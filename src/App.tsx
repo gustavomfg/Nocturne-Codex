@@ -2,7 +2,8 @@ import { FormEvent, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Activity as ActivityIcon, Brain, Check, ChevronRight, Code2, Command, Copy, ExternalLink, Eye, FileCode2, FileDown, Folder, FolderOpen, GitBranch, History, ListChecks, LoaderCircle, Menu, MessageSquarePlus, MoonStar, PackageOpen, Paperclip, PanelRight, Search, Send, Settings, ShieldCheck, Sparkles, Square, Star, Terminal, Trash2, X } from 'lucide-react'
 import { useAppStore } from './store'
-import type { Activity, Artifact, Attachment, ChangedFile, CodexEvent, CodexSettings, FilePreview, GitInfo, Message, PlanStep, Workspace, WorkspaceMemory } from './types'
+import type { Activity, AgentMode, Artifact, Attachment, ChangedFile, CodexEvent, CodexSettings, FilePreview, GitInfo, Message, PlanStep, Suggestion, SuggestionStatus, Workspace, WorkspaceMemory } from './types'
+import { SuggestionsPanel } from './SuggestionsPanel'
 import './App.css'
 
 const now = () => new Date().toISOString()
@@ -24,6 +25,7 @@ function App() {
   const [memory, setMemory] = useState<WorkspaceMemory>({ content: '', rules: '', updatedAt: '' })
   const [memoryOpen, setMemoryOpen] = useState(false)
   const [onboardingOpen, setOnboardingOpen] = useState(() => localStorage.getItem('nocturne.onboarding.completed') !== 'true')
+  const [agentMode, setAgentMode] = useState<AgentMode>('review')
   const endRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -32,6 +34,8 @@ function App() {
   const activityBuffersRef = useRef(new Map<string, { type: Activity['type']; label: string; detail: string }>())
   const activityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const completedTurnsRef = useRef(new Set<string>())
+  const activeTurnModeRef = useRef<AgentMode>('review')
+  const applyingSuggestionRef = useRef<string | null>(null)
   const active = store.conversations.find((item) => item.id === store.activeId)
   const documentContent = store.streaming || [...store.messages].reverse().find((item) => item.role === 'assistant')?.content || ''
   const filtered = store.conversations.filter((item) => item.title.toLowerCase().includes(search.toLowerCase()) && (!workspace || item.workspace === workspace))
@@ -98,8 +102,8 @@ function App() {
     if (lastMetadata) restoreMetadata(lastMetadata)
     const conversation = conversations.find((item) => item.id === id)
     if (conversation) setWorkspace(conversation.workspace)
-    const [artifacts, savedMemory] = await Promise.all([window.nocturne.artifacts.list(id), window.nocturne.memory.get(id)])
-    store.setArtifacts(artifacts); setMemory(savedMemory); setPreview(null)
+    const [artifacts, savedMemory, suggestions] = await Promise.all([window.nocturne.artifacts.list(id), window.nocturne.memory.get(id), window.nocturne.suggestions.list(id)])
+    store.setArtifacts(artifacts); store.setSuggestions(suggestions); setMemory(savedMemory); setPreview(null)
     try { await window.nocturne.codex.resume(id) } catch (error) { store.setError(`Não foi possível restaurar a thread: ${errorMessage(error)}`) }
     void refreshGit(id)
   }
@@ -109,7 +113,7 @@ function App() {
     await submitPrompt(prompt)
   }
 
-  async function submitPrompt(rawPrompt: string) {
+  async function submitPrompt(rawPrompt: string, mode: AgentMode = agentMode) {
     const content = rawPrompt.trim()
     if (!content || isBusy(store.status)) return
     let conversationId = store.activeId
@@ -120,10 +124,11 @@ function App() {
     if (!conversationId) return
     store.clearRun(); setPrompt('')
     const selectedAttachments = attachments
+    activeTurnModeRef.current = mode
     setAttachments([])
     store.addMessage({ id: fakeId(), conversationId, role: 'user', content, metadata: JSON.stringify({ attachments: selectedAttachments.map((item) => item.path) }), createdAt: now() })
-    try { const result = await window.nocturne.codex.send(conversationId, content, selectedAttachments.map((item) => item.path)); if (result.recreated) store.setError('A thread anterior não pôde ser restaurada. Uma nova thread foi criada para esta conversa.'); await refresh() }
-    catch (error) { store.setStatus('failed'); store.setError(error instanceof Error ? error.message : String(error)) }
+    try { const result = await window.nocturne.codex.send(conversationId, content, selectedAttachments.map((item) => item.path), mode); if (result.recreated) store.setError('A thread anterior não pôde ser restaurada. Uma nova thread foi criada para esta conversa.'); await refresh() }
+    catch (error) { applyingSuggestionRef.current = null; store.setStatus('failed'); store.setError(error instanceof Error ? error.message : String(error)) }
   }
 
   async function attachFiles() {
@@ -230,11 +235,24 @@ function App() {
     store.upsertActivity({ id: `completion-${String(turn?.id ?? Date.now())}`, type: 'completion', label: error ? 'Execução encerrada com erro' : 'Execução concluída', status: error ? 'failed' : 'completed' })
     if (state.streaming && state.activeId) {
       const current = useAppStore.getState()
+      let assistantContent = state.streaming
+      if (activeTurnModeRef.current === 'review') {
+        const extracted = await window.nocturne.suggestions.create(state.activeId, assistantContent)
+        assistantContent = extracted.content || assistantContent
+        store.setSuggestions(await window.nocturne.suggestions.list(state.activeId))
+      }
       const activitySnapshot = current.activities.slice(-100).map((activity) => ({ ...activity, detail: activity.detail?.slice(-4_000) }))
-      const saved = await window.nocturne.codex.saveAssistant(state.activeId, state.streaming, { diff: current.diff.slice(-500_000), activities: activitySnapshot, files: current.files.slice(-300), plan: current.plan.slice(-100), planExplanation: current.planExplanation.slice(-20_000) })
+      const saved = await window.nocturne.codex.saveAssistant(state.activeId, assistantContent, { diff: current.diff.slice(-500_000), activities: activitySnapshot, files: current.files.slice(-300), plan: current.plan.slice(-100), planExplanation: current.planExplanation.slice(-20_000) })
       store.addMessage(saved)
       useAppStore.setState({ streaming: '' })
       store.setArtifacts(await window.nocturne.artifacts.list(state.activeId))
+    }
+    if (applyingSuggestionRef.current && state.activeId) {
+      const suggestionId = applyingSuggestionRef.current
+      const changed = useAppStore.getState().files.length > 0 || Boolean(useAppStore.getState().diff)
+      if (!error && changed) await window.nocturne.suggestions.status(state.activeId, suggestionId, 'applied', 'Alteração executada; consulte a resposta do agente para resultados de validação.')
+      applyingSuggestionRef.current = null
+      store.setSuggestions(await window.nocturne.suggestions.list(state.activeId))
     }
     if (state.activeId) void refreshGit(state.activeId)
   }
@@ -242,6 +260,28 @@ function App() {
   async function decide(key: string, accepted: boolean) {
     try { await window.nocturne.codex.approve(key, accepted); store.resolveApproval(key, accepted ? 'accepted' : 'declined') }
     catch (error) { store.setError(errorMessage(error)) }
+  }
+
+  async function updateSuggestion(suggestion: Suggestion, status: SuggestionStatus) {
+    if (!store.activeId) return
+    try { await window.nocturne.suggestions.status(store.activeId, suggestion.id, status); store.setSuggestions(await window.nocturne.suggestions.list(store.activeId)) }
+    catch (error) { store.setError(errorMessage(error)) }
+  }
+
+  async function applySuggestion(suggestion: Suggestion) {
+    if (!store.activeId || isBusy(store.status)) return
+    const steps: PlanStep[] = [
+      { step: `Confirmar escopo em ${suggestion.affectedFiles.length || 1} arquivo(s)`, status: 'pending' },
+      { step: 'Aplicar somente a proposta aprovada', status: 'pending' },
+      { step: 'Executar typecheck, lint e testes relacionados quando disponíveis', status: 'pending' },
+      { step: 'Relatar alterações e validações', status: 'pending' },
+    ]
+    const files = suggestion.affectedFiles.length ? suggestion.affectedFiles.join('\n• ') : 'arquivos a confirmar pelo agente'
+    if (!window.confirm(`Aplicar esta sugestão?\n\n${suggestion.title}\n\nArquivos:\n• ${files}\n\nO agente poderá modificar somente o escopo confirmado e executará validações.`)) return
+    await updateSuggestion(suggestion, 'accepted')
+    store.setPlan(steps, `Aplicação da sugestão: ${suggestion.title}`)
+    applyingSuggestionRef.current = suggestion.id
+    await submitPrompt(`Aplique a sugestão aprovada abaixo. Não amplie o escopo. Antes de editar, confirme os arquivos afetados; depois execute typecheck, lint e testes relacionados quando disponíveis.\n\nTítulo: ${suggestion.title}\nProblema: ${suggestion.description}\nJustificativa: ${suggestion.reasoning}\nArquivos: ${suggestion.affectedFiles.join(', ') || 'identificar antes de editar'}\nProposta:\n${suggestion.proposedChanges}`, 'build')
   }
 
   async function removeConversation(id: string) {
@@ -344,14 +384,14 @@ function App() {
         </div>}
       </section>
 
-      <div className="composer-wrap"><div className="quick-actions"><button onClick={() => submitPrompt('Analise este projeto e resuma arquitetura, dependências, riscos e próximos passos.')}><Code2 size={11}/>Analisar</button><button onClick={() => submitPrompt('Crie documentação completa em Markdown para este projeto e salve em DOCUMENTACAO.md.')}><FileCode2 size={11}/>Documentar</button><button onClick={() => submitPrompt('Revise as alterações Git atuais, buscando bugs, riscos e testes ausentes. Não modifique arquivos sem pedir.')}><GitBranch size={11}/>Revisar diff</button></div><form className="composer" onSubmit={send}>
+      <div className="composer-wrap"><div className="agent-mode-switch" aria-label="Modo do agente"><button type="button" className={agentMode === 'build' ? 'active' : ''} onClick={() => setAgentMode('build')}><span/>Build <small>Pode modificar</small></button><button type="button" className={agentMode === 'review' ? 'active' : ''} onClick={() => setAgentMode('review')}><span/>Review <small>Apenas sugere</small></button><button type="button" className={agentMode === 'docs' ? 'active' : ''} onClick={() => setAgentMode('docs')}><span/>Docs <small>Foco documentação</small></button></div><div className="quick-actions"><button onClick={() => submitPrompt('Analise este projeto e resuma arquitetura, dependências, riscos e próximos passos.')}><Code2 size={11}/>Analisar</button><button onClick={() => submitPrompt('Crie documentação completa em Markdown para este projeto e salve em DOCUMENTACAO.md.', 'docs')}><FileCode2 size={11}/>Documentar</button><button onClick={() => submitPrompt('Revise as alterações Git atuais, buscando bugs, riscos e testes ausentes. Não modifique arquivos sem pedir.', 'review')}><GitBranch size={11}/>Revisar diff</button></div><form className="composer" onSubmit={send}>
         {!!attachments.length && <div className="attachment-list">{attachments.map((item) => <span key={item.path}><Paperclip size={11}/>{item.name}<button type="button" onClick={() => setAttachments((current) => current.filter((file) => file.path !== item.path))}><X size={11}/></button></span>)}</div>}
         <textarea ref={composerRef} value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit() } }} placeholder={store.activeId ? 'Peça ao Codex para criar, analisar ou modificar...' : 'Selecione um workspace e descreva o que deseja criar...'} rows={1}/>
         <div className="composer-bottom"><div className="composer-tools"><button type="button" title="Anexar arquivo" onClick={attachFiles}><Paperclip size={16}/></button><span><ShieldCheck size={14}/> {settings.sandbox}</span></div><button type={isBusy(store.status) ? 'button' : 'submit'} onClick={isBusy(store.status) && store.status !== 'cancelling' ? cancelRun : undefined} className={`send-button ${isBusy(store.status) ? 'stop' : ''}`} disabled={store.status === 'cancelling' || (!prompt.trim() && !isBusy(store.status))}>{isBusy(store.status) ? <Square size={14} fill="currentColor"/> : <Send size={16}/>}</button></div>
       </form><small className="composer-hint">Enter para enviar · Shift + Enter para nova linha</small></div>
     </main>
 
-    {rightOpen && <Inspector activities={store.activities} approvals={store.approvals} diff={store.diff} files={store.files} artifacts={store.artifacts} plan={store.plan} planExplanation={store.planExplanation} activeId={store.activeId} gitInfo={gitInfo} documentContent={documentContent} onDecide={decide} onError={store.setError} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onPlanChange={(plan) => store.setPlan(plan, store.planExplanation)} onPlanExecute={(plan) => submitPrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`)}/>} 
+    {rightOpen && <Inspector activities={store.activities} approvals={store.approvals} diff={store.diff} files={store.files} artifacts={store.artifacts} suggestions={store.suggestions} plan={store.plan} planExplanation={store.planExplanation} activeId={store.activeId} gitInfo={gitInfo} documentContent={documentContent} onDecide={decide} onError={store.setError} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onSuggestionStatus={updateSuggestion} onSuggestionApply={applySuggestion} onPlanChange={(plan) => store.setPlan(plan, store.planExplanation)} onPlanExecute={(plan) => submitPrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`, 'build')}/>}
     {settingsOpen && <SettingsDialog value={settings} status={store.status} onClose={() => setSettingsOpen(false)} onSave={saveSettings}/>}
     {memoryOpen && <MemoryDialog value={memory} workspace={workspace} onClose={() => setMemoryOpen(false)} onSave={saveMemory}/>}
     {preview && <PreviewDialog preview={preview} activeId={store.activeId} onClose={() => setPreview(null)} onError={store.setError}/>}
@@ -387,9 +427,9 @@ function AssistantMessage({ content, streaming }: { content: string; streaming?:
   return <div className="assistant-row"><div className="assistant-avatar"><Sparkles size={15}/></div><div className="assistant-content"><div className="assistant-name">Nocturne Codex {streaming && <span>escrevendo</span>}</div>{renderAsText ? <><p>Resposta extensa; renderização Markdown simplificada para preservar estabilidade.</p><pre className="large-response">{content.slice(-300_000)}</pre></> : <ReactMarkdown>{content}</ReactMarkdown>}{streaming && <span className="caret"/>}</div></div>
 }
 
-function Inspector({ activities, approvals, diff, files, artifacts, plan, planExplanation, activeId, gitInfo, documentContent, onDecide, onError, onGitRefresh, onArtifactsRefresh, onPreview, onArtifact, onDeleteArtifact, onPlanChange, onPlanExecute }: { activities: Activity[]; approvals: ReturnType<typeof useAppStore.getState>['approvals']; diff: string; files: ChangedFile[]; artifacts: Artifact[]; plan: PlanStep[]; planExplanation: string; activeId: string | null; gitInfo: GitInfo | null; documentContent: string; onDecide(key: string, accepted: boolean): void; onError(value: string): void; onGitRefresh(): void; onArtifactsRefresh(): void; onPreview(filePath: string): void; onArtifact(artifact: Artifact): void; onDeleteArtifact(id: string): void; onPlanChange(plan: PlanStep[]): void; onPlanExecute(plan: PlanStep[]): void }) {
+function Inspector({ activities, approvals, diff, files, artifacts, suggestions, plan, planExplanation, activeId, gitInfo, documentContent, onDecide, onError, onGitRefresh, onArtifactsRefresh, onPreview, onArtifact, onDeleteArtifact, onSuggestionStatus, onSuggestionApply, onPlanChange, onPlanExecute }: { activities: Activity[]; approvals: ReturnType<typeof useAppStore.getState>['approvals']; diff: string; files: ChangedFile[]; artifacts: Artifact[]; suggestions: Suggestion[]; plan: PlanStep[]; planExplanation: string; activeId: string | null; gitInfo: GitInfo | null; documentContent: string; onDecide(key: string, accepted: boolean): void; onError(value: string): void; onGitRefresh(): void; onArtifactsRefresh(): void; onPreview(filePath: string): void; onArtifact(artifact: Artifact): void; onDeleteArtifact(id: string): void; onSuggestionStatus(suggestion: Suggestion, status: SuggestionStatus): void; onSuggestionApply(suggestion: Suggestion): void; onPlanChange(plan: PlanStep[]): void; onPlanExecute(plan: PlanStep[]): void }) {
   const [commitMessage, setCommitMessage] = useState('')
-  const [tab, setTab] = useState<'activity' | 'plan' | 'artifacts'>('activity')
+  const [tab, setTab] = useState<'activity' | 'plan' | 'suggestions' | 'artifacts'>('activity')
   const open = async (filePath: string, action: 'file' | 'folder' | 'editor') => { if (!activeId) return; try { await window.nocturne.files.open(activeId, filePath, action) } catch (error) { onError(errorMessage(error)) } }
   const exportDocument = async (format: 'md' | 'docx' | 'pdf' | 'html') => {
     if (!activeId || !documentContent) { onError('Não há uma resposta Markdown para exportar.'); return }
@@ -398,7 +438,7 @@ function Inspector({ activities, approvals, diff, files, artifacts, plan, planEx
   }
   const commit = async () => { if (!activeId || !commitMessage.trim()) return; try { await window.nocturne.git.commit(activeId, commitMessage); setCommitMessage(''); onGitRefresh() } catch (error) { onError(errorMessage(error)) } }
   return <aside className="inspector"><div className="inspector-header"><div><ActivityIcon size={16}/><strong>Agente</strong></div><span>{activities.filter((a) => a.status === 'running').length ? 'Em execução' : 'Em espera'}</span></div>
-    <div className="inspector-tabs"><button className={tab === 'activity' ? 'active' : ''} onClick={() => setTab('activity')}><ActivityIcon size={12}/>Atividade</button><button className={tab === 'plan' ? 'active' : ''} onClick={() => setTab('plan')}><ListChecks size={12}/>Plano{plan.length > 0 && <b>{plan.length}</b>}</button><button className={tab === 'artifacts' ? 'active' : ''} onClick={() => setTab('artifacts')}><PackageOpen size={12}/>Artefatos{artifacts.length > 0 && <b>{artifacts.length}</b>}</button></div>
+    <div className="inspector-tabs"><button className={tab === 'activity' ? 'active' : ''} onClick={() => setTab('activity')}><ActivityIcon size={12}/>Atividade</button><button className={tab === 'plan' ? 'active' : ''} onClick={() => setTab('plan')}><ListChecks size={12}/>Plano{plan.length > 0 && <b>{plan.length}</b>}</button><button className={tab === 'suggestions' ? 'active' : ''} onClick={() => setTab('suggestions')}><ShieldCheck size={12}/>Sugestões{suggestions.length > 0 && <b>{suggestions.length}</b>}</button><button className={tab === 'artifacts' ? 'active' : ''} onClick={() => setTab('artifacts')}><PackageOpen size={12}/>Artefatos{artifacts.length > 0 && <b>{artifacts.length}</b>}</button></div>
     <div className="inspector-scroll">
       {tab === 'activity' && <>
       {approvals.map((approval) => <div className={`approval-card ${approval.status}`} key={approval.key}><div className="approval-title"><span>{approval.kind === 'command' ? <Command size={15}/> : <FileCode2 size={15}/>}</span><strong>{approval.title}</strong></div><pre>{approval.detail}</pre>{approval.status === 'pending' ? <div className="approval-actions"><button onClick={() => onDecide(approval.key, false)}><X size={14}/>Recusar</button><button className="accept" onClick={() => onDecide(approval.key, true)}><Check size={14}/>Aprovar</button></div> : <small>{approval.status === 'accepted' ? 'Aprovado' : 'Recusado'}</small>}</div>)}
@@ -410,6 +450,7 @@ function Inspector({ activities, approvals, diff, files, artifacts, plan, planEx
       {!activities.length && !approvals.length && !diff && <div className="inspector-empty"><div><ActivityIcon size={22}/></div><p>A atividade do agente aparecerá aqui.</p><small>Comandos, arquivos e aprovações em tempo real.</small></div>}
       </>}
       {tab === 'plan' && <PlanPanel plan={plan} explanation={planExplanation} onChange={onPlanChange} onExecute={onPlanExecute}/>} 
+      {tab === 'suggestions' && <SuggestionsPanel suggestions={suggestions} onStatus={onSuggestionStatus} onApply={onSuggestionApply} onOpenFile={onPreview}/>}
       {tab === 'artifacts' && <ArtifactsPanel artifacts={artifacts} onOpen={onArtifact} onDelete={onDeleteArtifact}/>} 
     </div>
   </aside>

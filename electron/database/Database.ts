@@ -2,6 +2,7 @@ import Database from 'better-sqlite3'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
+import type { Suggestion, SuggestionStatus } from '../../shared/suggestions'
 
 export interface ConversationRow {
   id: string
@@ -36,7 +37,7 @@ export class LocalDatabase {
     const integrity = this.db.pragma('quick_check', { simple: true }) as string
     if (integrity !== 'ok') throw new Error(`Banco de dados corrompido (${integrity}). Preserve o arquivo e restaure um backup.`)
     const schemaVersion = this.db.pragma('user_version', { simple: true }) as number
-    if (schemaVersion < 3 && fs.existsSync(this.databasePath)) {
+    if (schemaVersion < 4 && fs.existsSync(this.databasePath)) {
       fs.copyFileSync(this.databasePath, `${this.databasePath}.backup-${Date.now()}`)
     }
     this.db.exec(`
@@ -68,12 +69,26 @@ export class LocalDatabase {
         id TEXT PRIMARY KEY, approval_key TEXT NOT NULL, decision TEXT NOT NULL,
         command TEXT, risk TEXT, created_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS suggestions (
+        id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, conversation_id TEXT NOT NULL,
+        title TEXT NOT NULL, description TEXT NOT NULL, reasoning TEXT NOT NULL,
+        category TEXT NOT NULL, severity TEXT NOT NULL, affected_files TEXT NOT NULL,
+        proposed_changes TEXT NOT NULL, status TEXT NOT NULL, result TEXT,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_suggestions_conversation ON suggestions(conversation_id, updated_at);
+      CREATE TABLE IF NOT EXISTS suggestion_decisions (
+        id TEXT PRIMARY KEY, suggestion_id TEXT NOT NULL, status TEXT NOT NULL,
+        result TEXT, created_at TEXT NOT NULL,
+        FOREIGN KEY (suggestion_id) REFERENCES suggestions(id) ON DELETE CASCADE
+      );
       INSERT OR IGNORE INTO workspaces(path,name,created_at,last_opened_at)
         SELECT workspace, workspace, MIN(created_at), MAX(updated_at) FROM conversations GROUP BY workspace;
     `)
     const columns = this.db.prepare('PRAGMA table_info(workspaces)').all() as Array<{ name: string }>
     if (!columns.some((column) => column.name === 'favorite')) this.db.exec('ALTER TABLE workspaces ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0')
-    this.db.pragma('user_version = 3')
+    this.db.pragma('user_version = 4')
     this.cleanupOrphans()
   }
 
@@ -154,11 +169,36 @@ export class LocalDatabase {
   deleteArtifact(id: string) { this.db.prepare('DELETE FROM artifacts WHERE id=?').run(id) }
   recordApproval(key: string, accepted: boolean, command?: string, risk?: string) { this.db.prepare('INSERT INTO approval_audit(id,approval_key,decision,command,risk,created_at) VALUES(?,?,?,?,?,?)').run(randomUUID(), key, accepted ? 'accepted' : 'declined', command?.slice(0, 4_000) ?? null, risk ?? null, new Date().toISOString()) }
 
-  exportData() {
-    return { schemaVersion: 3, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), settings: this.getSettings() }
+  listSuggestions(conversationId: string): Suggestion[] {
+    const rows = this.db.prepare(`SELECT id,workspace_id workspaceId,conversation_id conversationId,title,description,reasoning,category,severity,affected_files affectedFiles,proposed_changes proposedChanges,status,created_at createdAt,updated_at updatedAt FROM suggestions WHERE conversation_id=? ORDER BY updated_at DESC`).all(conversationId) as Array<Omit<Suggestion, 'affectedFiles'> & { affectedFiles: string }>
+    return rows.map((row) => ({ ...row, affectedFiles: JSON.parse(row.affectedFiles) as string[] }))
   }
 
-  importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[] }) {
+  addSuggestion(conversationId: string, workspaceId: string, value: Omit<Suggestion, 'id' | 'workspaceId' | 'conversationId' | 'createdAt' | 'updatedAt' | 'status'>): Suggestion {
+    const now = new Date().toISOString()
+    const row: Suggestion = { id: randomUUID(), workspaceId, conversationId, ...value, status: 'pending', createdAt: now, updatedAt: now }
+    this.db.prepare(`INSERT INTO suggestions(id,workspace_id,conversation_id,title,description,reasoning,category,severity,affected_files,proposed_changes,status,created_at,updated_at) VALUES(@id,@workspaceId,@conversationId,@title,@description,@reasoning,@category,@severity,@affectedFiles,@proposedChanges,@status,@createdAt,@updatedAt)`).run({ ...row, affectedFiles: JSON.stringify(row.affectedFiles) })
+    return row
+  }
+
+  setSuggestionStatus(id: string, status: SuggestionStatus, result?: string): Suggestion {
+    const updatedAt = new Date().toISOString()
+    const current = this.db.prepare('SELECT status FROM suggestions WHERE id=?').get(id) as { status: SuggestionStatus } | undefined
+    if (!current) throw new Error('Sugestão não encontrada.')
+    const allowed: Record<SuggestionStatus, SuggestionStatus[]> = { pending: ['accepted', 'rejected'], accepted: ['applied', 'rejected'], rejected: [], applied: [] }
+    if (current.status !== status && !allowed[current.status].includes(status)) throw new Error(`Transição de sugestão inválida: ${current.status} → ${status}.`)
+    const changed = this.db.prepare('UPDATE suggestions SET status=?,result=?,updated_at=? WHERE id=?').run(status, result?.slice(0, 20_000) ?? null, updatedAt, id)
+    if (!changed.changes) throw new Error('Sugestão não encontrada.')
+    this.db.prepare('INSERT INTO suggestion_decisions(id,suggestion_id,status,result,created_at) VALUES(?,?,?,?,?)').run(randomUUID(), id, status, result?.slice(0, 20_000) ?? null, updatedAt)
+    const row = this.db.prepare('SELECT conversation_id conversationId FROM suggestions WHERE id=?').get(id) as { conversationId: string }
+    return this.listSuggestions(row.conversationId).find((item) => item.id === id) as Suggestion
+  }
+
+  exportData() {
+    return { schemaVersion: 4, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), suggestions: this.db.prepare('SELECT * FROM suggestions').all(), suggestionDecisions: this.db.prepare('SELECT * FROM suggestion_decisions').all(), settings: this.getSettings() }
+  }
+
+  importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[]; suggestions?: unknown[]; suggestionDecisions?: unknown[] }) {
     const insert = (table: string, rows: unknown[]) => {
       for (const raw of rows) {
         if (!raw || typeof raw !== 'object') continue
@@ -168,12 +208,12 @@ export class LocalDatabase {
         this.db.prepare(`INSERT OR IGNORE INTO ${table} (${keys.join(',')}) VALUES (${keys.map((key) => `@${key}`).join(',')})`).run(row)
       }
     }
-    this.db.transaction(() => { insert('workspaces', data.workspaces); insert('conversations', data.conversations); insert('messages', data.messages); insert('artifacts', data.artifacts); insert('workspace_memory', data.memories) })()
+    this.db.transaction(() => { insert('workspaces', data.workspaces); insert('conversations', data.conversations); insert('messages', data.messages); insert('artifacts', data.artifacts); insert('workspace_memory', data.memories); insert('suggestions', data.suggestions ?? []); insert('suggestion_decisions', data.suggestionDecisions ?? []) })()
     this.cleanupOrphans()
   }
 
   private cleanupOrphans() {
-    this.db.exec(`DELETE FROM messages WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM artifacts WHERE conversation_id NOT IN (SELECT id FROM conversations);`)
+    this.db.exec(`DELETE FROM messages WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM artifacts WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM suggestions WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM suggestion_decisions WHERE suggestion_id NOT IN (SELECT id FROM suggestions);`)
   }
 
   renameFromPrompt(id: string, prompt: string) {

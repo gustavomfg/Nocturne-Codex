@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { CodexProcess } from './CodexProcess'
 import type { CodexEvent, CodexStatus, RpcId, RpcMessage, RpcResponse } from './protocol'
 import { AgentStateMachine } from '../../shared/agentState'
+import { reviewInstructions, sandboxModeForAgent, type AgentMode } from '../../shared/suggestions'
 
 interface PendingCall {
   resolve: (value: unknown) => void
@@ -86,7 +87,7 @@ export class CodexClient extends EventEmitter {
     this.loadedThreads.add(threadId)
   }
 
-  async sendTurn(threadId: string, workspace: string, prompt: string, settings: Record<string, string> = {}, attachments: string[] = [], memory = '') {
+  async sendTurn(threadId: string, workspace: string, prompt: string, settings: Record<string, string> = {}, attachments: string[] = [], memory = '', mode: AgentMode = 'build') {
     if (this.activeTurns.size) throw new Error('Já existe uma execução do agente em andamento. Cancele-a antes de iniciar outra.')
     this.eventCount = 0
     this.responseBytes = 0
@@ -99,8 +100,12 @@ export class CodexClient extends EventEmitter {
       approvalPolicy: safeApprovalPolicy(settings.approvalPolicy),
       approvalsReviewer: 'user',
       model: settings.model || undefined,
-      sandboxPolicy: toSandboxPolicy(settings.sandbox, workspace),
-      additionalContext: memory ? { 'nocturne.workspace-memory': { value: workspaceMemoryInstructions(memory), kind: 'application' } } : undefined,
+      sandboxPolicy: toSandboxPolicy(sandboxModeForAgent(mode, settings.sandbox === 'read-only' ? 'read-only' : 'workspace-write'), workspace),
+      additionalContext: {
+        ...(memory ? { 'nocturne.workspace-memory': { value: workspaceMemoryInstructions(memory), kind: 'application' } } : {}),
+        ...(mode === 'review' ? { 'nocturne.review-mode': { value: reviewInstructions(), kind: 'application' } } : {}),
+        ...(mode === 'docs' ? { 'nocturne.docs-mode': { value: 'Priorize documentação clara e verificável. Só altere arquivos de documentação diretamente relacionados ao pedido.', kind: 'application' } } : {}),
+      },
       input: [
         { type: 'text', text: prompt, text_elements: [] },
         ...attachments.map((attachment) => ({ type: 'mention', name: attachment.split(/[\\/]/).pop() || attachment, path: attachment })),

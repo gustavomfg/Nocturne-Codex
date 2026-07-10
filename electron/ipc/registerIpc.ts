@@ -8,10 +8,11 @@ import { CodexClient } from '../codex/CodexClient'
 import { LocalDatabase, type ConversationRow } from '../database/Database'
 import { Logger } from '../logging/Logger'
 import { assessCommand, resolveInsideWorkspace } from '../security/ExecutionPolicy'
+import { agentModes, extractSuggestions, suggestionStatuses } from '../../shared/suggestions'
 
 const idSchema = z.string().uuid()
 const execFileAsync = promisify(execFile)
-const sendSchema = z.object({ conversationId: z.string().uuid(), prompt: z.string().trim().min(1).max(100_000), attachments: z.array(z.string()).max(10).default([]) })
+const sendSchema = z.object({ conversationId: z.string().uuid(), prompt: z.string().trim().min(1).max(100_000), attachments: z.array(z.string()).max(10).default([]), mode: z.enum(agentModes).default('build') })
 const approvalSchema = z.object({ key: z.string().min(1), accepted: z.boolean(), forSession: z.boolean().optional() })
 
 export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: CodexClient, logger: Logger) {
@@ -140,7 +141,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   ipcMain.handle('data:import', async () => {
     const result = await dialog.showOpenDialog(win, { title: 'Importar dados do Nocturne', properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] })
     if (result.canceled || !result.filePaths[0]) return false
-    const schema = z.object({ schemaVersion: z.number().int().min(1).max(3), conversations: z.array(z.record(z.string(), z.unknown())).max(100_000), workspaces: z.array(z.record(z.string(), z.unknown())).max(10_000), messages: z.array(z.record(z.string(), z.unknown())).max(1_000_000), artifacts: z.array(z.record(z.string(), z.unknown())).max(1_000_000), memories: z.array(z.record(z.string(), z.unknown())).max(10_000) })
+    const schema = z.object({ schemaVersion: z.number().int().min(1).max(4), conversations: z.array(z.record(z.string(), z.unknown())).max(100_000), workspaces: z.array(z.record(z.string(), z.unknown())).max(10_000), messages: z.array(z.record(z.string(), z.unknown())).max(1_000_000), artifacts: z.array(z.record(z.string(), z.unknown())).max(1_000_000), memories: z.array(z.record(z.string(), z.unknown())).max(10_000), suggestions: z.array(z.record(z.string(), z.unknown())).max(100_000).optional(), suggestionDecisions: z.array(z.record(z.string(), z.unknown())).max(1_000_000).optional() })
     database.importData(schema.parse(JSON.parse(fs.readFileSync(result.filePaths[0], 'utf8'))))
     logger.info('persistence', 'Dados importados')
     return true
@@ -167,7 +168,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   })
 
   ipcMain.handle('codex:send', async (_event, value: unknown) => {
-    const { conversationId, prompt, attachments } = sendSchema.parse(value)
+    const { conversationId, prompt, attachments, mode } = sendSchema.parse(value)
     const conversation = getConversation(database, conversationId)
     assertWorkspace(conversation)
     attachments.forEach((filePath) => assertInsideWorkspace(filePath, conversation.workspace))
@@ -190,7 +191,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     }
     database.addMessage(conversationId, 'user', prompt, { attachments })
     if (conversation.title === 'Nova conversa') database.renameFromPrompt(conversationId, prompt)
-    await codex.sendTurn(threadId, conversation.workspace, prompt, database.getSettings(), attachments, memory)
+    await codex.sendTurn(threadId, conversation.workspace, prompt, database.getSettings(), attachments, memory, mode)
     return { threadId, recreated }
   })
 
@@ -219,6 +220,24 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     }
     if (metadata?.diff) database.addArtifact(data.conversationId, conversation.workspace, 'report', 'Alterações do turno', null, metadata.diff, { origin: 'Codex', format: 'diff' })
     return message
+  })
+
+  ipcMain.handle('suggestions:list', (_event, value: unknown) => database.listSuggestions(idSchema.parse(value)))
+  ipcMain.handle('suggestions:create', (_event, value: unknown) => {
+    const data = z.object({ conversationId: z.string().uuid(), content: z.string().max(2_000_000) }).parse(value)
+    const conversation = getConversation(database, data.conversationId)
+    const extracted = extractSuggestions(data.content)
+    const suggestions = extracted.suggestions.map((suggestion) => database.addSuggestion(data.conversationId, conversation.workspace, suggestion))
+    if (suggestions.length) logger.info('artifacts', 'Sugestões de review persistidas', { conversationId: data.conversationId, count: suggestions.length })
+    return { suggestions, content: extracted.content }
+  })
+  ipcMain.handle('suggestions:status', (_event, value: unknown) => {
+    const data = z.object({ conversationId: z.string().uuid(), suggestionId: z.string().uuid(), status: z.enum(suggestionStatuses), result: z.string().max(20_000).optional() }).parse(value)
+    const suggestion = database.listSuggestions(data.conversationId).find((item) => item.id === data.suggestionId)
+    if (!suggestion) throw new Error('Sugestão não pertence a esta conversa.')
+    const updated = database.setSuggestionStatus(data.suggestionId, data.status, data.result)
+    recordSuggestionDecision(suggestion.workspaceId, updated)
+    return updated
   })
 
   ipcMain.handle('codex:approve', (_event, value: unknown) => {
@@ -413,4 +432,12 @@ function detectProject(workspace: string): ProjectContext {
   if (files.has('pyproject.toml') || files.has('requirements.txt')) { stack.push('Python'); primaryLanguage = 'Python'; commands.test ??= 'pytest' }
   if (files.has('go.mod')) { stack.push('Go'); primaryLanguage = 'Go'; commands.test = 'go test ./...' }
   return { name: path.basename(workspace), stack: [...new Set(stack)], primaryLanguage, commands }
+}
+
+function recordSuggestionDecision(workspace: string, suggestion: { title: string; status: string; updatedAt: string }) {
+  ensureNocturneWorkspace(workspace)
+  const memoryPath = path.join(workspace, '.nocturne', 'memory.md')
+  if (fs.statSync(memoryPath).size > 1_000_000) return
+  const icon = suggestion.status === 'rejected' ? '✕' : '✓'
+  fs.appendFileSync(memoryPath, `\n- ${icon} ${suggestion.title} — ${suggestion.status} em ${new Date(suggestion.updatedAt).toLocaleDateString('pt-BR')}\n`, 'utf8')
 }

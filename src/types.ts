@@ -1,3 +1,7 @@
+import type { AgentState } from '../shared/agentState'
+import type { AgentMode, Suggestion, SuggestionStatus } from '../shared/suggestions'
+export type { AgentMode, Suggestion, SuggestionStatus } from '../shared/suggestions'
+
 export type Role = 'user' | 'assistant' | 'system'
 export interface Conversation { id: string; title: string; workspace: string; codexThreadId: string | null; createdAt: string; updatedAt: string }
 export interface Workspace { path: string; name: string; favorite: boolean; createdAt: string; lastOpenedAt: string }
@@ -26,7 +30,7 @@ declare global {
         start(): Promise<{ status: CodexStatus }>
         restart(): Promise<CodexDiagnostics>
         diagnostics(): Promise<CodexDiagnostics>
-        send(conversationId: string, prompt: string, attachments?: string[]): Promise<{ threadId: string; recreated: boolean }>
+        send(conversationId: string, prompt: string, attachments?: string[], mode?: AgentMode): Promise<{ threadId: string; recreated: boolean }>
         resume(conversationId: string): Promise<{ resumed: boolean }>
         interrupt(conversationId: string): Promise<void>
         saveAssistant(conversationId: string, content: string, metadata?: unknown): Promise<Message>
@@ -37,6 +41,7 @@ declare global {
       files: { attach(conversationId: string): Promise<Attachment[]>; open(conversationId: string, filePath: string, action: 'file' | 'folder' | 'editor'): Promise<void>; preview(conversationId: string, filePath: string): Promise<FilePreview> }
       memory: { get(conversationId: string): Promise<WorkspaceMemory>; set(conversationId: string, content: string, rules: string): Promise<WorkspaceMemory> }
       artifacts: { list(conversationId: string): Promise<Artifact[]>; delete(conversationId: string, artifactId: string): Promise<void> }
+      suggestions: { list(conversationId: string): Promise<Suggestion[]>; create(conversationId: string, content: string): Promise<{ suggestions: Suggestion[]; content: string }>; status(conversationId: string, suggestionId: string, status: SuggestionStatus, result?: string): Promise<Suggestion> }
       data: { export(): Promise<string | null>; import(): Promise<boolean> }
       diagnostics: { openLogs(): Promise<string>; copy(): Promise<string>; rendererError(value: { type: 'error' | 'unhandledRejection'; message: string; stack?: string }): Promise<void>; rendererStats(value: { responseSize: number; activities: number; messages: number }): Promise<void> }
       settings: { get(): Promise<CodexSettings>; set(settings: Pick<CodexSettings, 'model' | 'sandbox' | 'approvalPolicy' | 'codexPath' | 'diagnosticMode'>): Promise<CodexSettings> }
@@ -45,4 +50,3 @@ declare global {
     }
   }
 }
-import type { AgentState } from '../shared/agentState'
