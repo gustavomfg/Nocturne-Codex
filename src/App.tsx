@@ -1,8 +1,8 @@
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { Activity as ActivityIcon, Check, ChevronRight, Code2, Command, FileCode2, Folder, FolderOpen, GitBranch, History, LoaderCircle, Menu, MessageSquarePlus, MoonStar, PanelRight, Plus, Search, Send, ShieldCheck, Sparkles, Square, Trash2, X } from 'lucide-react'
+import { Activity as ActivityIcon, Check, ChevronRight, Code2, Command, ExternalLink, FileCode2, FileDown, Folder, FolderOpen, GitBranch, History, LoaderCircle, Menu, MessageSquarePlus, MoonStar, Paperclip, PanelRight, Search, Send, Settings, ShieldCheck, Sparkles, Square, Trash2, X } from 'lucide-react'
 import { useAppStore } from './store'
-import type { Activity, CodexEvent, Message } from './types'
+import type { Activity, Attachment, ChangedFile, CodexEvent, CodexSettings, GitInfo, Message, Workspace } from './types'
 import './App.css'
 
 const now = () => new Date().toISOString()
@@ -15,14 +15,24 @@ function App() {
   const [search, setSearch] = useState('')
   const [rightOpen, setRightOpen] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settings, setSettings] = useState<CodexSettings>({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request' })
+  const [gitInfo, setGitInfo] = useState<GitInfo | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const active = store.conversations.find((item) => item.id === store.activeId)
-  const filtered = store.conversations.filter((item) => item.title.toLowerCase().includes(search.toLowerCase()))
+  const documentContent = store.streaming || [...store.messages].reverse().find((item) => item.role === 'assistant')?.content || ''
+  const filtered = store.conversations.filter((item) => item.title.toLowerCase().includes(search.toLowerCase()) && (!workspace || item.workspace === workspace))
 
   const refresh = async () => store.setConversations(await window.nocturne.conversations.list())
 
   useEffect(() => {
-    void refresh().then(() => window.nocturne.codex.start()).catch((error) => store.setError(error.message))
+    void Promise.all([window.nocturne.conversations.list(), window.nocturne.workspace.list(), window.nocturne.settings.get()]).then(async ([conversations, savedWorkspaces, savedSettings]) => {
+      store.setConversations(conversations); setWorkspaces(savedWorkspaces); setSettings({ ...savedSettings, model: savedSettings.model || '', sandbox: savedSettings.sandbox || 'workspace-write', approvalPolicy: savedSettings.approvalPolicy || 'on-request' })
+      await window.nocturne.codex.start()
+      if (conversations[0]) await openConversation(conversations[0].id, conversations)
+    }).catch((error) => store.setError(error.message))
     const offStatus = window.nocturne.codex.onStatus(({ status, error }) => { store.setStatus(status); if (error) store.setError(error) })
     const offEvent = window.nocturne.codex.onEvent(handleCodexEvent)
     return () => { offStatus(); offEvent() }
@@ -34,7 +44,7 @@ function App() {
 
   async function selectWorkspace() {
     const selected = await window.nocturne.workspace.select()
-    if (selected) setWorkspace(selected)
+    if (selected) { setWorkspace(selected); setWorkspaces(await window.nocturne.workspace.list()) }
   }
 
   async function createConversation() {
@@ -45,15 +55,33 @@ function App() {
     await refresh(); store.setActive(conversation.id); store.setMessages([]); store.clearRun(); setWorkspace(selected)
   }
 
-  async function openConversation(id: string) {
-    store.setActive(id); store.clearRun(); store.setMessages(await window.nocturne.conversations.messages(id))
-    const conversation = store.conversations.find((item) => item.id === id)
+  async function chooseSavedWorkspace(selected: string) {
+    setWorkspace(selected)
+    const conversation = store.conversations.find((item) => item.workspace === selected)
+    if (conversation) await openConversation(conversation.id)
+    else { store.setActive(null); store.setMessages([]); store.clearRun(); setGitInfo(null) }
+  }
+
+  async function openConversation(id: string, conversations = store.conversations) {
+    if (store.status === 'running' && id !== store.activeId) { store.setError('Cancele ou aguarde a execução atual antes de trocar de conversa.'); return }
+    store.setActive(id); store.clearRun()
+    const messages = await window.nocturne.conversations.messages(id)
+    store.setMessages(messages)
+    const lastMetadata = [...messages].reverse().find((message) => message.metadata)?.metadata
+    if (lastMetadata) restoreMetadata(lastMetadata)
+    const conversation = conversations.find((item) => item.id === id)
     if (conversation) setWorkspace(conversation.workspace)
+    try { await window.nocturne.codex.resume(id) } catch (error) { store.setError(`Não foi possível restaurar a thread: ${errorMessage(error)}`) }
+    void refreshGit(id)
   }
 
   async function send(event: FormEvent) {
     event.preventDefault()
-    const content = prompt.trim()
+    await submitPrompt(prompt)
+  }
+
+  async function submitPrompt(rawPrompt: string) {
+    const content = rawPrompt.trim()
     if (!content || store.status === 'running') return
     let conversationId = store.activeId
     if (!conversationId) {
@@ -62,22 +90,46 @@ function App() {
     }
     if (!conversationId) return
     store.clearRun(); setPrompt('')
-    store.addMessage({ id: fakeId(), conversationId, role: 'user', content, metadata: null, createdAt: now() })
-    try { await window.nocturne.codex.send(conversationId, content); await refresh() }
+    const selectedAttachments = attachments
+    setAttachments([])
+    store.addMessage({ id: fakeId(), conversationId, role: 'user', content, metadata: JSON.stringify({ attachments: selectedAttachments.map((item) => item.path) }), createdAt: now() })
+    try { const result = await window.nocturne.codex.send(conversationId, content, selectedAttachments.map((item) => item.path)); if (result.recreated) store.setError('A thread anterior não pôde ser restaurada. Uma nova thread foi criada para esta conversa.'); await refresh() }
     catch (error) { store.setStatus('error'); store.setError(error instanceof Error ? error.message : String(error)) }
+  }
+
+  async function attachFiles() {
+    if (!store.activeId) { store.setError('Crie uma conversa antes de anexar arquivos.'); return }
+    try { const selected = await window.nocturne.files.attach(store.activeId); setAttachments((current) => [...current, ...selected]) }
+    catch (error) { store.setError(errorMessage(error)) }
+  }
+
+  async function cancelRun() {
+    if (!store.activeId) return
+    try { await window.nocturne.codex.interrupt(store.activeId) }
+    catch (error) { store.setError(errorMessage(error)) }
   }
 
   function handleCodexEvent(event: CodexEvent) {
     const p = event.params
     if (event.method === 'item/agentMessage/delta') store.appendStream(String(p.delta ?? ''))
-    if (event.method === 'item/reasoning/summaryTextDelta') store.upsertActivity({ id: String(p.itemId), type: 'reasoning', label: 'Analisando o projeto', detail: String(p.delta ?? ''), status: 'running' })
+    if (event.method === 'item/reasoning/summaryTextDelta') appendActivityDetail(String(p.itemId), 'reasoning', 'Analisando o projeto', String(p.delta ?? ''))
+    if (event.method === 'item/commandExecution/outputDelta') appendActivityDetail(String(p.itemId), 'command', 'Executando comando', String(p.delta ?? ''))
+    if (event.method === 'item/fileChange/outputDelta') appendActivityDetail(String(p.itemId), 'file', 'Aplicando alterações', String(p.delta ?? ''))
     if (event.method === 'turn/diff/updated') store.setDiff(String(p.diff ?? ''))
     if (event.method === 'item/started') addItemActivity(p.item as Record<string, unknown>)
     if (event.method === 'item/completed') completeItem(p.item as Record<string, unknown>)
+    if (event.method === 'fs/changed') {
+      const paths = Array.isArray(p.changedPaths) ? p.changedPaths.map(String) : []
+      paths.forEach((filePath) => store.upsertActivity({ id: `fs-${filePath}`, type: 'file', label: 'Filesystem atualizado', detail: filePath, status: 'completed' }))
+    }
     if (event.method === 'item/commandExecution/requestApproval') store.addApproval({ key: String(p.approvalKey), kind: 'command', title: 'Executar comando', detail: String(p.command ?? p.reason ?? ''), status: 'pending' })
     if (event.method === 'item/fileChange/requestApproval') store.addApproval({ key: String(p.approvalKey), kind: 'file', title: 'Aplicar alterações', detail: 'O Codex solicitou permissão para modificar arquivos.', status: 'pending' })
     if (event.method === 'turn/completed') void finishTurn(p)
-    if (event.method === 'error') store.setError(String((p.error as Record<string, unknown>)?.message ?? p.message ?? 'Erro no Codex'))
+    if (event.method === 'error') {
+      const message = String((p.error as Record<string, unknown>)?.message ?? p.message ?? 'Erro no Codex')
+      store.setError(message); store.upsertActivity({ id: `error-${Date.now()}`, type: 'error', label: 'Erro na execução', detail: message, status: 'failed' })
+    }
+    if (event.method === 'warning') store.upsertActivity({ id: `warning-${Date.now()}`, type: 'error', label: 'Aviso do Codex', detail: String(p.message ?? p), status: 'failed' })
   }
 
   function addItemActivity(item?: Record<string, unknown>) {
@@ -85,13 +137,23 @@ function App() {
     const type = String(item.type)
     if (type === 'commandExecution') store.upsertActivity({ id: String(item.id), type: 'command', label: String(item.command ?? 'Executando comando'), status: 'running' })
     if (type === 'fileChange') store.upsertActivity({ id: String(item.id), type: 'file', label: 'Preparando alterações em arquivos', status: 'running' })
+    if (type === 'mcpToolCall' || type === 'dynamicToolCall') store.upsertActivity({ id: String(item.id), type: 'read', label: `Ferramenta: ${String(item.tool ?? type)}`, detail: JSON.stringify(item.arguments ?? ''), status: 'running' })
+  }
+
+  function appendActivityDetail(id: string, type: Activity['type'], label: string, delta: string) {
+    const current = useAppStore.getState().activities.find((item) => item.id === id)
+    store.upsertActivity({ id, type, label: current?.label || label, detail: `${current?.detail || ''}${delta}`, status: 'running' })
   }
 
   function completeItem(item?: Record<string, unknown>) {
     if (!item) return
     const type = String(item.type)
     if (type === 'commandExecution') store.upsertActivity({ id: String(item.id), type: 'command', label: String(item.command ?? 'Comando executado'), detail: String(item.aggregatedOutput ?? ''), status: item.status === 'failed' ? 'failed' : 'completed' })
-    if (type === 'fileChange') store.upsertActivity({ id: String(item.id), type: 'file', label: 'Arquivos atualizados', detail: describeChanges(item.changes), status: item.status === 'failed' ? 'failed' : 'completed' })
+    if (type === 'fileChange') {
+      store.upsertActivity({ id: String(item.id), type: 'file', label: 'Arquivos atualizados', detail: describeChanges(item.changes), status: item.status === 'failed' ? 'failed' : 'completed' })
+      store.addFiles(parseChanges(item.changes))
+    }
+    if (type === 'mcpToolCall' || type === 'dynamicToolCall') store.upsertActivity({ id: String(item.id), type: 'read', label: `Ferramenta concluída: ${String(item.tool ?? type)}`, detail: item.error ? JSON.stringify(item.error) : undefined, status: item.error ? 'failed' : 'completed' })
   }
 
   async function finishTurn(params: Record<string, unknown>) {
@@ -99,22 +161,50 @@ function App() {
     const turn = params.turn as Record<string, unknown> | undefined
     const error = turn?.error as Record<string, unknown> | undefined
     if (error) store.setError(String(error.message ?? 'A execução não foi concluída.'))
+    store.upsertActivity({ id: `completion-${String(turn?.id ?? Date.now())}`, type: 'completion', label: error ? 'Execução encerrada com erro' : 'Execução concluída', status: error ? 'failed' : 'completed' })
     if (state.streaming && state.activeId) {
-      const saved = await window.nocturne.codex.saveAssistant(state.activeId, state.streaming, { diff: state.diff, activities: state.activities })
+      const current = useAppStore.getState()
+      const saved = await window.nocturne.codex.saveAssistant(state.activeId, state.streaming, { diff: current.diff, activities: current.activities, files: current.files })
       store.addMessage(saved); store.appendStream(state.streaming ? '' : '')
       useAppStore.setState({ streaming: '' })
     }
+    if (state.activeId) void refreshGit(state.activeId)
   }
 
   async function decide(key: string, accepted: boolean) {
-    await window.nocturne.codex.approve(key, accepted)
-    store.resolveApproval(key, accepted ? 'accepted' : 'declined')
+    try { await window.nocturne.codex.approve(key, accepted); store.resolveApproval(key, accepted ? 'accepted' : 'declined') }
+    catch (error) { store.setError(errorMessage(error)) }
   }
 
   async function removeConversation(id: string) {
     await window.nocturne.conversations.delete(id)
     if (store.activeId === id) { store.setActive(null); store.setMessages([]) }
     await refresh()
+  }
+
+  function restoreMetadata(metadata: string) {
+    try {
+      const parsed = JSON.parse(metadata) as { diff?: string; activities?: Activity[]; files?: ChangedFile[] }
+      if (parsed.diff) store.setDiff(parsed.diff)
+      if (parsed.activities) parsed.activities.forEach(store.upsertActivity)
+      if (parsed.files) store.setFiles(parsed.files)
+    } catch { /* metadata from older versions is optional */ }
+  }
+
+  async function refreshGit(conversationId = store.activeId) {
+    if (!conversationId) return
+    try { const info = await window.nocturne.git.status(conversationId); setGitInfo(info); if (info.diff && !useAppStore.getState().diff) store.setDiff(info.diff) }
+    catch { setGitInfo(null) }
+  }
+
+  async function saveSettings(next: CodexSettings) {
+    try { const saved = await window.nocturne.settings.set(next); setSettings({ ...next, ...saved }); setSettingsOpen(false) }
+    catch (error) { store.setError(errorMessage(error)) }
+  }
+
+  async function reconnect() {
+    try { store.setError(null); await window.nocturne.codex.start(); if (store.activeId) await window.nocturne.codex.resume(store.activeId) }
+    catch (error) { store.setError(errorMessage(error)) }
   }
 
   const title = active?.title ?? 'Nova conversa'
@@ -134,8 +224,9 @@ function App() {
         {!filtered.length && <p className="empty-list">Nenhuma conversa ainda.</p>}
       </nav>
       <div className="sidebar-footer">
+        {workspaces.slice(0, 3).map((item) => <button key={item.path} className={`workspace-mini ${workspace === item.path ? 'active' : ''}`} onClick={() => chooseSavedWorkspace(item.path)}><Folder size={13}/><span>{item.name}</span></button>)}
         <button className="workspace-card" onClick={selectWorkspace}><span className="workspace-icon"><FolderOpen size={17}/></span><span><small>Workspace</small><strong>{workspace ? workspace.split(/[/\\]/).pop() : 'Selecionar projeto'}</strong></span><ChevronRight size={15}/></button>
-        <div className="profile"><div className="avatar">G</div><span><strong>Ambiente local</strong><small>Codex CLI</small></span><span className={`status-dot ${store.status}`}/></div>
+        <div className="profile"><div className="avatar">G</div><span><strong>Ambiente local</strong><small>{settings.codexVersion || 'Codex CLI'}</small></span><span className={`status-dot ${store.status}`}/><button className="settings-button" onClick={() => setSettingsOpen(true)}><Settings size={14}/></button></div>
       </div>
     </aside>
 
@@ -143,11 +234,11 @@ function App() {
       <header className="topbar">
         {!sidebarOpen && <button className="icon-button" onClick={() => setSidebarOpen(true)}><Menu size={18}/></button>}
         <div className="title-block"><h1>{title}</h1>{pathLabel && <button className="path-pill" onClick={selectWorkspace}><Folder size={13}/>{pathLabel.split(/[/\\]/).pop()}<ChevronRight size={12}/></button>}</div>
-        <div className="top-actions"><span className={`connection ${store.status}`}><span/>{statusText(store.status)}</span><button className={`icon-button ${rightOpen ? 'selected' : ''}`} onClick={() => setRightOpen(!rightOpen)}><PanelRight size={18}/></button></div>
+        <div className="top-actions">{gitInfo && <span className="branch-pill"><GitBranch size={12}/>{gitInfo.branch}</span>}<button className={`connection ${store.status}`} onClick={reconnect} title="Reconectar ao App Server"><span/>{statusText(store.status)}</button><button className="icon-button" onClick={() => setSettingsOpen(true)}><Settings size={17}/></button><button className={`icon-button ${rightOpen ? 'selected' : ''}`} onClick={() => setRightOpen(!rightOpen)}><PanelRight size={18}/></button></div>
       </header>
 
       <section className="chat-scroll">
-        {!store.activeId && !store.messages.length ? <Welcome onNew={createConversation} onWorkspace={selectWorkspace}/> : <div className="chat-content">
+        {!store.activeId && !store.messages.length ? <Welcome onNew={createConversation} onWorkspace={selectWorkspace} onPrompt={submitPrompt}/> : <div className="chat-content">
           <div className="date-divider"><span>Hoje</span></div>
           {store.messages.map((message) => <MessageBubble key={message.id} message={message}/>) }
           {store.streaming && <AssistantMessage content={store.streaming} streaming/>}
@@ -156,40 +247,63 @@ function App() {
         </div>}
       </section>
 
-      <div className="composer-wrap"><form className="composer" onSubmit={send}>
+      <div className="composer-wrap"><div className="quick-actions"><button onClick={() => submitPrompt('Analise este projeto e resuma arquitetura, dependências, riscos e próximos passos.')}><Code2 size={11}/>Analisar</button><button onClick={() => submitPrompt('Crie documentação completa em Markdown para este projeto e salve em DOCUMENTACAO.md.')}><FileCode2 size={11}/>Documentar</button><button onClick={() => submitPrompt('Revise as alterações Git atuais, buscando bugs, riscos e testes ausentes. Não modifique arquivos sem pedir.')}><GitBranch size={11}/>Revisar diff</button></div><form className="composer" onSubmit={send}>
+        {!!attachments.length && <div className="attachment-list">{attachments.map((item) => <span key={item.path}><Paperclip size={11}/>{item.name}<button type="button" onClick={() => setAttachments((current) => current.filter((file) => file.path !== item.path))}><X size={11}/></button></span>)}</div>}
         <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit() } }} placeholder={store.activeId ? 'Peça ao Codex para criar, analisar ou modificar...' : 'Selecione um workspace e descreva o que deseja criar...'} rows={1}/>
-        <div className="composer-bottom"><div className="composer-tools"><button type="button" onClick={selectWorkspace}><Plus size={17}/></button><span><ShieldCheck size={14}/> Workspace protegido</span></div><button className={`send-button ${store.status === 'running' ? 'stop' : ''}`} disabled={!prompt.trim() && store.status !== 'running'}>{store.status === 'running' ? <Square size={14} fill="currentColor"/> : <Send size={16}/>}</button></div>
+        <div className="composer-bottom"><div className="composer-tools"><button type="button" title="Anexar arquivo" onClick={attachFiles}><Paperclip size={16}/></button><span><ShieldCheck size={14}/> {settings.sandbox}</span></div><button type={store.status === 'running' ? 'button' : 'submit'} onClick={store.status === 'running' ? cancelRun : undefined} className={`send-button ${store.status === 'running' ? 'stop' : ''}`} disabled={!prompt.trim() && store.status !== 'running'}>{store.status === 'running' ? <Square size={14} fill="currentColor"/> : <Send size={16}/>}</button></div>
       </form><small className="composer-hint">Enter para enviar · Shift + Enter para nova linha</small></div>
     </main>
 
-    {rightOpen && <Inspector activities={store.activities} approvals={store.approvals} diff={store.diff} onDecide={decide}/>} 
+    {rightOpen && <Inspector activities={store.activities} approvals={store.approvals} diff={store.diff} files={store.files} activeId={store.activeId} gitInfo={gitInfo} documentContent={documentContent} onDecide={decide} onError={store.setError} onGitRefresh={refreshGit}/>} 
+    {settingsOpen && <SettingsDialog value={settings} status={store.status} onClose={() => setSettingsOpen(false)} onSave={saveSettings}/>} 
   </div>
 }
 
-function Welcome({ onNew, onWorkspace }: { onNew(): void; onWorkspace(): void }) {
-  return <div className="welcome"><div className="welcome-orb"><Sparkles size={30}/></div><h2>O que vamos construir?</h2><p>Converse com o Codex, explore seu projeto e transforme ideias em código — com você no controle.</p><div className="welcome-actions"><button onClick={onWorkspace}><FolderOpen size={17}/>Abrir projeto</button><button onClick={onNew}><MessageSquarePlus size={17}/>Nova conversa</button></div><div className="suggestions"><button onClick={onNew}><Code2/><span><strong>Analisar este projeto</strong><small>Entenda arquitetura e dependências</small></span></button><button onClick={onNew}><FileCode2/><span><strong>Criar documentação</strong><small>Gere um guia completo do projeto</small></span></button><button onClick={onNew}><GitBranch/><span><strong>Revisar alterações</strong><small>Encontre problemas antes do commit</small></span></button></div></div>
+function Welcome({ onNew, onWorkspace, onPrompt }: { onNew(): void; onWorkspace(): void; onPrompt(prompt: string): void }) {
+  return <div className="welcome"><div className="welcome-orb"><Sparkles size={30}/></div><h2>O que vamos construir?</h2><p>Converse com o Codex, explore seu projeto e transforme ideias em código — com você no controle.</p><div className="welcome-actions"><button onClick={onWorkspace}><FolderOpen size={17}/>Abrir projeto</button><button onClick={onNew}><MessageSquarePlus size={17}/>Nova conversa</button></div><div className="suggestions"><button onClick={() => onPrompt('Analise este projeto. Explique a arquitetura, dependências, pontos de entrada, riscos e sugira próximos passos práticos.')}><Code2/><span><strong>Analisar este projeto</strong><small>Entenda arquitetura e dependências</small></span></button><button onClick={() => onPrompt('Crie uma documentação completa deste projeto em Markdown, incluindo instalação, arquitetura, uso, scripts e solução de problemas. Salve em DOCUMENTACAO.md.')}><FileCode2/><span><strong>Criar documentação</strong><small>Gere um guia completo do projeto</small></span></button><button onClick={() => onPrompt('Revise todas as alterações Git atuais. Aponte bugs, riscos, problemas de segurança e testes ausentes. Não modifique arquivos sem pedir.')}><GitBranch/><span><strong>Revisar alterações</strong><small>Encontre problemas antes do commit</small></span></button></div></div>
 }
 
 function MessageBubble({ message }: { message: Message }) {
-  return message.role === 'user' ? <div className="user-row"><div className="user-message">{message.content}</div><div className="mini-avatar">G</div></div> : <AssistantMessage content={message.content}/>
+  if (message.role !== 'user') return <AssistantMessage content={message.content}/>
+  let attachments: string[] = []
+  try { attachments = (JSON.parse(message.metadata || '{}') as { attachments?: string[] }).attachments || [] } catch { /* optional metadata */ }
+  return <div className="user-row"><div className="user-message">{message.content}{!!attachments.length && <div className="message-attachments">{attachments.map((filePath) => <span key={filePath}><Paperclip size={10}/>{filePath.split(/[/\\]/).pop()}</span>)}</div>}</div><div className="mini-avatar">G</div></div>
 }
 
 function AssistantMessage({ content, streaming }: { content: string; streaming?: boolean }) {
   return <div className="assistant-row"><div className="assistant-avatar"><Sparkles size={15}/></div><div className="assistant-content"><div className="assistant-name">Nocturne Codex {streaming && <span>escrevendo</span>}</div><ReactMarkdown>{content}</ReactMarkdown>{streaming && <span className="caret"/>}</div></div>
 }
 
-function Inspector({ activities, approvals, diff, onDecide }: { activities: Activity[]; approvals: ReturnType<typeof useAppStore.getState>['approvals']; diff: string; onDecide(key: string, accepted: boolean): void }) {
+function Inspector({ activities, approvals, diff, files, activeId, gitInfo, documentContent, onDecide, onError, onGitRefresh }: { activities: Activity[]; approvals: ReturnType<typeof useAppStore.getState>['approvals']; diff: string; files: ChangedFile[]; activeId: string | null; gitInfo: GitInfo | null; documentContent: string; onDecide(key: string, accepted: boolean): void; onError(value: string): void; onGitRefresh(): void }) {
+  const [commitMessage, setCommitMessage] = useState('')
+  const open = async (filePath: string, action: 'file' | 'folder' | 'editor') => { if (!activeId) return; try { await window.nocturne.files.open(activeId, filePath, action) } catch (error) { onError(errorMessage(error)) } }
+  const exportDocument = async (format: 'md' | 'docx' | 'pdf' | 'html') => {
+    if (!activeId || !documentContent) { onError('Não há uma resposta Markdown para exportar.'); return }
+    try { if (format === 'md') await window.nocturne.documents.saveMarkdown(activeId, documentContent); else await window.nocturne.documents.export(activeId, documentContent, format) }
+    catch (error) { onError(errorMessage(error)) }
+  }
+  const commit = async () => { if (!activeId || !commitMessage.trim()) return; try { await window.nocturne.git.commit(activeId, commitMessage); setCommitMessage(''); onGitRefresh() } catch (error) { onError(errorMessage(error)) } }
   return <aside className="inspector"><div className="inspector-header"><div><ActivityIcon size={16}/><strong>Atividade</strong></div><span>{activities.filter((a) => a.status === 'running').length ? 'Em execução' : 'Em espera'}</span></div>
     <div className="inspector-scroll">
       {approvals.map((approval) => <div className={`approval-card ${approval.status}`} key={approval.key}><div className="approval-title"><span>{approval.kind === 'command' ? <Command size={15}/> : <FileCode2 size={15}/>}</span><strong>{approval.title}</strong></div><pre>{approval.detail}</pre>{approval.status === 'pending' ? <div className="approval-actions"><button onClick={() => onDecide(approval.key, false)}><X size={14}/>Recusar</button><button className="accept" onClick={() => onDecide(approval.key, true)}><Check size={14}/>Aprovar</button></div> : <small>{approval.status === 'accepted' ? 'Aprovado' : 'Recusado'}</small>}</div>)}
       <div className="timeline">{activities.map((item) => <div className="timeline-item" key={item.id}><span className={`timeline-dot ${item.status}`}>{item.status === 'running' ? <LoaderCircle size={13}/> : item.type === 'command' ? <Command size={12}/> : item.type === 'file' ? <FileCode2 size={12}/> : <Sparkles size={12}/>}</span><div><strong>{item.label}</strong>{item.detail && <pre>{item.detail.slice(0, 700)}</pre>}</div></div>)}</div>
+      {!!files.length && <div className="files-panel"><div className="diff-title"><FileCode2 size={14}/>Arquivos alterados <span>{files.length}</span></div>{files.map((file) => <div className="changed-file" key={file.path}><span className={`file-kind ${file.kind}`}>{file.kind[0].toUpperCase()}</span><button title={file.path} onClick={() => open(file.path, 'editor')}>{file.path.split(/[/\\]/).pop()}</button><button title="Abrir arquivo" onClick={() => open(file.path, 'file')}><ExternalLink size={12}/></button><button title="Mostrar na pasta" onClick={() => open(file.path, 'folder')}><FolderOpen size={12}/></button></div>)}</div>}
       {diff && <div className="diff-panel"><div className="diff-title"><FileCode2 size={14}/>Alterações propostas</div><pre>{diff.split('\n').map((line, i) => <span key={i} className={line.startsWith('+') ? 'added' : line.startsWith('-') ? 'removed' : ''}>{line}{'\n'}</span>)}</pre></div>}
+      {gitInfo && <div className="git-panel"><div className="diff-title"><GitBranch size={14}/>Git · {gitInfo.branch}</div><pre>{gitInfo.status || 'Workspace limpo'}</pre><div className="commit-row"><input value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} placeholder="Mensagem do commit"/><button disabled={!commitMessage.trim() || !gitInfo.status} onClick={commit}><Check size={13}/></button></div></div>}
+      <div className="document-panel"><div className="diff-title"><FileDown size={14}/>Documento da resposta</div><div className="export-actions"><button onClick={() => exportDocument('md')}>MD</button><button onClick={() => exportDocument('html')}>HTML</button><button onClick={() => exportDocument('docx')}>DOCX</button><button onClick={() => exportDocument('pdf')}>PDF</button></div></div>
       {!activities.length && !approvals.length && !diff && <div className="inspector-empty"><div><ActivityIcon size={22}/></div><p>A atividade do agente aparecerá aqui.</p><small>Comandos, arquivos e aprovações em tempo real.</small></div>}
     </div>
   </aside>
 }
 
+function SettingsDialog({ value, status, onClose, onSave }: { value: CodexSettings; status: string; onClose(): void; onSave(value: CodexSettings): void }) {
+  const [form, setForm] = useState(value)
+  return <div className="modal-backdrop" onMouseDown={onClose}><div className="settings-dialog" onMouseDown={(event) => event.stopPropagation()}><div className="modal-title"><Settings size={17}/><strong>Configurações do Codex</strong><button onClick={onClose}><X size={16}/></button></div><div className="codex-info"><span className={`status-dot ${status}`}/><div><strong>{statusText(status)}</strong><small>{value.codexVersion || 'Versão indisponível'} · {value.codexPath || 'codex'}<br/>Pandoc: {value.pandocVersion || 'indisponível'}</small></div></div><label>Modelo<input value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} placeholder="Padrão do Codex"/></label><label>Sandbox<select value={form.sandbox} onChange={(event) => setForm({ ...form, sandbox: event.target.value as CodexSettings['sandbox'] })}><option value="read-only">Somente leitura</option><option value="workspace-write">Escrita no workspace</option></select></label><label>Política de aprovação<select value={form.approvalPolicy} onChange={(event) => setForm({ ...form, approvalPolicy: event.target.value as CodexSettings['approvalPolicy'] })}><option value="untrusted">Comandos não confiáveis</option><option value="on-request">Quando solicitado</option><option value="never">Nunca solicitar</option></select></label><div className="modal-actions"><button onClick={onClose}>Cancelar</button><button className="primary" onClick={() => onSave(form)}>Salvar</button></div></div></div>
+}
+
 function describeChanges(value: unknown) { if (!Array.isArray(value)) return ''; return value.map((item) => String((item as Record<string, unknown>).path ?? '')).filter(Boolean).join('\n') }
+function parseChanges(value: unknown): ChangedFile[] { if (!Array.isArray(value)) return []; return value.map((item) => { const change = item as Record<string, unknown>; const rawKind = String(change.kind ?? 'modified').toLowerCase(); return { path: String(change.path ?? ''), kind: (rawKind.includes('add') ? 'created' : rawKind.includes('delete') ? 'deleted' : 'modified') as ChangedFile['kind'], status: String(change.status ?? 'completed') } }).filter((item) => item.path) }
+function errorMessage(error: unknown) { return error instanceof Error ? error.message : String(error) }
 function relativeTime(date: string) { const mins = Math.floor((Date.now() - new Date(date).getTime()) / 60000); return mins < 1 ? 'agora' : mins < 60 ? `${mins} min` : mins < 1440 ? `${Math.floor(mins / 60)} h` : `${Math.floor(mins / 1440)} d` }
 function statusText(status: string) { return ({ offline: 'Codex offline', starting: 'Conectando', ready: 'Codex pronto', running: 'Executando', error: 'Erro de conexão' } as Record<string, string>)[status] }
 

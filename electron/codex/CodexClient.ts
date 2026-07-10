@@ -14,13 +14,20 @@ export class CodexClient extends EventEmitter {
   private pending = new Map<RpcId, PendingCall>()
   private approvalRequests = new Map<string, RpcId>()
   private starting: Promise<void> | null = null
+  private loadedThreads = new Set<string>()
+  private activeTurns = new Map<string, string>()
   status: CodexStatus = 'offline'
 
   constructor() {
     super()
     this.process.on('message', (message) => this.handleMessage(message))
-    this.process.on('error', (error) => this.setStatus('error', error.message))
-    this.process.on('exit', () => this.setStatus('offline'))
+    this.process.on('error', (error) => { this.rejectPending(error); this.setStatus('error', error.message) })
+    this.process.on('exit', (code) => {
+      this.loadedThreads.clear()
+      this.activeTurns.clear()
+      this.rejectPending(new Error(`Codex App Server foi encerrado${code === null ? '.' : ` com código ${code}.`}`))
+      this.setStatus(code === 0 ? 'offline' : 'error', code === 0 ? undefined : `Codex App Server foi encerrado com código ${code}.`)
+    })
     this.process.on('log', (line) => this.emit('log', line))
   }
 
@@ -31,29 +38,56 @@ export class CodexClient extends EventEmitter {
     try { await this.starting } finally { this.starting = null }
   }
 
-  async createThread(workspace: string) {
+  async createThread(workspace: string, settings: Record<string, string> = {}) {
     await this.start()
     const result = await this.call('thread/start', {
       cwd: workspace,
       runtimeWorkspaceRoots: [workspace],
-      approvalPolicy: 'on-request',
+      approvalPolicy: settings.approvalPolicy || 'on-request',
       approvalsReviewer: 'user',
-      sandbox: 'workspace-write',
+      sandbox: settings.sandbox || 'workspace-write',
+      model: settings.model || undefined,
       ephemeral: false,
     }) as { thread: { id: string } }
+    this.loadedThreads.add(result.thread.id)
     return result.thread.id
   }
 
-  async sendTurn(threadId: string, workspace: string, prompt: string) {
+  async resumeThread(threadId: string, workspace: string, settings: Record<string, string> = {}) {
+    await this.start()
+    if (this.loadedThreads.has(threadId)) return
+    await this.call('thread/resume', {
+      threadId, cwd: workspace, runtimeWorkspaceRoots: [workspace],
+      approvalPolicy: settings.approvalPolicy || 'on-request', approvalsReviewer: 'user',
+      sandbox: settings.sandbox || 'workspace-write', model: settings.model || undefined,
+    })
+    this.loadedThreads.add(threadId)
+  }
+
+  async sendTurn(threadId: string, workspace: string, prompt: string, settings: Record<string, string> = {}, attachments: string[] = []) {
+    await this.resumeThread(threadId, workspace, settings)
     this.setStatus('running')
-    return this.call('turn/start', {
+    const result = await this.call('turn/start', {
       threadId,
       cwd: workspace,
       runtimeWorkspaceRoots: [workspace],
-      approvalPolicy: 'on-request',
+      approvalPolicy: settings.approvalPolicy || 'on-request',
       approvalsReviewer: 'user',
-      input: [{ type: 'text', text: prompt, text_elements: [] }],
-    })
+      model: settings.model || undefined,
+      sandboxPolicy: toSandboxPolicy(settings.sandbox, workspace),
+      input: [
+        { type: 'text', text: prompt, text_elements: [] },
+        ...attachments.map((attachment) => ({ type: 'mention', name: attachment.split(/[\\/]/).pop() || attachment, path: attachment })),
+      ],
+    }) as { turn: { id: string } }
+    this.activeTurns.set(threadId, result.turn.id)
+    return result
+  }
+
+  async interrupt(threadId: string) {
+    const turnId = this.activeTurns.get(threadId)
+    if (!turnId) throw new Error('Nenhuma execução ativa para cancelar.')
+    await this.call('turn/interrupt', { threadId, turnId })
   }
 
   async resolveApproval(key: string, accepted: boolean, forSession = false) {
@@ -67,6 +101,8 @@ export class CodexClient extends EventEmitter {
   }
 
   stop() { this.process.stop() }
+
+  async readConfig() { await this.start(); return this.call('config/read', {}) }
 
   private async initialize() {
     this.setStatus('starting')
@@ -113,7 +149,11 @@ export class CodexClient extends EventEmitter {
         this.approvalRequests.set(itemId, message.id)
         this.emit('event', { method: message.method, params: { ...params, approvalKey: itemId } } satisfies CodexEvent)
       } else {
-        if (message.method === 'turn/completed') this.setStatus('ready')
+        if (message.method === 'turn/completed') {
+          const threadId = String(params.threadId ?? '')
+          if (threadId) this.activeTurns.delete(threadId)
+          this.setStatus('ready')
+        }
         this.emit('event', { method: message.method, params } satisfies CodexEvent)
       }
     }
@@ -123,4 +163,15 @@ export class CodexClient extends EventEmitter {
     this.status = status
     this.emit('status', { status, error })
   }
+
+  private rejectPending(error: Error) {
+    for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(error) }
+    this.pending.clear()
+  }
+}
+
+function toSandboxPolicy(mode: string | undefined, workspace: string) {
+  return mode === 'read-only'
+    ? { type: 'readOnly', networkAccess: false }
+    : { type: 'workspaceWrite', writableRoots: [workspace], networkAccess: false, excludeTmpdirEnvVar: false, excludeSlashTmp: false }
 }

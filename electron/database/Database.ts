@@ -20,6 +20,8 @@ export interface MessageRow {
   createdAt: string
 }
 
+export interface WorkspaceRow { path: string; name: string; createdAt: string; lastOpenedAt: string }
+
 export class LocalDatabase {
   private db: Database.Database
 
@@ -38,6 +40,12 @@ export class LocalDatabase {
         FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
       );
       CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, created_at);
+      CREATE TABLE IF NOT EXISTS workspaces (
+        path TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL, last_opened_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      INSERT OR IGNORE INTO workspaces(path,name,created_at,last_opened_at)
+        SELECT workspace, workspace, MIN(created_at), MAX(updated_at) FROM conversations GROUP BY workspace;
     `)
   }
 
@@ -47,6 +55,7 @@ export class LocalDatabase {
   }
 
   createConversation(workspace: string): ConversationRow {
+    this.touchWorkspace(workspace)
     const now = new Date().toISOString()
     const row = { id: randomUUID(), title: 'Nova conversa', workspace, codexThreadId: null, createdAt: now, updatedAt: now }
     this.db.prepare(`INSERT INTO conversations (id,title,workspace,created_at,updated_at) VALUES (@id,@title,@workspace,@createdAt,@updatedAt)`).run(row)
@@ -55,6 +64,33 @@ export class LocalDatabase {
 
   setThread(id: string, threadId: string) {
     this.db.prepare('UPDATE conversations SET codex_thread_id=?, updated_at=? WHERE id=?').run(threadId, new Date().toISOString(), id)
+  }
+
+  clearThread(id: string) { this.db.prepare('UPDATE conversations SET codex_thread_id=NULL WHERE id=?').run(id) }
+
+  listWorkspaces(): WorkspaceRow[] {
+    return this.db.prepare(`SELECT path, name, created_at createdAt, last_opened_at lastOpenedAt
+      FROM workspaces ORDER BY last_opened_at DESC`).all() as WorkspaceRow[]
+  }
+
+  touchWorkspace(workspace: string) {
+    const now = new Date().toISOString()
+    this.db.prepare(`INSERT INTO workspaces(path,name,created_at,last_opened_at) VALUES(?,?,?,?)
+      ON CONFLICT(path) DO UPDATE SET name=excluded.name,last_opened_at=excluded.last_opened_at`)
+      .run(workspace, path.basename(workspace), now, now)
+  }
+
+  removeWorkspace(workspace: string) { this.db.prepare('DELETE FROM workspaces WHERE path=?').run(workspace) }
+
+  getSettings(): Record<string, string> {
+    const rows = this.db.prepare('SELECT key,value FROM settings').all() as Array<{ key: string; value: string }>
+    return Object.fromEntries(rows.map((row) => [row.key, row.value]))
+  }
+
+  setSettings(values: Record<string, string>) {
+    const statement = this.db.prepare(`INSERT INTO settings(key,value) VALUES(?,?)
+      ON CONFLICT(key) DO UPDATE SET value=excluded.value`)
+    this.db.transaction(() => Object.entries(values).forEach(([key, value]) => statement.run(key, value)))()
   }
 
   renameFromPrompt(id: string, prompt: string) {

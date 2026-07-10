@@ -36,9 +36,22 @@ O processo renderer não possui acesso a Node.js. O App Server inicia com `works
 
 ## Escopo do MVP
 
-- seleção de workspace e histórico local;
-- criação e retomada de threads do Codex;
-- streaming de mensagens e progresso do agente;
-- comandos, alterações de arquivos e diff em tempo real;
+- múltiplos workspaces com conversas separadas e histórico SQLite;
+- criação, retomada (`thread/resume`) e continuidade de threads reais do Codex;
+- streaming, cancelamento de turnos e reconexão do App Server;
+- atividades de raciocínio, ferramentas, comandos, alterações, erros e conclusão;
 - aprovação ou recusa de comandos e patches;
-- persistência de conversas e mensagens em SQLite.
+- arquivos alterados, abertura pelo sistema e diff do Codex/Git;
+- anexos de texto locais limitados ao workspace e a 1 MB por arquivo;
+- atalhos para análise, documentação e revisão Git;
+- salvamento Markdown e exportação HTML, DOCX ou PDF com Pandoc;
+- configurações de modelo, sandbox e política de aprovação;
+- status/branch/diff Git e criação confirmada de commits.
+
+## Dependências opcionais
+
+O Pandoc precisa estar disponível no `PATH` para exportar HTML, DOCX e PDF. A geração de PDF também depende de um mecanismo PDF compatível instalado no sistema. Quando uma dependência externa falha, a mensagem original é exibida na interface.
+
+## Segurança operacional
+
+Arquivos anexados e abertos são validados contra a raiz do workspace. Comandos do Codex seguem a política escolhida e, por padrão, usam `workspace-write` com rede desabilitada. A criação de commit exige confirmação e inclui um `git add -A`; o aplicativo não executa push. Exclusão de conversas remove apenas o histórico local do Nocturne.
