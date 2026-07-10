@@ -47,6 +47,10 @@ O processo renderer não possui acesso a Node.js. O App Server inicia com `works
 - salvamento Markdown e exportação HTML, DOCX ou PDF com Pandoc;
 - configurações de modelo, sandbox e política de aprovação;
 - status/branch/diff Git e criação confirmada de commits.
+- sistema de artefatos por conversa para respostas, arquivos, diffs e documentos exportados;
+- preview interno seguro para texto, Markdown e imagens de até 2 MB;
+- memória persistente e editável por workspace, enviada ao Codex em cada turno;
+- painel de planejamento com etapas, estados e progresso emitidos pelo App Server.
 
 ## Dependências opcionais
 
@@ -55,3 +59,5 @@ O Pandoc precisa estar disponível no `PATH` para exportar HTML, DOCX e PDF. A g
 ## Segurança operacional
 
 Arquivos anexados e abertos são validados contra a raiz do workspace. Comandos do Codex seguem a política escolhida e, por padrão, usam `workspace-write` com rede desabilitada. A criação de commit exige confirmação e inclui um `git add -A`; o aplicativo não executa push. Exclusão de conversas remove apenas o histórico local do Nocturne.
+
+Previews e documentos salvos pelo aplicativo também permanecem dentro do workspace. Remover um artefato do painel apaga somente seu registro local, nunca o arquivo correspondente.

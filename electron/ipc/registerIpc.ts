@@ -57,11 +57,38 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   ipcMain.handle('files:open', async (_event, value: unknown) => {
     const data = z.object({ conversationId: z.string().uuid(), filePath: z.string().min(1), action: z.enum(['file', 'folder', 'editor']) }).parse(value)
     const conversation = getConversation(database, data.conversationId)
-    assertInsideWorkspace(data.filePath, conversation.workspace)
-    if (!fs.existsSync(data.filePath)) throw new Error('Arquivo não encontrado.')
-    if (data.action === 'folder') { shell.showItemInFolder(data.filePath); return }
-    const error = await shell.openPath(data.filePath)
+    const filePath = resolveWorkspaceFile(data.filePath, conversation.workspace)
+    if (!fs.existsSync(filePath)) throw new Error('Arquivo não encontrado.')
+    if (data.action === 'folder') { shell.showItemInFolder(filePath); return }
+    const error = await shell.openPath(filePath)
     if (error) throw new Error(error)
+  })
+
+  ipcMain.handle('files:preview', (_event, value: unknown) => {
+    const data = z.object({ conversationId: z.string().uuid(), filePath: z.string().min(1) }).parse(value)
+    const conversation = getConversation(database, data.conversationId)
+    const filePath = resolveWorkspaceFile(data.filePath, conversation.workspace)
+    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) throw new Error('Arquivo não encontrado.')
+    const stat = fs.statSync(filePath)
+    if (stat.size > 2_000_000) throw new Error('Preview limitado a arquivos de até 2 MB.')
+    const extension = path.extname(filePath).toLowerCase()
+    const imageMime = ({ '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml' } as Record<string, string>)[extension]
+    if (imageMime) return { kind: 'image', name: path.basename(filePath), filePath, mime: imageMime, content: `data:${imageMime};base64,${fs.readFileSync(filePath).toString('base64')}`, size: stat.size }
+    if (!isTextFile(extension)) throw new Error('Este formato não possui preview interno.')
+    return { kind: extension === '.md' ? 'markdown' : 'text', name: path.basename(filePath), filePath, mime: 'text/plain', content: fs.readFileSync(filePath, 'utf8'), size: stat.size }
+  })
+
+  ipcMain.handle('memory:get', (_event, value: unknown) => database.getWorkspaceMemory(getConversation(database, idSchema.parse(value)).workspace))
+  ipcMain.handle('memory:set', (_event, value: unknown) => {
+    const data = z.object({ conversationId: z.string().uuid(), content: z.string().max(20_000) }).parse(value)
+    return database.setWorkspaceMemory(getConversation(database, data.conversationId).workspace, data.content)
+  })
+
+  ipcMain.handle('artifacts:list', (_event, value: unknown) => database.listArtifacts(idSchema.parse(value)))
+  ipcMain.handle('artifacts:delete', (_event, value: unknown) => {
+    const data = z.object({ conversationId: z.string().uuid(), artifactId: z.string().uuid() }).parse(value)
+    if (!database.listArtifacts(data.conversationId).some((artifact) => artifact.id === data.artifactId)) throw new Error('Artefato não encontrado.')
+    database.deleteArtifact(data.artifactId)
   })
 
   ipcMain.handle('codex:start', async () => {
@@ -77,21 +104,22 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
 
     let threadId = conversation.codexThreadId
     let recreated = false
+    const memory = database.getWorkspaceMemory(conversation.workspace).content
     if (!threadId) {
-      threadId = await codex.createThread(conversation.workspace, database.getSettings())
+      threadId = await codex.createThread(conversation.workspace, database.getSettings(), memory)
       database.setThread(conversationId, threadId)
     } else {
       try { await codex.resumeThread(threadId, conversation.workspace, database.getSettings()) }
       catch {
         database.clearThread(conversationId)
-        threadId = await codex.createThread(conversation.workspace, database.getSettings())
+        threadId = await codex.createThread(conversation.workspace, database.getSettings(), memory)
         database.setThread(conversationId, threadId)
         recreated = true
       }
     }
     database.addMessage(conversationId, 'user', prompt, { attachments })
     if (conversation.title === 'Nova conversa') database.renameFromPrompt(conversationId, prompt)
-    await codex.sendTurn(threadId, conversation.workspace, prompt, database.getSettings(), attachments)
+    await codex.sendTurn(threadId, conversation.workspace, prompt, database.getSettings(), attachments, memory)
     return { threadId, recreated }
   })
 
@@ -110,7 +138,16 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
 
   ipcMain.handle('codex:save-assistant', (_event, value: unknown) => {
     const data = z.object({ conversationId: z.string().uuid(), content: z.string(), metadata: z.unknown().optional() }).parse(value)
-    return database.addMessage(data.conversationId, 'assistant', data.content, data.metadata)
+    const conversation = getConversation(database, data.conversationId)
+    const message = database.addMessage(data.conversationId, 'assistant', data.content, data.metadata)
+    database.addArtifact(data.conversationId, conversation.workspace, 'response', `Resposta · ${new Date().toLocaleString()}`, null, data.content)
+    const metadata = data.metadata as { files?: Array<{ path?: string; kind?: string }>; diff?: string } | undefined
+    for (const file of metadata?.files ?? []) {
+      if (!file.path) continue
+      database.addArtifact(data.conversationId, conversation.workspace, 'file', path.basename(file.path), file.path, null, { kind: file.kind })
+    }
+    if (metadata?.diff) database.addArtifact(data.conversationId, conversation.workspace, 'diff', 'Alterações do turno', null, metadata.diff)
+    return message
   })
 
   ipcMain.handle('codex:approve', (_event, value: unknown) => {
@@ -141,7 +178,9 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     const conversation = getConversation(database, data.conversationId)
     const result = await dialog.showSaveDialog(win, { title: 'Salvar documento Markdown', defaultPath: path.join(conversation.workspace, safeName(data.name, '.md')), filters: [{ name: 'Markdown', extensions: ['md'] }] })
     if (result.canceled || !result.filePath) return null
+    assertInsideWorkspace(result.filePath, conversation.workspace)
     fs.writeFileSync(result.filePath, data.content, 'utf8')
+    database.addArtifact(data.conversationId, conversation.workspace, 'document', path.basename(result.filePath), result.filePath, data.content, { format: 'md' })
     return result.filePath
   })
 
@@ -152,7 +191,9 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     if (!available) throw new Error('Pandoc não foi encontrado no PATH.')
     const result = await dialog.showSaveDialog(win, { title: `Exportar ${data.format.toUpperCase()}`, defaultPath: path.join(conversation.workspace, `documento.${data.format}`), filters: [{ name: data.format.toUpperCase(), extensions: [data.format] }] })
     if (result.canceled || !result.filePath) return null
+    assertInsideWorkspace(result.filePath, conversation.workspace)
     await pipeCommand('pandoc', ['-f', 'markdown', '-t', data.format, '-o', result.filePath], data.content, conversation.workspace)
+    database.addArtifact(data.conversationId, conversation.workspace, 'document', path.basename(result.filePath), result.filePath, data.format === 'html' ? fs.readFileSync(result.filePath, 'utf8') : null, { format: data.format })
     return result.filePath
   })
 }
@@ -173,6 +214,16 @@ function assertWorkspace(conversation: ConversationRow) {
 function assertInsideWorkspace(filePath: string, workspace: string) {
   const relative = path.relative(path.resolve(workspace), path.resolve(filePath))
   if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('O arquivo precisa estar dentro do workspace selecionado.')
+}
+
+function resolveWorkspaceFile(filePath: string, workspace: string) {
+  const resolved = path.isAbsolute(filePath) ? path.resolve(filePath) : path.resolve(workspace, filePath)
+  assertInsideWorkspace(resolved, workspace)
+  return resolved
+}
+
+function isTextFile(extension: string) {
+  return new Set(['.txt', '.md', '.json', '.js', '.jsx', '.ts', '.tsx', '.css', '.html', '.xml', '.yaml', '.yml', '.toml', '.py', '.rs', '.go', '.java', '.c', '.cpp', '.h', '.sh', '.sql', '.env', '.gitignore']).has(extension)
 }
 
 async function run(command: string, args: string[], cwd: string) {

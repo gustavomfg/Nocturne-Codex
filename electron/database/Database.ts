@@ -21,6 +21,7 @@ export interface MessageRow {
 }
 
 export interface WorkspaceRow { path: string; name: string; createdAt: string; lastOpenedAt: string }
+export interface ArtifactRow { id: string; conversationId: string; workspace: string; type: string; title: string; filePath: string | null; content: string | null; metadata: string | null; createdAt: string; updatedAt: string }
 
 export class LocalDatabase {
   private db: Database.Database
@@ -44,6 +45,16 @@ export class LocalDatabase {
         path TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL, last_opened_at TEXT NOT NULL
       );
       CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS workspace_memory (
+        workspace TEXT PRIMARY KEY, content TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS artifacts (
+        id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL, workspace TEXT NOT NULL,
+        type TEXT NOT NULL, title TEXT NOT NULL, file_path TEXT, content TEXT, metadata TEXT,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_artifacts_conversation ON artifacts(conversation_id, updated_at);
       INSERT OR IGNORE INTO workspaces(path,name,created_at,last_opened_at)
         SELECT workspace, workspace, MIN(created_at), MAX(updated_at) FROM conversations GROUP BY workspace;
     `)
@@ -92,6 +103,36 @@ export class LocalDatabase {
       ON CONFLICT(key) DO UPDATE SET value=excluded.value`)
     this.db.transaction(() => Object.entries(values).forEach(([key, value]) => statement.run(key, value)))()
   }
+
+  getWorkspaceMemory(workspace: string) {
+    const row = this.db.prepare('SELECT content, updated_at updatedAt FROM workspace_memory WHERE workspace=?').get(workspace) as { content: string; updatedAt: string } | undefined
+    return row ?? { content: '', updatedAt: '' }
+  }
+
+  setWorkspaceMemory(workspace: string, content: string) {
+    const updatedAt = new Date().toISOString()
+    this.db.prepare(`INSERT INTO workspace_memory(workspace,content,updated_at) VALUES(?,?,?)
+      ON CONFLICT(workspace) DO UPDATE SET content=excluded.content,updated_at=excluded.updated_at`).run(workspace, content, updatedAt)
+    return { content, updatedAt }
+  }
+
+  listArtifacts(conversationId: string): ArtifactRow[] {
+    return this.db.prepare(`SELECT id,conversation_id conversationId,workspace,type,title,file_path filePath,
+      content,metadata,created_at createdAt,updated_at updatedAt FROM artifacts
+      WHERE conversation_id=? ORDER BY updated_at DESC`).all(conversationId) as ArtifactRow[]
+  }
+
+  addArtifact(conversationId: string, workspace: string, type: string, title: string, filePath?: string | null, content?: string | null, metadata?: unknown) {
+    const now = new Date().toISOString()
+    const existing = filePath ? this.db.prepare('SELECT id,created_at createdAt FROM artifacts WHERE conversation_id=? AND file_path=? ORDER BY updated_at DESC LIMIT 1').get(conversationId, filePath) as { id: string; createdAt: string } | undefined : undefined
+    const row: ArtifactRow = { id: existing?.id ?? randomUUID(), conversationId, workspace, type, title, filePath: filePath ?? null, content: content ?? null, metadata: metadata ? JSON.stringify(metadata) : null, createdAt: existing?.createdAt ?? now, updatedAt: now }
+    this.db.prepare(`INSERT INTO artifacts(id,conversation_id,workspace,type,title,file_path,content,metadata,created_at,updated_at)
+      VALUES(@id,@conversationId,@workspace,@type,@title,@filePath,@content,@metadata,@createdAt,@updatedAt)
+      ON CONFLICT(id) DO UPDATE SET type=excluded.type,title=excluded.title,content=excluded.content,metadata=excluded.metadata,updated_at=excluded.updated_at`).run(row)
+    return row
+  }
+
+  deleteArtifact(id: string) { this.db.prepare('DELETE FROM artifacts WHERE id=?').run(id) }
 
   renameFromPrompt(id: string, prompt: string) {
     const title = prompt.replace(/\s+/g, ' ').trim().slice(0, 52) || 'Nova conversa'

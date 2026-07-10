@@ -38,7 +38,7 @@ export class CodexClient extends EventEmitter {
     try { await this.starting } finally { this.starting = null }
   }
 
-  async createThread(workspace: string, settings: Record<string, string> = {}) {
+  async createThread(workspace: string, settings: Record<string, string> = {}, memory = '') {
     await this.start()
     const result = await this.call('thread/start', {
       cwd: workspace,
@@ -47,6 +47,7 @@ export class CodexClient extends EventEmitter {
       approvalsReviewer: 'user',
       sandbox: settings.sandbox || 'workspace-write',
       model: settings.model || undefined,
+      developerInstructions: memory ? workspaceMemoryInstructions(memory) : undefined,
       ephemeral: false,
     }) as { thread: { id: string } }
     this.loadedThreads.add(result.thread.id)
@@ -64,7 +65,7 @@ export class CodexClient extends EventEmitter {
     this.loadedThreads.add(threadId)
   }
 
-  async sendTurn(threadId: string, workspace: string, prompt: string, settings: Record<string, string> = {}, attachments: string[] = []) {
+  async sendTurn(threadId: string, workspace: string, prompt: string, settings: Record<string, string> = {}, attachments: string[] = [], memory = '') {
     await this.resumeThread(threadId, workspace, settings)
     this.setStatus('running')
     const result = await this.call('turn/start', {
@@ -75,6 +76,7 @@ export class CodexClient extends EventEmitter {
       approvalsReviewer: 'user',
       model: settings.model || undefined,
       sandboxPolicy: toSandboxPolicy(settings.sandbox, workspace),
+      additionalContext: memory ? { 'nocturne.workspace-memory': { value: workspaceMemoryInstructions(memory), kind: 'application' } } : undefined,
       input: [
         { type: 'text', text: prompt, text_elements: [] },
         ...attachments.map((attachment) => ({ type: 'mention', name: attachment.split(/[\\/]/).pop() || attachment, path: attachment })),
@@ -174,4 +176,8 @@ function toSandboxPolicy(mode: string | undefined, workspace: string) {
   return mode === 'read-only'
     ? { type: 'readOnly', networkAccess: false }
     : { type: 'workspaceWrite', writableRoots: [workspace], networkAccess: false, excludeTmpdirEnvVar: false, excludeSlashTmp: false }
+}
+
+function workspaceMemoryInstructions(memory: string) {
+  return `Memória persistente deste workspace, fornecida pelo usuário. Use como contexto e preferências do projeto; instruções explícitas da mensagem atual têm prioridade.\n\n${memory}`
 }
