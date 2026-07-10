@@ -17,6 +17,9 @@ let database: LocalDatabase | null = null
 const codex = new CodexClient()
 let logger: Logger | null = null
 
+process.on('uncaughtException', (error) => { logger?.error('app', 'uncaughtException no processo principal', error); console.error(error) })
+process.on('unhandledRejection', (reason) => { logger?.error('app', 'unhandledRejection no processo principal', reason); console.error(reason) })
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1440, height: 920, minWidth: 980, minHeight: 680,
@@ -42,6 +45,19 @@ function createWindow() {
   logger = new Logger(app.getPath('logs'), database.getSettings().diagnosticMode === 'true')
   logger.info('app', 'Janela principal iniciada', { packaged: app.isPackaged })
   registerIpc(win, database, codex, logger)
+  win.webContents.on('render-process-gone', (_event, details) => {
+    logger?.error('app', 'Renderer encerrado inesperadamente', details)
+    codex.stop()
+    if (!win?.isDestroyed()) setTimeout(() => { if (win && !win.isDestroyed()) void win.webContents.reload() }, 1_000)
+  })
+  win.webContents.on('unresponsive', () => logger?.warn('app', 'Renderer não está respondendo'))
+  win.webContents.on('responsive', () => logger?.info('app', 'Renderer voltou a responder'))
+  const memoryTimer = setInterval(() => {
+    if (!win || win.isDestroyed() || !['planning', 'running', 'waiting-approval', 'cancelling'].includes(codex.status)) return
+    const renderer = app.getAppMetrics().find((metric) => metric.pid === win?.webContents.getOSProcessId())
+    logger?.info('app', 'Uso de memória durante execução', { main: process.memoryUsage(), renderer: renderer?.memory, codex: codex.getDiagnostics() })
+  }, 10_000)
+  win.on('closed', () => clearInterval(memoryTimer))
   if (VITE_DEV_SERVER_URL) void win.loadURL(VITE_DEV_SERVER_URL)
   else void win.loadFile(path.join(RENDERER_DIST, 'index.html'))
 }
@@ -49,4 +65,5 @@ function createWindow() {
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 app.on('before-quit', () => { logger?.info('app', 'Encerrando aplicação'); codex.stop(); database?.close() })
+app.on('child-process-gone', (_event, details) => logger?.error('app', 'Processo filho do Electron encerrado', details))
 void app.whenReady().then(createWindow)

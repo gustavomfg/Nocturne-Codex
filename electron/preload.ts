@@ -41,7 +41,7 @@ contextBridge.exposeInMainWorld('nocturne', {
   memory: { get: (conversationId: string) => ipcRenderer.invoke('memory:get', conversationId), set: (conversationId: string, content: string, rules: string) => ipcRenderer.invoke('memory:set', { conversationId, content, rules }) },
   artifacts: { list: (conversationId: string) => ipcRenderer.invoke('artifacts:list', conversationId), delete: (conversationId: string, artifactId: string) => ipcRenderer.invoke('artifacts:delete', { conversationId, artifactId }) },
   data: { export: () => ipcRenderer.invoke('data:export'), import: () => ipcRenderer.invoke('data:import') },
-  diagnostics: { openLogs: () => ipcRenderer.invoke('diagnostics:openLogs'), copy: () => ipcRenderer.invoke('diagnostics:copy') },
+  diagnostics: { openLogs: () => ipcRenderer.invoke('diagnostics:openLogs'), copy: () => ipcRenderer.invoke('diagnostics:copy'), rendererError: (value: unknown) => ipcRenderer.invoke('diagnostics:rendererError', value), rendererStats: (value: unknown) => ipcRenderer.invoke('diagnostics:rendererStats', value) },
   settings: { get: () => ipcRenderer.invoke('settings:get'), set: (settings: unknown) => ipcRenderer.invoke('settings:set', settings) },
   git: { status: (conversationId: string) => ipcRenderer.invoke('git:status', conversationId), commit: (conversationId: string, message: string) => ipcRenderer.invoke('git:commit', { conversationId, message }) },
   documents: {

@@ -19,19 +19,22 @@ export class CodexProcess extends EventEmitter {
       env: process.env,
     })
 
-    const lines = readline.createInterface({ input: this.child.stdout })
+    const child = this.child
+    const lines = readline.createInterface({ input: child.stdout })
     lines.on('line', (line) => {
       const message = parseRpcLine(line)
       if (message) this.emit('message', message)
       else this.emit('stdout', line)
     })
-    this.child.stderr.on('data', (chunk) => this.emit('stderr', chunk.toString()))
-    this.child.on('error', (error) => this.emit('error', error))
-    this.child.on('exit', (code, signal) => {
-      this.child = null
+    child.stderr.on('data', (chunk) => this.emit('stderr', chunk.toString().slice(-64_000)))
+    child.on('error', (error) => this.emit('error', error))
+    child.on('exit', (code, signal) => {
+      if (this.child === child) this.child = null
+      lines.close()
       this.emit('exit', code, signal, this.stopping)
       this.stopping = false
     })
+    child.on('close', (code, signal) => this.emit('close', code, signal))
   }
 
   send(message: RpcMessage) {

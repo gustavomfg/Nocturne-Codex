@@ -38,7 +38,7 @@ declare global {
       memory: { get(conversationId: string): Promise<WorkspaceMemory>; set(conversationId: string, content: string, rules: string): Promise<WorkspaceMemory> }
       artifacts: { list(conversationId: string): Promise<Artifact[]>; delete(conversationId: string, artifactId: string): Promise<void> }
       data: { export(): Promise<string | null>; import(): Promise<boolean> }
-      diagnostics: { openLogs(): Promise<string>; copy(): Promise<string> }
+      diagnostics: { openLogs(): Promise<string>; copy(): Promise<string>; rendererError(value: { type: 'error' | 'unhandledRejection'; message: string; stack?: string }): Promise<void>; rendererStats(value: { responseSize: number; activities: number; messages: number }): Promise<void> }
       settings: { get(): Promise<CodexSettings>; set(settings: Pick<CodexSettings, 'model' | 'sandbox' | 'approvalPolicy' | 'codexPath' | 'diagnosticMode'>): Promise<CodexSettings> }
       git: { status(conversationId: string): Promise<GitInfo>; commit(conversationId: string, message: string): Promise<{ output: string }> }
       documents: { saveMarkdown(conversationId: string, content: string, name?: string): Promise<string | null>; export(conversationId: string, content: string, format: 'docx' | 'pdf' | 'html'): Promise<string | null> }

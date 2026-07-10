@@ -10,6 +10,13 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+release
+out
+coverage
+.nocturne
+*.AppImage
+*.deb
+*.tar.gz
 *.local
 
 # Editor directories and files

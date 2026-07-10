@@ -27,6 +27,11 @@ function App() {
   const endRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const streamBufferRef = useRef('')
+  const streamTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const activityBuffersRef = useRef(new Map<string, { type: Activity['type']; label: string; detail: string }>())
+  const activityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const completedTurnsRef = useRef(new Set<string>())
   const active = store.conversations.find((item) => item.id === store.activeId)
   const documentContent = store.streaming || [...store.messages].reverse().find((item) => item.role === 'assistant')?.content || ''
   const filtered = store.conversations.filter((item) => item.title.toLowerCase().includes(search.toLowerCase()) && (!workspace || item.workspace === workspace))
@@ -41,12 +46,12 @@ function App() {
     }).catch((error) => store.setError(error.message))
     const offStatus = window.nocturne.codex.onStatus(({ status, error }) => { store.setStatus(status); if (error) store.setError(error) })
     const offEvent = window.nocturne.codex.onEvent(handleCodexEvent)
-    return () => { offStatus(); offEvent() }
+    return () => { offStatus(); offEvent(); if (streamTimerRef.current) clearTimeout(streamTimerRef.current); if (activityTimerRef.current) clearTimeout(activityTimerRef.current) }
     // A ponte IPC deve ser registrada uma única vez; os handlers consultam o estado atual do Zustand.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [store.messages, store.streaming, store.activities])
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [store.messages])
   useEffect(() => {
     const shortcuts = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey)) { if (event.key === 'Escape' && isBusy(useAppStore.getState().status)) void cancelRun(); return }
@@ -58,6 +63,11 @@ function App() {
     window.addEventListener('keydown', shortcuts)
     return () => window.removeEventListener('keydown', shortcuts)
   })
+  useEffect(() => {
+    if (!isBusy(store.status)) return
+    const timer = setInterval(() => { const state = useAppStore.getState(); void window.nocturne.diagnostics.rendererStats({ responseSize: state.streaming.length, activities: state.activities.length, messages: state.messages.length }) }, 10_000)
+    return () => clearInterval(timer)
+  }, [store.status])
 
   async function selectWorkspace() {
     const selected = await window.nocturne.workspace.select()
@@ -130,7 +140,7 @@ function App() {
 
   function handleCodexEvent(event: CodexEvent) {
     const p = event.params
-    if (event.method === 'item/agentMessage/delta') store.appendStream(String(p.delta ?? ''))
+    if (event.method === 'item/agentMessage/delta') queueStreamDelta(String(p.delta ?? ''))
     if (event.method === 'item/reasoning/summaryTextDelta') appendActivityDetail(String(p.itemId), 'reasoning', 'Analisando o projeto', String(p.delta ?? ''))
     if (event.method === 'item/commandExecution/outputDelta') appendActivityDetail(String(p.itemId), 'command', 'Executando comando', String(p.delta ?? ''))
     if (event.method === 'item/fileChange/outputDelta') appendActivityDetail(String(p.itemId), 'file', 'Aplicando alterações', String(p.delta ?? ''))
@@ -144,16 +154,31 @@ function App() {
     if (event.method === 'item/completed') completeItem(p.item as Record<string, unknown>)
     if (event.method === 'fs/changed') {
       const paths = Array.isArray(p.changedPaths) ? p.changedPaths.map(String) : []
-      paths.forEach((filePath) => store.upsertActivity({ id: `fs-${filePath}`, type: 'file', label: 'Filesystem atualizado', detail: filePath, status: 'completed' }))
+      if (paths.length) store.upsertActivity({ id: 'fs-summary', type: 'file', label: `${paths.length} arquivo(s) observado(s)`, detail: paths.slice(-50).join('\n'), status: 'completed' })
     }
     if (event.method === 'item/commandExecution/requestApproval') store.addApproval({ key: String(p.approvalKey), kind: 'command', title: 'Executar comando', detail: String(p.command ?? p.reason ?? ''), status: 'pending' })
     if (event.method === 'item/fileChange/requestApproval') store.addApproval({ key: String(p.approvalKey), kind: 'file', title: 'Aplicar alterações', detail: 'O Codex solicitou permissão para modificar arquivos.', status: 'pending' })
-    if (event.method === 'turn/completed') void finishTurn(p)
+    if (event.method === 'turn/completed') void finishTurn(p).catch((error) => { store.setStatus('failed'); store.setError(`Falha ao finalizar a resposta: ${errorMessage(error)}`) })
     if (event.method === 'error') {
       const message = String((p.error as Record<string, unknown>)?.message ?? p.message ?? 'Erro no Codex')
       store.setError(message); store.upsertActivity({ id: `error-${Date.now()}`, type: 'error', label: 'Erro na execução', detail: message, status: 'failed' })
     }
     if (event.method === 'warning') store.upsertActivity({ id: `warning-${Date.now()}`, type: 'error', label: 'Aviso do Codex', detail: String(p.message ?? p), status: 'failed' })
+  }
+
+  function queueStreamDelta(delta: string) {
+    streamBufferRef.current += delta
+    if (streamBufferRef.current.length > 100_000) streamBufferRef.current = streamBufferRef.current.slice(-100_000)
+    if (streamTimerRef.current) return
+    streamTimerRef.current = setTimeout(flushStream, 80)
+  }
+
+  function flushStream() {
+    if (streamTimerRef.current) clearTimeout(streamTimerRef.current)
+    streamTimerRef.current = null
+    const buffered = streamBufferRef.current
+    streamBufferRef.current = ''
+    if (buffered) store.appendStream(buffered)
   }
 
   function addItemActivity(item?: Record<string, unknown>) {
@@ -165,12 +190,24 @@ function App() {
   }
 
   function appendActivityDetail(id: string, type: Activity['type'], label: string, delta: string) {
-    const current = useAppStore.getState().activities.find((item) => item.id === id)
-    store.upsertActivity({ id, type, label: current?.label || label, detail: `${current?.detail || ''}${delta}`, status: 'running' })
+    const buffered = activityBuffersRef.current.get(id)
+    activityBuffersRef.current.set(id, { type, label: buffered?.label || label, detail: `${buffered?.detail || ''}${delta}`.slice(-64_000) })
+    if (!activityTimerRef.current) activityTimerRef.current = setTimeout(flushActivityDetails, 150)
+  }
+
+  function flushActivityDetails() {
+    if (activityTimerRef.current) clearTimeout(activityTimerRef.current)
+    activityTimerRef.current = null
+    for (const [id, buffered] of activityBuffersRef.current) {
+      const current = useAppStore.getState().activities.find((item) => item.id === id)
+      store.upsertActivity({ id, type: buffered.type, label: current?.label || buffered.label, detail: `${current?.detail || ''}${buffered.detail}`.slice(-64_000), status: 'running' })
+    }
+    activityBuffersRef.current.clear()
   }
 
   function completeItem(item?: Record<string, unknown>) {
     if (!item) return
+    flushActivityDetails()
     const type = String(item.type)
     if (type === 'commandExecution') store.upsertActivity({ id: String(item.id), type: 'command', label: humanizeCommand(String(item.command ?? '')), detail: [String(item.command ?? ''), String(item.aggregatedOutput ?? '')].filter(Boolean).join('\n\n'), status: item.status === 'failed' ? 'failed' : 'completed' })
     if (type === 'fileChange') {
@@ -181,15 +218,21 @@ function App() {
   }
 
   async function finishTurn(params: Record<string, unknown>) {
+    flushStream()
     const state = useAppStore.getState()
     const turn = params.turn as Record<string, unknown> | undefined
+    const completionKey = String(turn?.id ?? `${params.threadId ?? 'thread'}:${state.streaming.length}`)
+    if (completedTurnsRef.current.has(completionKey)) return
+    completedTurnsRef.current.add(completionKey)
+    if (completedTurnsRef.current.size > 100) completedTurnsRef.current.delete(completedTurnsRef.current.values().next().value as string)
     const error = turn?.error as Record<string, unknown> | undefined
     if (error) store.setError(String(error.message ?? 'A execução não foi concluída.'))
     store.upsertActivity({ id: `completion-${String(turn?.id ?? Date.now())}`, type: 'completion', label: error ? 'Execução encerrada com erro' : 'Execução concluída', status: error ? 'failed' : 'completed' })
     if (state.streaming && state.activeId) {
       const current = useAppStore.getState()
-      const saved = await window.nocturne.codex.saveAssistant(state.activeId, state.streaming, { diff: current.diff, activities: current.activities, files: current.files, plan: current.plan, planExplanation: current.planExplanation })
-      store.addMessage(saved); store.appendStream(state.streaming ? '' : '')
+      const activitySnapshot = current.activities.slice(-100).map((activity) => ({ ...activity, detail: activity.detail?.slice(-4_000) }))
+      const saved = await window.nocturne.codex.saveAssistant(state.activeId, state.streaming, { diff: current.diff.slice(-500_000), activities: activitySnapshot, files: current.files.slice(-300), plan: current.plan.slice(-100), planExplanation: current.planExplanation.slice(-20_000) })
+      store.addMessage(saved)
       useAppStore.setState({ streaming: '' })
       store.setArtifacts(await window.nocturne.artifacts.list(state.activeId))
     }
@@ -340,7 +383,8 @@ function MessageBubble({ message }: { message: Message }) {
 }
 
 function AssistantMessage({ content, streaming }: { content: string; streaming?: boolean }) {
-  return <div className="assistant-row"><div className="assistant-avatar"><Sparkles size={15}/></div><div className="assistant-content"><div className="assistant-name">Nocturne Codex {streaming && <span>escrevendo</span>}</div><ReactMarkdown>{content}</ReactMarkdown>{streaming && <span className="caret"/>}</div></div>
+  const renderAsText = content.length > 300_000
+  return <div className="assistant-row"><div className="assistant-avatar"><Sparkles size={15}/></div><div className="assistant-content"><div className="assistant-name">Nocturne Codex {streaming && <span>escrevendo</span>}</div>{renderAsText ? <><p>Resposta extensa; renderização Markdown simplificada para preservar estabilidade.</p><pre className="large-response">{content.slice(-300_000)}</pre></> : <ReactMarkdown>{content}</ReactMarkdown>}{streaming && <span className="caret"/>}</div></div>
 }
 
 function Inspector({ activities, approvals, diff, files, artifacts, plan, planExplanation, activeId, gitInfo, documentContent, onDecide, onError, onGitRefresh, onArtifactsRefresh, onPreview, onArtifact, onDeleteArtifact, onPlanChange, onPlanExecute }: { activities: Activity[]; approvals: ReturnType<typeof useAppStore.getState>['approvals']; diff: string; files: ChangedFile[]; artifacts: Artifact[]; plan: PlanStep[]; planExplanation: string; activeId: string | null; gitInfo: GitInfo | null; documentContent: string; onDecide(key: string, accepted: boolean): void; onError(value: string): void; onGitRefresh(): void; onArtifactsRefresh(): void; onPreview(filePath: string): void; onArtifact(artifact: Artifact): void; onDeleteArtifact(id: string): void; onPlanChange(plan: PlanStep[]): void; onPlanExecute(plan: PlanStep[]): void }) {

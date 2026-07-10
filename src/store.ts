@@ -12,13 +12,17 @@ interface AppState {
   setArtifacts(value: Artifact[]): void; setPlan(value: PlanStep[], explanation?: string): void
 }
 
+const MAX_ACTIVITIES = 300
+const MAX_ACTIVITY_DETAIL = 64_000
+const MAX_STREAM_SIZE = 2_000_000
+
 export const useAppStore = create<AppState>((set) => ({
   conversations: [], activeId: null, messages: [], status: 'disconnected', streaming: '', diff: '', activities: [], approvals: [], files: [], artifacts: [], plan: [], planExplanation: '', error: null,
   setConversations: (conversations) => set({ conversations }), setActive: (activeId) => set({ activeId }),
   setMessages: (messages) => set({ messages }), addMessage: (message) => set((state) => ({ messages: [...state.messages, message] })),
-  setStatus: (status) => set({ status }), appendStream: (value) => set((state) => ({ streaming: state.streaming + value })),
+  setStatus: (status) => set({ status }), appendStream: (value) => set((state) => ({ streaming: `${state.streaming}${value}`.slice(0, MAX_STREAM_SIZE) })),
   clearRun: () => set({ streaming: '', diff: '', activities: [], approvals: [], files: [], plan: [], planExplanation: '', error: null }), setDiff: (diff) => set({ diff }),
-  upsertActivity: (activity) => set((state) => ({ activities: [...state.activities.filter((item) => item.id !== activity.id), activity] })),
+  upsertActivity: (activity) => set((state) => ({ activities: [...state.activities.filter((item) => item.id !== activity.id), { ...activity, detail: activity.detail?.slice(-MAX_ACTIVITY_DETAIL) }].slice(-MAX_ACTIVITIES) })),
   addApproval: (approval) => set((state) => ({ approvals: [...state.approvals.filter((item) => item.key !== approval.key), approval] })),
   resolveApproval: (key, status) => set((state) => ({ approvals: state.approvals.map((item) => item.key === key ? { ...item, status } : item) })),
   setFiles: (files) => set({ files }), addFiles: (files) => set((state) => ({ files: [...state.files.filter((old) => !files.some((item) => item.path === old.path)), ...files] })),

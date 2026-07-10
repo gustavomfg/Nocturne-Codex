@@ -157,6 +157,14 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   ipcMain.handle('codex:diagnostics', () => ({ ...codex.getDiagnostics(), version: database.getSettings().codexVersion || undefined, logsPath: logger.path }))
   ipcMain.handle('diagnostics:openLogs', () => shell.openPath(logger.path))
   ipcMain.handle('diagnostics:copy', async () => JSON.stringify({ app: 'Nocturne Codex', platform: process.platform, arch: process.arch, codex: codex.getDiagnostics() }, null, 2))
+  ipcMain.handle('diagnostics:rendererError', (_event, value: unknown) => {
+    const data = z.object({ type: z.enum(['error', 'unhandledRejection']), message: z.string().max(8_000), stack: z.string().max(20_000).optional() }).parse(value)
+    logger.error('app', `Renderer ${data.type}`, data)
+  })
+  ipcMain.handle('diagnostics:rendererStats', (_event, value: unknown) => {
+    const data = z.object({ responseSize: z.number().int().nonnegative(), activities: z.number().int().nonnegative(), messages: z.number().int().nonnegative() }).parse(value)
+    logger.info('app', 'Estado do renderer durante execução', data)
+  })
 
   ipcMain.handle('codex:send', async (_event, value: unknown) => {
     const { conversationId, prompt, attachments } = sendSchema.parse(value)

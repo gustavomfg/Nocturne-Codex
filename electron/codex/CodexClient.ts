@@ -22,6 +22,8 @@ export class CodexClient extends EventEmitter {
   private intentionalStop = false
   private lastFailure: string | null = null
   private executable = 'codex'
+  private eventCount = 0
+  private responseBytes = 0
   private machine = new AgentStateMachine('disconnected', (from, to) => this.emit('diagnostic', { level: 'warn', message: `Transição inválida do agente: ${from} → ${to}` }))
   status: CodexStatus = 'disconnected'
 
@@ -39,6 +41,7 @@ export class CodexClient extends EventEmitter {
     })
     this.process.on('stdout', (line) => this.emit('log', { stream: 'stdout', line }))
     this.process.on('stderr', (line) => this.emit('log', { stream: 'stderr', line }))
+    this.process.on('close', (code, signal) => this.emit('diagnostic', { level: 'info', message: 'Transporte do App Server fechado', code, signal }))
   }
 
   async start(executable = this.executable) {
@@ -85,6 +88,8 @@ export class CodexClient extends EventEmitter {
 
   async sendTurn(threadId: string, workspace: string, prompt: string, settings: Record<string, string> = {}, attachments: string[] = [], memory = '') {
     if (this.activeTurns.size) throw new Error('Já existe uma execução do agente em andamento. Cancele-a antes de iniciar outra.')
+    this.eventCount = 0
+    this.responseBytes = 0
     await this.resumeThread(threadId, workspace, settings)
     this.setStatus('running')
     const result = await this.call('turn/start', {
@@ -132,7 +137,7 @@ export class CodexClient extends EventEmitter {
     this.intentionalStop = false
     await this.start(executable)
   }
-  getDiagnostics() { return { executable: this.process.path, pid: this.process.pid, state: this.status, lastFailure: this.lastFailure } }
+  getDiagnostics() { return { executable: this.process.path, pid: this.process.pid, state: this.status, lastFailure: this.lastFailure, eventCount: this.eventCount, responseBytes: this.responseBytes, processListeners: this.process.eventNames().reduce((total, event) => total + this.process.listenerCount(event), 0), clientListeners: this.eventNames().reduce((total, event) => total + this.listenerCount(event), 0) } }
 
   async readConfig() { await this.start(); return this.call('config/read', {}) }
 
@@ -165,6 +170,7 @@ export class CodexClient extends EventEmitter {
   }
 
   private handleMessage(message: RpcMessage) {
+    this.eventCount += 1
     if ('id' in message && !('method' in message)) {
       const response = message as RpcResponse
       const pending = this.pending.get(response.id)
@@ -177,6 +183,7 @@ export class CodexClient extends EventEmitter {
 
     if ('method' in message) {
       const params = (message.params ?? {}) as Record<string, unknown>
+      if (message.method === 'item/agentMessage/delta') this.responseBytes += Buffer.byteLength(String(params.delta ?? ''), 'utf8')
       if ('id' in message) {
         const itemId = String(params.itemId ?? message.id)
         this.approvalRequests.set(itemId, message.id)
@@ -231,5 +238,9 @@ function toSandboxPolicy(mode: string | undefined, workspace: string) {
 function safeApprovalPolicy(policy: string | undefined) { return policy === 'untrusted' ? 'untrusted' : 'on-request' }
 
 function workspaceMemoryInstructions(memory: string) {
-  return `Memória persistente deste workspace, fornecida pelo usuário. Use como contexto e preferências do projeto; instruções explícitas da mensagem atual têm prioridade.\n\n${memory}`
+  return `Memória persistente deste workspace, fornecida pelo usuário. Use como contexto e preferências do projeto; instruções explícitas da mensagem atual têm prioridade.
+
+Ao explorar ou analisar o workspace, ignore por padrão: node_modules, dist, release, out, coverage, .git, logs, arquivos binários, caches, artefatos gerados e .nocturne. Não leia os logs nem o diretório de dados do próprio Nocturne Codex durante uma análise do projeto. Só acesse um desses caminhos quando o usuário pedir explicitamente.
+
+${memory}`
 }
