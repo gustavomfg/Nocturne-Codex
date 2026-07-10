@@ -16,6 +16,7 @@ export function assessCommand(command: string | string[]): CommandAssessment {
   if (gitIndex >= 0 && destructiveGit.has(normalized[gitIndex + 1])) reasons.push(`Operação Git sensível: ${normalized[gitIndex + 1]}`)
   if (normalized.some((token) => path.basename(token) === 'rm') && normalized.some((token) => /^-[a-z]*r[a-z]*f|^-[a-z]*f[a-z]*r/.test(token))) reasons.push('Remoção recursiva forçada')
   if (normalized.some((token) => ['mkfs', 'shutdown', 'reboot'].includes(path.basename(token)))) reasons.push('Comando destrutivo do sistema')
+  if (normalized.some((token) => ['electron-rebuild', 'electron-builder'].includes(path.basename(token))) || normalized.some((token, index) => token === 'npm' && ['rebuild', 'package'].includes(normalized[index + 1])) || normalized.some((token) => ['rebuild:native', 'package'].includes(token))) reasons.push('Pode substituir módulos nativos enquanto o aplicativo está em execução')
   if (reasons.length) risk = 'dangerous'
   else if (normalized.some((token) => ['rm', 'mv', 'chmod', 'chown'].includes(path.basename(token))) || gitIndex >= 0) risk = 'sensitive'
   return { risk, reasons, requiresApproval: risk !== 'safe', blockedAutomatic: risk === 'dangerous' }
