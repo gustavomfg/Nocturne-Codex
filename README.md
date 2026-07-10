@@ -125,23 +125,17 @@ The renderer runs with `contextIsolation: true`, `nodeIntegration: false`, and E
 
 ## Screenshots
 
-The repository is prepared for real product screenshots. The following files are intentionally referenced as placeholders until the Beta capture set is published:
+### Project analysis and agent activity
 
-### Conversation and agent activity
+![Project analysis with agent activity](docs/images/analysis-and-activity.png)
 
-![Chat](docs/images/chat.png)
+### Review Mode
 
-### Review suggestions
+![Review Mode with suggestions and proposed changes](docs/images/review-mode.png)
 
-![Review Mode](docs/images/review-mode.png)
+### Suggestion details
 
-### Project Health
-
-![Project Health](docs/images/project-health.png)
-
-### Artifacts and diff
-
-![Artifacts](docs/images/artifacts.png)
+![Structured suggestion with impact, reasoning, affected files, and proposed solution](docs/images/suggestion-detail.png)
 
 ---
 
