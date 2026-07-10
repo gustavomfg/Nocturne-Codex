@@ -16,7 +16,7 @@ export interface ProjectContext { name: string; stack: string[]; primaryLanguage
 export interface WorkspaceMemory { content: string; rules: string; project?: ProjectContext; updatedAt: string }
 export interface PlanStep { step: string; status: 'pending' | 'inProgress' | 'completed' }
 export interface GitInfo { branch: string; status: string; diff: string }
-export interface CodexSettings { model: string; sandbox: 'read-only' | 'workspace-write'; approvalPolicy: 'untrusted' | 'on-request' | 'never'; codexPath?: string; codexVersion?: string; pandocVersion?: string; serverStatus?: CodexStatus; diagnosticMode?: boolean }
+export interface CodexSettings { model: string; sandbox: 'read-only' | 'workspace-write'; approvalPolicy: 'untrusted' | 'on-request' | 'never'; codexPath?: string; codexVersion?: string; pandocVersion?: string; serverStatus?: CodexStatus; diagnosticMode?: boolean; authStatus?: string; authenticated?: boolean; theme?: 'dark' | 'system'; defaultAgentMode?: AgentMode }
 export interface CodexDiagnostics { executable: string; version?: string; pid: number | null; state: CodexStatus; lastFailure: string | null; logsPath: string }
 export interface CodexEvent { method: string; params: Record<string, unknown> }
 export type CodexStatus = AgentState
@@ -44,7 +44,7 @@ declare global {
       suggestions: { list(conversationId: string): Promise<Suggestion[]>; create(conversationId: string, content: string): Promise<{ suggestions: Suggestion[]; content: string }>; status(conversationId: string, suggestionId: string, status: SuggestionStatus, result?: string): Promise<Suggestion> }
       data: { export(): Promise<string | null>; import(): Promise<boolean> }
       diagnostics: { openLogs(): Promise<string>; copy(): Promise<string>; rendererError(value: { type: 'error' | 'unhandledRejection'; message: string; stack?: string }): Promise<void>; rendererStats(value: { responseSize: number; activities: number; messages: number }): Promise<void> }
-      settings: { get(): Promise<CodexSettings>; set(settings: Pick<CodexSettings, 'model' | 'sandbox' | 'approvalPolicy' | 'codexPath' | 'diagnosticMode'>): Promise<CodexSettings> }
+      settings: { get(): Promise<CodexSettings>; set(settings: Pick<CodexSettings, 'model' | 'sandbox' | 'approvalPolicy' | 'codexPath' | 'diagnosticMode' | 'theme' | 'defaultAgentMode'>): Promise<CodexSettings> }
       git: { status(conversationId: string): Promise<GitInfo>; commit(conversationId: string, message: string): Promise<{ output: string }> }
       documents: { saveMarkdown(conversationId: string, content: string, name?: string): Promise<string | null>; export(conversationId: string, content: string, format: 'docx' | 'pdf' | 'html'): Promise<string | null> }
     }

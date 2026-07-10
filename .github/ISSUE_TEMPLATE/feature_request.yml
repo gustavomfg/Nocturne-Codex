@@ -1,0 +1,19 @@
+name: Feature request
+description: Proponha uma melhoria focada
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes: { label: Problema, description: "Que dificuldade real deve ser resolvida?" }
+    validations: { required: true }
+  - type: textarea
+    id: proposal
+    attributes: { label: Proposta }
+    validations: { required: true }
+  - type: textarea
+    id: alternatives
+    attributes: { label: Alternativas consideradas }
+  - type: dropdown
+    id: area
+    attributes: { label: Área, options: [Review, Agente, Workspace, Git, Documentos, Interface, Segurança] }

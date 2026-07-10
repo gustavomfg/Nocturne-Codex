@@ -141,7 +141,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   ipcMain.handle('data:import', async () => {
     const result = await dialog.showOpenDialog(win, { title: 'Importar dados do Nocturne', properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] })
     if (result.canceled || !result.filePaths[0]) return false
-    const schema = z.object({ schemaVersion: z.number().int().min(1).max(4), conversations: z.array(z.record(z.string(), z.unknown())).max(100_000), workspaces: z.array(z.record(z.string(), z.unknown())).max(10_000), messages: z.array(z.record(z.string(), z.unknown())).max(1_000_000), artifacts: z.array(z.record(z.string(), z.unknown())).max(1_000_000), memories: z.array(z.record(z.string(), z.unknown())).max(10_000), suggestions: z.array(z.record(z.string(), z.unknown())).max(100_000).optional(), suggestionDecisions: z.array(z.record(z.string(), z.unknown())).max(1_000_000).optional() })
+    const schema = z.object({ schemaVersion: z.number().int().min(1).max(5), conversations: z.array(z.record(z.string(), z.unknown())).max(100_000), workspaces: z.array(z.record(z.string(), z.unknown())).max(10_000), messages: z.array(z.record(z.string(), z.unknown())).max(1_000_000), artifacts: z.array(z.record(z.string(), z.unknown())).max(1_000_000), memories: z.array(z.record(z.string(), z.unknown())).max(10_000), suggestions: z.array(z.record(z.string(), z.unknown())).max(100_000).optional(), suggestionDecisions: z.array(z.record(z.string(), z.unknown())).max(1_000_000).optional() })
     database.importData(schema.parse(JSON.parse(fs.readFileSync(result.filePaths[0], 'utf8'))))
     logger.info('persistence', 'Dados importados')
     return true
@@ -251,7 +251,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
 
   ipcMain.handle('settings:get', async () => { const saved = database.getSettings(); return { ...saved, diagnosticMode: saved.diagnosticMode === 'true', ...(await getCodexInfo(codex)) } })
   ipcMain.handle('settings:set', (_event, value: unknown) => {
-    const data = z.object({ model: z.string().max(100), sandbox: z.enum(['read-only', 'workspace-write']), approvalPolicy: z.enum(['untrusted', 'on-request', 'never']), codexPath: z.string().trim().max(1_000).optional(), diagnosticMode: z.boolean().optional() }).parse(value)
+    const data = z.object({ model: z.string().max(100), sandbox: z.enum(['read-only', 'workspace-write']), approvalPolicy: z.enum(['untrusted', 'on-request', 'never']), codexPath: z.string().trim().max(1_000).optional(), diagnosticMode: z.boolean().optional(), theme: z.enum(['dark', 'system']).default('dark'), defaultAgentMode: z.enum(agentModes).default('review') }).parse(value)
     if (data.codexPath && !path.isAbsolute(data.codexPath) && data.codexPath !== 'codex') throw new Error('Use um caminho absoluto para o executável do Codex.')
     if (data.codexPath && path.isAbsolute(data.codexPath) && (!fs.existsSync(data.codexPath) || !fs.statSync(data.codexPath).isFile())) throw new Error('Executável do Codex não encontrado.')
     logger.setDiagnostic(Boolean(data.diagnosticMode))
@@ -348,7 +348,8 @@ async function getCodexInfo(codex: CodexClient) {
   const version = await commandVersion(executable || 'codex')
   let config: unknown = null
   try { config = await codex.readConfig() } catch { /* status remains truthful through the Codex status event */ }
-  return { codexPath: executable || 'codex', codexVersion: version || 'indisponível', pandocVersion: await commandVersion('pandoc') || 'indisponível', serverStatus: codex.status, rawConfig: config }
+  const authStatus = executable ? await commandOutput(executable, ['login', 'status']) : null
+  return { codexPath: executable || 'codex', codexVersion: version || 'indisponível', pandocVersion: await commandVersion('pandoc') || 'indisponível', serverStatus: codex.status, authStatus: authStatus || 'Não foi possível verificar a autenticação.', authenticated: Boolean(authStatus && /logged in|autenticado/i.test(authStatus)), rawConfig: config }
 }
 
 function findExecutable(name: string) {
@@ -363,6 +364,7 @@ async function commandVersion(command: string) {
   try { const { stdout, stderr } = await execFileAsync(command, ['--version'], { timeout: 5_000 }); return (stdout || stderr).trim() }
   catch { return null }
 }
+async function commandOutput(command: string, args: string[]) { try { const { stdout, stderr } = await execFileAsync(command, args, { timeout: 5_000 }); return (stdout || stderr).trim() } catch { return null } }
 
 function safeName(name: string, extension: string) {
   const base = path.basename(name).replace(/[^a-zA-Z0-9._-]/g, '-')

@@ -37,7 +37,7 @@ export class LocalDatabase {
     const integrity = this.db.pragma('quick_check', { simple: true }) as string
     if (integrity !== 'ok') throw new Error(`Banco de dados corrompido (${integrity}). Preserve o arquivo e restaure um backup.`)
     const schemaVersion = this.db.pragma('user_version', { simple: true }) as number
-    if (schemaVersion < 4 && fs.existsSync(this.databasePath)) {
+    if (schemaVersion < 5 && fs.existsSync(this.databasePath)) {
       fs.copyFileSync(this.databasePath, `${this.databasePath}.backup-${Date.now()}`)
     }
     this.db.exec(`
@@ -73,7 +73,7 @@ export class LocalDatabase {
         id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, conversation_id TEXT NOT NULL,
         title TEXT NOT NULL, description TEXT NOT NULL, reasoning TEXT NOT NULL,
         category TEXT NOT NULL, severity TEXT NOT NULL, affected_files TEXT NOT NULL,
-        proposed_changes TEXT NOT NULL, status TEXT NOT NULL, result TEXT,
+        proposed_changes TEXT NOT NULL, expected_benefits TEXT NOT NULL DEFAULT '[]', complexity TEXT NOT NULL DEFAULT 'medium', risk TEXT NOT NULL DEFAULT 'medium', status TEXT NOT NULL, result TEXT,
         created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
         FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
       );
@@ -88,7 +88,11 @@ export class LocalDatabase {
     `)
     const columns = this.db.prepare('PRAGMA table_info(workspaces)').all() as Array<{ name: string }>
     if (!columns.some((column) => column.name === 'favorite')) this.db.exec('ALTER TABLE workspaces ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0')
-    this.db.pragma('user_version = 4')
+    const suggestionColumns = this.db.prepare('PRAGMA table_info(suggestions)').all() as Array<{ name: string }>
+    if (!suggestionColumns.some((column) => column.name === 'expected_benefits')) this.db.exec("ALTER TABLE suggestions ADD COLUMN expected_benefits TEXT NOT NULL DEFAULT '[]'")
+    if (!suggestionColumns.some((column) => column.name === 'complexity')) this.db.exec("ALTER TABLE suggestions ADD COLUMN complexity TEXT NOT NULL DEFAULT 'medium'")
+    if (!suggestionColumns.some((column) => column.name === 'risk')) this.db.exec("ALTER TABLE suggestions ADD COLUMN risk TEXT NOT NULL DEFAULT 'medium'")
+    this.db.pragma('user_version = 5')
     this.cleanupOrphans()
   }
 
@@ -170,14 +174,14 @@ export class LocalDatabase {
   recordApproval(key: string, accepted: boolean, command?: string, risk?: string) { this.db.prepare('INSERT INTO approval_audit(id,approval_key,decision,command,risk,created_at) VALUES(?,?,?,?,?,?)').run(randomUUID(), key, accepted ? 'accepted' : 'declined', command?.slice(0, 4_000) ?? null, risk ?? null, new Date().toISOString()) }
 
   listSuggestions(conversationId: string): Suggestion[] {
-    const rows = this.db.prepare(`SELECT id,workspace_id workspaceId,conversation_id conversationId,title,description,reasoning,category,severity,affected_files affectedFiles,proposed_changes proposedChanges,status,created_at createdAt,updated_at updatedAt FROM suggestions WHERE conversation_id=? ORDER BY updated_at DESC`).all(conversationId) as Array<Omit<Suggestion, 'affectedFiles'> & { affectedFiles: string }>
-    return rows.map((row) => ({ ...row, affectedFiles: JSON.parse(row.affectedFiles) as string[] }))
+    const rows = this.db.prepare(`SELECT id,workspace_id workspaceId,conversation_id conversationId,title,description,reasoning,category,severity,affected_files affectedFiles,proposed_changes proposedChanges,expected_benefits expectedBenefits,complexity,risk,status,created_at createdAt,updated_at updatedAt FROM suggestions WHERE conversation_id=? ORDER BY updated_at DESC`).all(conversationId) as Array<Omit<Suggestion, 'affectedFiles' | 'expectedBenefits'> & { affectedFiles: string; expectedBenefits: string }>
+    return rows.map((row) => ({ ...row, affectedFiles: JSON.parse(row.affectedFiles) as string[], expectedBenefits: JSON.parse(row.expectedBenefits) as string[] }))
   }
 
   addSuggestion(conversationId: string, workspaceId: string, value: Omit<Suggestion, 'id' | 'workspaceId' | 'conversationId' | 'createdAt' | 'updatedAt' | 'status'>): Suggestion {
     const now = new Date().toISOString()
     const row: Suggestion = { id: randomUUID(), workspaceId, conversationId, ...value, status: 'pending', createdAt: now, updatedAt: now }
-    this.db.prepare(`INSERT INTO suggestions(id,workspace_id,conversation_id,title,description,reasoning,category,severity,affected_files,proposed_changes,status,created_at,updated_at) VALUES(@id,@workspaceId,@conversationId,@title,@description,@reasoning,@category,@severity,@affectedFiles,@proposedChanges,@status,@createdAt,@updatedAt)`).run({ ...row, affectedFiles: JSON.stringify(row.affectedFiles) })
+    this.db.prepare(`INSERT INTO suggestions(id,workspace_id,conversation_id,title,description,reasoning,category,severity,affected_files,proposed_changes,expected_benefits,complexity,risk,status,created_at,updated_at) VALUES(@id,@workspaceId,@conversationId,@title,@description,@reasoning,@category,@severity,@affectedFiles,@proposedChanges,@expectedBenefits,@complexity,@risk,@status,@createdAt,@updatedAt)`).run({ ...row, affectedFiles: JSON.stringify(row.affectedFiles), expectedBenefits: JSON.stringify(row.expectedBenefits) })
     return row
   }
 
@@ -195,7 +199,7 @@ export class LocalDatabase {
   }
 
   exportData() {
-    return { schemaVersion: 4, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), suggestions: this.db.prepare('SELECT * FROM suggestions').all(), suggestionDecisions: this.db.prepare('SELECT * FROM suggestion_decisions').all(), settings: this.getSettings() }
+    return { schemaVersion: 5, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), suggestions: this.db.prepare('SELECT * FROM suggestions').all(), suggestionDecisions: this.db.prepare('SELECT * FROM suggestion_decisions').all(), settings: this.getSettings() }
   }
 
   importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[]; suggestions?: unknown[]; suggestionDecisions?: unknown[] }) {

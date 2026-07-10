@@ -150,7 +150,7 @@ export class CodexClient extends EventEmitter {
     this.setStatus('starting')
     this.process.start(this.executable)
     await this.call('initialize', {
-      clientInfo: { name: 'nocturne-codex', title: 'Nocturne Codex', version: '0.1.0' },
+      clientInfo: { name: 'nocturne-codex', title: 'Nocturne Codex', version: '0.5.0-beta' },
       capabilities: { experimentalApi: true, requestAttestation: false },
     })
     this.notify('initialized')

@@ -9,7 +9,7 @@ const directories: string[] = []
 const tempDirectory = () => { const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-suggestions-')); directories.push(directory); return directory }
 afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }) })
 
-const input = { title: 'Restringir IPC', description: 'O renderer possui acesso amplo.', reasoning: 'Reduzir a superfície evita acesso indevido.', category: 'security' as const, severity: 'high' as const, affectedFiles: ['electron/preload.ts'], proposedChanges: '- broadApi\n+ narrowApi' }
+const input = { title: 'Restringir IPC', description: 'O renderer possui acesso amplo.', reasoning: 'Reduzir a superfície evita acesso indevido.', category: 'security' as const, severity: 'high' as const, affectedFiles: ['electron/preload.ts'], proposedChanges: '- broadApi\n+ narrowApi', expectedBenefits: ['Menor superfície de ataque'], complexity: 'medium' as const, risk: 'low' as const }
 
 describe('sugestões', () => {
   it('extrai apenas sugestões estruturadas e remove o bloco da resposta', () => {

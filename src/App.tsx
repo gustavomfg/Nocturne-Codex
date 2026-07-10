@@ -19,7 +19,7 @@ function App() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [settings, setSettings] = useState<CodexSettings>({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request' })
+  const [settings, setSettings] = useState<CodexSettings>({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', theme: 'dark', defaultAgentMode: 'review' })
   const [gitInfo, setGitInfo] = useState<GitInfo | null>(null)
   const [preview, setPreview] = useState<FilePreview | null>(null)
   const [memory, setMemory] = useState<WorkspaceMemory>({ content: '', rules: '', updatedAt: '' })
@@ -44,7 +44,8 @@ function App() {
 
   useEffect(() => {
     void Promise.all([window.nocturne.conversations.list(), window.nocturne.workspace.list(), window.nocturne.settings.get()]).then(async ([conversations, savedWorkspaces, savedSettings]) => {
-      store.setConversations(conversations); setWorkspaces(savedWorkspaces); setSettings({ ...savedSettings, model: savedSettings.model || '', sandbox: savedSettings.sandbox || 'workspace-write', approvalPolicy: savedSettings.approvalPolicy || 'on-request' })
+      const normalized = { ...savedSettings, model: savedSettings.model || '', sandbox: savedSettings.sandbox || 'workspace-write', approvalPolicy: savedSettings.approvalPolicy || 'on-request', theme: savedSettings.theme || 'dark', defaultAgentMode: savedSettings.defaultAgentMode || 'review' } as CodexSettings
+      store.setConversations(conversations); store.setStatus(normalized.serverStatus || 'disconnected'); setWorkspaces(savedWorkspaces); setSettings(normalized); setAgentMode(normalized.defaultAgentMode || 'review')
       await window.nocturne.codex.start()
       if (conversations[0]) await openConversation(conversations[0].id, conversations)
     }).catch((error) => store.setError(error.message))
@@ -56,6 +57,7 @@ function App() {
   }, [])
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [store.messages])
+  useEffect(() => { document.documentElement.dataset.theme = settings.theme || 'dark' }, [settings.theme])
   useEffect(() => {
     const shortcuts = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey)) { if (event.key === 'Escape' && isBusy(useAppStore.getState().status)) void cancelRun(); return }
@@ -307,7 +309,7 @@ function App() {
   }
 
   async function saveSettings(next: CodexSettings) {
-    try { const saved = await window.nocturne.settings.set(next); setSettings({ ...next, ...saved }); setSettingsOpen(false) }
+    try { const saved = await window.nocturne.settings.set(next); setSettings({ ...next, ...saved }); setAgentMode(next.defaultAgentMode || 'review'); setSettingsOpen(false) }
     catch (error) { store.setError(errorMessage(error)) }
   }
 
@@ -392,7 +394,14 @@ function App() {
     </main>
 
     {rightOpen && <Inspector activities={store.activities} approvals={store.approvals} diff={store.diff} files={store.files} artifacts={store.artifacts} suggestions={store.suggestions} plan={store.plan} planExplanation={store.planExplanation} activeId={store.activeId} gitInfo={gitInfo} documentContent={documentContent} onDecide={decide} onError={store.setError} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onSuggestionStatus={updateSuggestion} onSuggestionApply={applySuggestion} onPlanChange={(plan) => store.setPlan(plan, store.planExplanation)} onPlanExecute={(plan) => submitPrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`, 'build')}/>}
-    {settingsOpen && <SettingsDialog value={settings} status={store.status} onClose={() => setSettingsOpen(false)} onSave={saveSettings}/>}
+    {settingsOpen && <SettingsDialog
+      value={settings}
+      status={store.status}
+      workspaces={workspaces}
+      onClose={() => setSettingsOpen(false)}
+      onSave={saveSettings}
+      onOnboarding={() => { setSettingsOpen(false); setOnboardingOpen(true) }}
+    />}
     {memoryOpen && <MemoryDialog value={memory} workspace={workspace} onClose={() => setMemoryOpen(false)} onSave={saveMemory}/>}
     {preview && <PreviewDialog preview={preview} activeId={store.activeId} onClose={() => setPreview(null)} onError={store.setError}/>}
     {onboardingOpen && <OnboardingDialog settings={settings} status={store.status} hasWorkspace={Boolean(workspace)} onWorkspace={selectWorkspace} onClose={() => { localStorage.setItem('nocturne.onboarding.completed', 'true'); setOnboardingOpen(false); composerRef.current?.focus() }}/>}
@@ -402,13 +411,14 @@ function App() {
 function OnboardingDialog({ settings, status, hasWorkspace, onWorkspace, onClose }: { settings: CodexSettings; status: string; hasWorkspace: boolean; onWorkspace(): void; onClose(): void }) {
   const [step, setStep] = useState(0)
   const items = [
-    { title: 'Codex CLI', body: settings.codexVersion && !settings.codexVersion.includes('indisponível') ? `Encontrado: ${settings.codexVersion}` : 'Codex CLI não encontrado. Instale e autentique o CLI antes de usar o agente.' },
-    { title: 'App Server', body: `Estado atual: ${statusText(status)}. O Nocturne usa a autenticação já existente no Codex CLI e nunca solicita seu token.` },
-    { title: 'Workspace', body: hasWorkspace ? 'Workspace selecionado e pronto.' : 'Escolha a pasta do primeiro projeto. O agente ficará limitado a essa raiz.' },
-    { title: 'Aprovações e segurança', body: 'Revise comandos sensíveis antes de aprovar. Comandos perigosos são destacados e as decisões ficam registradas localmente.' },
+    { title: 'Codex CLI', ok: Boolean(settings.codexVersion && !settings.codexVersion.includes('indisponível')), body: settings.codexVersion && !settings.codexVersion.includes('indisponível') ? `Encontrado: ${settings.codexVersion}` : 'Codex CLI não encontrado.', fix: 'Instale o Codex CLI e confirme com: codex --version' },
+    { title: 'Autenticação', ok: Boolean(settings.authenticated), body: settings.authStatus || 'Não foi possível verificar o login.', fix: 'Execute no terminal: codex login' },
+    { title: 'App Server', ok: ['ready', 'completed'].includes(status), body: `Estado atual: ${statusText(status)}.`, fix: 'Abra Configurações → Diagnóstico e use Reiniciar Codex.' },
+    { title: 'Primeiro workspace', ok: hasWorkspace, body: hasWorkspace ? 'Workspace selecionado e pronto.' : 'Escolha a pasta do primeiro projeto. O agente ficará limitado a essa raiz.', fix: 'Selecione uma pasta de projeto local.' },
+    { title: 'Aprovações e segurança', ok: true, body: 'Review apenas sugere; Build pode modificar. Revise comandos sensíveis antes de aprovar.', fix: '' },
   ]
   const current = items[step]
-  return <div className="modal-backdrop"><div className="settings-dialog onboarding-dialog"><div className="modal-title"><MoonStar size={18}/><strong>Bem-vindo ao Nocturne Codex</strong><button onClick={onClose}>Pular</button></div><div className="onboarding-progress">{items.map((_, index) => <span key={index} className={index <= step ? 'active' : ''}/>)}</div><h2>{current.title}</h2><p>{current.body}</p>{step === 2 && !hasWorkspace && <button className="onboarding-workspace" onClick={onWorkspace}><FolderOpen size={15}/>Escolher workspace</button>}<div className="modal-actions"><button disabled={step === 0} onClick={() => setStep(step - 1)}>Voltar</button><button className="primary" onClick={() => step === items.length - 1 ? onClose() : setStep(step + 1)}>{step === items.length - 1 ? 'Começar' : 'Continuar'}</button></div></div></div>
+  return <div className="modal-backdrop"><div className="settings-dialog onboarding-dialog"><div className="modal-title"><MoonStar size={18}/><strong>Bem-vindo ao Nocturne Codex</strong><button onClick={onClose}>Pular</button></div><div className="onboarding-progress">{items.map((_, index) => <span key={index} className={index <= step ? 'active' : ''}/>)}</div><div className={`onboarding-check ${current.ok ? 'ok' : 'failed'}`}>{current.ok ? <Check size={18}/> : <X size={18}/>}</div><h2>{current.title}</h2><p>{current.body}</p>{!current.ok && current.fix && <code className="onboarding-fix">{current.fix}</code>}{step === 3 && !hasWorkspace && <button className="onboarding-workspace" onClick={onWorkspace}><FolderOpen size={15}/>Escolher workspace</button>}<div className="modal-actions"><button disabled={step === 0} onClick={() => setStep(step - 1)}>Voltar</button><button className="primary" onClick={() => step === items.length - 1 ? onClose() : setStep(step + 1)}>{step === items.length - 1 ? 'Começar' : 'Continuar'}</button></div></div></div>
 }
 
 function Welcome({ onNew, onWorkspace, onPrompt }: { onNew(): void; onWorkspace(): void; onPrompt(prompt: string): void }) {
@@ -486,13 +496,20 @@ function PreviewDialog({ preview, activeId, onClose, onError }: { preview: FileP
   return <div className="preview-backdrop" onMouseDown={onClose}><section className="preview-dialog" onMouseDown={(event) => event.stopPropagation()}><header><div><Eye size={16}/><span><strong>{preview.name}</strong><small>{formatBytes(preview.size)}{preview.filePath && ` · ${preview.filePath}`}</small></span></div><div>{preview.kind !== 'image' && <button onClick={copy} title="Copiar conteúdo"><Copy size={15}/></button>}{preview.filePath && <><button onClick={() => open('folder')} title="Abrir pasta"><FolderOpen size={15}/></button><button onClick={() => open('editor')} title="Abrir arquivo"><ExternalLink size={15}/></button></>}<button onClick={onClose}><X size={17}/></button></div></header><div className={`preview-content ${preview.kind}`}>{preview.kind === 'image' ? <img src={preview.content} alt={preview.name}/> : preview.kind === 'markdown' ? <ReactMarkdown>{preview.content}</ReactMarkdown> : <pre><code>{preview.content}</code></pre>}</div></section></div>
 }
 
-function SettingsDialog({ value, status, onClose, onSave }: { value: CodexSettings; status: string; onClose(): void; onSave(value: CodexSettings): void }) {
+function SettingsDialog({ value, status, workspaces, onClose, onSave, onOnboarding }: { value: CodexSettings; status: string; workspaces: Workspace[]; onClose(): void; onSave(value: CodexSettings): void; onOnboarding(): void }) {
   const [form, setForm] = useState(value)
   const [diagnostic, setDiagnostic] = useState('Carregando diagnóstico…')
   useEffect(() => { void window.nocturne.codex.diagnostics().then((item) => setDiagnostic(`PID: ${item.pid ?? '—'} · ${item.executable}\nÚltima falha: ${item.lastFailure || 'nenhuma'}`)).catch((error) => setDiagnostic(errorMessage(error))) }, [])
   const copyDiagnostic = async () => { const content = await window.nocturne.diagnostics.copy(); await navigator.clipboard.writeText(content) }
-  return <div className="modal-backdrop" onMouseDown={onClose}><div className="settings-dialog" onMouseDown={(event) => event.stopPropagation()}><div className="modal-title"><Settings size={17}/><strong>Configurações do Codex</strong><button onClick={onClose}><X size={16}/></button></div><div className="codex-info"><span className={`status-dot ${status}`}/><div><strong>{statusText(status)}</strong><small>{value.codexVersion || 'Versão indisponível'}<br/>{diagnostic}</small></div></div><label>Executável do Codex<input value={form.codexPath || ''} onChange={(event) => setForm({ ...form, codexPath: event.target.value })} placeholder="codex ou caminho absoluto"/></label><label>Modelo<input value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} placeholder="Padrão do Codex"/></label><label>Sandbox<select value={form.sandbox} onChange={(event) => setForm({ ...form, sandbox: event.target.value as CodexSettings['sandbox'] })}><option value="read-only">Somente leitura</option><option value="workspace-write">Escrita no workspace</option></select></label><label>Política de aprovação<select value={form.approvalPolicy} onChange={(event) => setForm({ ...form, approvalPolicy: event.target.value as CodexSettings['approvalPolicy'] })}><option value="untrusted">Comandos não confiáveis</option><option value="on-request">Quando solicitado</option><option value="never">Nunca solicitar</option></select></label><label className="check-label"><input type="checkbox" checked={Boolean(form.diagnosticMode)} onChange={(event) => setForm({ ...form, diagnosticMode: event.target.checked })}/>Modo de diagnóstico</label><div className="diagnostic-actions"><button onClick={() => window.nocturne.codex.restart().then(() => setDiagnostic('Codex reiniciado com sucesso.')).catch((error) => setDiagnostic(errorMessage(error)))}>Reiniciar Codex</button><button onClick={() => window.nocturne.diagnostics.openLogs()}>Abrir logs</button><button onClick={copyDiagnostic}>Copiar diagnóstico</button><button onClick={() => window.nocturne.data.export()}>Exportar dados</button></div><div className="modal-actions"><button onClick={onClose}>Cancelar</button><button className="primary" onClick={() => onSave(form)}>Salvar</button></div></div></div>
+  return <div className="modal-backdrop" onMouseDown={onClose}><div className="settings-dialog beta-settings" onMouseDown={(event) => event.stopPropagation()}><div className="modal-title"><Settings size={17}/><strong>Configurações</strong><button onClick={onClose}><X size={16}/></button></div><div className="settings-scroll">
+    <SettingsSection title="Codex"><div className="codex-info"><span className={`status-dot ${status}`}/><div><strong>{statusText(status)}</strong><small>{value.codexVersion || 'Versão indisponível'} · {value.authenticated ? 'Autenticado' : 'Login necessário'}</small></div></div><label>Executável<input value={form.codexPath || ''} onChange={(event) => setForm({ ...form, codexPath: event.target.value })} placeholder="codex ou caminho absoluto"/></label><label>Modelo<input value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} placeholder="Padrão do Codex"/></label><div className="settings-columns"><label>Sandbox<select value={form.sandbox} onChange={(event) => setForm({ ...form, sandbox: event.target.value as CodexSettings['sandbox'] })}><option value="read-only">Somente leitura</option><option value="workspace-write">Escrita no workspace</option></select></label><label>Aprovações<select value={form.approvalPolicy} onChange={(event) => setForm({ ...form, approvalPolicy: event.target.value as CodexSettings['approvalPolicy'] })}><option value="untrusted">Não confiáveis</option><option value="on-request">Quando solicitado</option><option value="never">Sempre proteger riscos</option></select></label></div></SettingsSection>
+    <SettingsSection title="Workspace"><div className="settings-workspaces">{workspaces.slice(0, 6).map((workspace) => <div key={workspace.path}><Folder size={13}/><span><strong>{workspace.name}</strong><small>{workspace.path}</small></span>{workspace.favorite && <Star size={12} fill="currentColor"/>}</div>)}{!workspaces.length && <p>Nenhum workspace recente.</p>}</div></SettingsSection>
+    <SettingsSection title="Aplicação"><div className="settings-columns"><label>Tema<select value={form.theme || 'dark'} onChange={(event) => setForm({ ...form, theme: event.target.value as CodexSettings['theme'] })}><option value="dark">Nocturne escuro</option><option value="system">Seguir sistema</option></select></label><label>Modo padrão<select value={form.defaultAgentMode || 'review'} onChange={(event) => setForm({ ...form, defaultAgentMode: event.target.value as AgentMode })}><option value="review">Review</option><option value="build">Build</option><option value="docs">Docs</option></select></label></div><label className="check-label"><input type="checkbox" checked={Boolean(form.diagnosticMode)} onChange={(event) => setForm({ ...form, diagnosticMode: event.target.checked })}/>Ativar logs detalhados</label><button className="secondary-setting" onClick={onOnboarding}>Reabrir primeira execução</button></SettingsSection>
+    <SettingsSection title="Diagnóstico"><pre className="diagnostic-summary">{diagnostic}</pre><div className="diagnostic-actions"><button onClick={() => window.nocturne.codex.restart().then(() => setDiagnostic('Codex reiniciado com sucesso.')).catch((error) => setDiagnostic(errorMessage(error)))}>Reiniciar Codex</button><button onClick={() => window.nocturne.diagnostics.openLogs()}>Abrir logs</button><button onClick={copyDiagnostic}>Copiar informações</button><button onClick={() => window.nocturne.data.export()}>Exportar dados</button></div></SettingsSection>
+  </div><div className="modal-actions"><button onClick={onClose}>Cancelar</button><button className="primary" onClick={() => onSave(form)}>Salvar</button></div></div></div>
 }
+
+function SettingsSection({ title, children }: { title: string; children: React.ReactNode }) { return <section className="settings-section"><h3>{title}</h3>{children}</section> }
 
 function describeChanges(value: unknown) { if (!Array.isArray(value)) return ''; return value.map((item) => String((item as Record<string, unknown>).path ?? '')).filter(Boolean).join('\n') }
 function parseChanges(value: unknown): ChangedFile[] { if (!Array.isArray(value)) return []; return value.map((item) => { const change = item as Record<string, unknown>; const rawKind = String(change.kind ?? 'modified').toLowerCase(); return { path: String(change.path ?? ''), kind: (rawKind.includes('add') ? 'created' : rawKind.includes('delete') ? 'deleted' : 'modified') as ChangedFile['kind'], status: String(change.status ?? 'completed') } }).filter((item) => item.path) }
