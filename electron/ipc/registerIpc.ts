@@ -23,6 +23,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     const result = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], title: 'Selecionar workspace' })
     if (result.canceled || !result.filePaths[0]) return null
     database.touchWorkspace(result.filePaths[0])
+    ensureNocturneWorkspace(result.filePaths[0])
     return result.filePaths[0]
   })
 
@@ -33,9 +34,31 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   })
   ipcMain.handle('workspaces:list', () => database.listWorkspaces())
   ipcMain.handle('workspaces:remove', (_event, value: unknown) => database.removeWorkspace(z.string().min(1).parse(value)))
+  ipcMain.handle('workspaces:favorite', (_event, value: unknown) => {
+    const data = z.object({ workspace: z.string().min(1), favorite: z.boolean() }).parse(value)
+    database.setWorkspaceFavorite(data.workspace, data.favorite)
+  })
+  ipcMain.handle('workspace:openTool', async (_event, value: unknown) => {
+    const data = z.object({ workspace: z.string().min(1), tool: z.enum(['editor', 'terminal']) }).parse(value)
+    const workspace = path.resolve(data.workspace)
+    if (!fs.existsSync(workspace)) throw new Error('Workspace não encontrado.')
+    if (data.tool === 'editor') {
+      try { await run('code', [workspace], workspace) } catch { throw new Error('Não foi possível abrir o VS Code. Verifique se o comando “code” está no PATH.') }
+      return
+    }
+    const terminal = process.platform === 'win32' ? ['cmd', ['/K', 'cd', '/d', workspace]] as const
+      : process.platform === 'darwin' ? ['open', ['-a', 'Terminal', workspace]] as const
+      : ['x-terminal-emulator', ['--working-directory', workspace]] as const
+    const child = spawn(terminal[0], [...terminal[1]], { cwd: workspace, detached: true, stdio: 'ignore' })
+    child.unref()
+  })
 
   ipcMain.handle('conversations:list', () => database.listConversations())
-  ipcMain.handle('conversations:create', (_event, value: unknown) => database.createConversation(z.string().min(1).parse(value)))
+  ipcMain.handle('conversations:create', (_event, value: unknown) => {
+    const workspace = z.string().min(1).parse(value)
+    ensureNocturneWorkspace(workspace)
+    return database.createConversation(workspace)
+  })
   ipcMain.handle('conversations:messages', (_event, value: unknown) => database.listMessages(idSchema.parse(value)))
   ipcMain.handle('conversations:delete', (_event, value: unknown) => database.deleteConversation(idSchema.parse(value)))
 
@@ -78,10 +101,16 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     return { kind: extension === '.md' ? 'markdown' : 'text', name: path.basename(filePath), filePath, mime: 'text/plain', content: fs.readFileSync(filePath, 'utf8'), size: stat.size }
   })
 
-  ipcMain.handle('memory:get', (_event, value: unknown) => database.getWorkspaceMemory(getConversation(database, idSchema.parse(value)).workspace))
+  ipcMain.handle('memory:get', (_event, value: unknown) => {
+    const workspace = getConversation(database, idSchema.parse(value)).workspace
+    return readWorkspaceContext(workspace)
+  })
   ipcMain.handle('memory:set', (_event, value: unknown) => {
-    const data = z.object({ conversationId: z.string().uuid(), content: z.string().max(20_000) }).parse(value)
-    return database.setWorkspaceMemory(getConversation(database, data.conversationId).workspace, data.content)
+    const data = z.object({ conversationId: z.string().uuid(), content: z.string().max(20_000), rules: z.string().max(20_000).default('') }).parse(value)
+    const workspace = getConversation(database, data.conversationId).workspace
+    const result = writeWorkspaceContext(workspace, data.content, data.rules)
+    database.setWorkspaceMemory(workspace, `${data.content}\n\n# Regras do projeto\n${data.rules}`)
+    return result
   })
 
   ipcMain.handle('artifacts:list', (_event, value: unknown) => database.listArtifacts(idSchema.parse(value)))
@@ -104,7 +133,8 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
 
     let threadId = conversation.codexThreadId
     let recreated = false
-    const memory = database.getWorkspaceMemory(conversation.workspace).content
+    const context = readWorkspaceContext(conversation.workspace)
+    const memory = `${context.content}\n\n# Regras do projeto\n${context.rules}\n\n# Projeto detectado\n${JSON.stringify(context.project, null, 2)}`
     if (!threadId) {
       threadId = await codex.createThread(conversation.workspace, database.getSettings(), memory)
       database.setThread(conversationId, threadId)
@@ -140,13 +170,13 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     const data = z.object({ conversationId: z.string().uuid(), content: z.string(), metadata: z.unknown().optional() }).parse(value)
     const conversation = getConversation(database, data.conversationId)
     const message = database.addMessage(data.conversationId, 'assistant', data.content, data.metadata)
-    database.addArtifact(data.conversationId, conversation.workspace, 'response', `Resposta · ${new Date().toLocaleString()}`, null, data.content)
+    database.addArtifact(data.conversationId, conversation.workspace, 'markdown', `Resposta · ${new Date().toLocaleString()}`, null, data.content, { origin: 'Codex' })
     const metadata = data.metadata as { files?: Array<{ path?: string; kind?: string }>; diff?: string } | undefined
     for (const file of metadata?.files ?? []) {
       if (!file.path) continue
-      database.addArtifact(data.conversationId, conversation.workspace, 'file', path.basename(file.path), file.path, null, { kind: file.kind })
+      database.addArtifact(data.conversationId, conversation.workspace, artifactType(file.path), path.basename(file.path), file.path, null, { kind: file.kind, origin: 'Codex' })
     }
-    if (metadata?.diff) database.addArtifact(data.conversationId, conversation.workspace, 'diff', 'Alterações do turno', null, metadata.diff)
+    if (metadata?.diff) database.addArtifact(data.conversationId, conversation.workspace, 'report', 'Alterações do turno', null, metadata.diff, { origin: 'Codex', format: 'diff' })
     return message
   })
 
@@ -226,6 +256,15 @@ function isTextFile(extension: string) {
   return new Set(['.txt', '.md', '.json', '.js', '.jsx', '.ts', '.tsx', '.css', '.html', '.xml', '.yaml', '.yml', '.toml', '.py', '.rs', '.go', '.java', '.c', '.cpp', '.h', '.sh', '.sql', '.env', '.gitignore']).has(extension)
 }
 
+function artifactType(filePath: string) {
+  const extension = path.extname(filePath).toLowerCase()
+  if (['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'].includes(extension)) return 'image'
+  if (extension === '.md') return 'markdown'
+  if (['.json', '.yaml', '.yml', '.toml', '.env', '.ini'].includes(extension)) return 'configuration'
+  if (['.docx', '.pdf', '.html'].includes(extension)) return 'document'
+  return 'code'
+}
+
 async function run(command: string, args: string[], cwd: string) {
   try { return await execFileAsync(command, args, { cwd, timeout: 20_000, maxBuffer: 5_000_000 }) }
   catch (error) { throw new Error(error instanceof Error ? error.message : String(error)) }
@@ -274,4 +313,58 @@ function pipeCommand(command: string, args: string[], input: string, cwd: string
     child.on('exit', (code) => code === 0 ? resolve() : reject(new Error(error || `Pandoc encerrou com código ${code}.`)))
     child.stdin.end(input)
   })
+}
+
+interface ProjectContext { name: string; stack: string[]; primaryLanguage: string; commands: Record<string, string> }
+
+function ensureNocturneWorkspace(workspace: string) {
+  const directory = path.join(workspace, '.nocturne')
+  fs.mkdirSync(directory, { recursive: true })
+  const projectPath = path.join(directory, 'project.json')
+  const memoryPath = path.join(directory, 'memory.md')
+  const rulesPath = path.join(directory, 'rules.md')
+  if (!fs.existsSync(projectPath)) fs.writeFileSync(projectPath, `${JSON.stringify(detectProject(workspace), null, 2)}\n`, 'utf8')
+  if (!fs.existsSync(memoryPath)) fs.writeFileSync(memoryPath, '# Memória do projeto\n\nDecisões, arquitetura e informações aprendidas pelo agente.\n', 'utf8')
+  if (!fs.existsSync(rulesPath)) fs.writeFileSync(rulesPath, '# Regras do projeto\n\nPreferências e padrões de código que o agente deve seguir.\n', 'utf8')
+}
+
+function readWorkspaceContext(workspace: string) {
+  ensureNocturneWorkspace(workspace)
+  const directory = path.join(workspace, '.nocturne')
+  let project = detectProject(workspace)
+  try { project = JSON.parse(fs.readFileSync(path.join(directory, 'project.json'), 'utf8')) as ProjectContext } catch { /* regenerate invalid metadata on save */ }
+  const memoryPath = path.join(directory, 'memory.md')
+  const rulesPath = path.join(directory, 'rules.md')
+  const stats = [memoryPath, rulesPath].map((file) => fs.statSync(file).mtimeMs)
+  return { content: fs.readFileSync(memoryPath, 'utf8'), rules: fs.readFileSync(rulesPath, 'utf8'), project, updatedAt: new Date(Math.max(...stats)).toISOString() }
+}
+
+function writeWorkspaceContext(workspace: string, content: string, rules: string) {
+  ensureNocturneWorkspace(workspace)
+  const directory = path.join(workspace, '.nocturne')
+  fs.writeFileSync(path.join(directory, 'memory.md'), content, 'utf8')
+  fs.writeFileSync(path.join(directory, 'rules.md'), rules, 'utf8')
+  const project = detectProject(workspace)
+  fs.writeFileSync(path.join(directory, 'project.json'), `${JSON.stringify(project, null, 2)}\n`, 'utf8')
+  return { content, rules, project, updatedAt: new Date().toISOString() }
+}
+
+function detectProject(workspace: string): ProjectContext {
+  const files = new Set(fs.readdirSync(workspace))
+  const stack: string[] = []
+  const commands: Record<string, string> = {}
+  let primaryLanguage = 'Desconhecida'
+  if (files.has('package.json')) {
+    stack.push('Node.js'); primaryLanguage = files.has('tsconfig.json') ? 'TypeScript' : 'JavaScript'
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(workspace, 'package.json'), 'utf8')) as { scripts?: Record<string, string>; dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
+      Object.assign(commands, pkg.scripts ?? {})
+      const deps = { ...pkg.dependencies, ...pkg.devDependencies }
+      for (const [dependency, label] of Object.entries({ react: 'React', vue: 'Vue', electron: 'Electron', next: 'Next.js', vite: 'Vite' })) if (deps[dependency]) stack.push(label)
+    } catch { /* keep basic detection */ }
+  }
+  if (files.has('Cargo.toml')) { stack.push('Rust'); primaryLanguage = 'Rust'; commands.test = 'cargo test' }
+  if (files.has('pyproject.toml') || files.has('requirements.txt')) { stack.push('Python'); primaryLanguage = 'Python'; commands.test ??= 'pytest' }
+  if (files.has('go.mod')) { stack.push('Go'); primaryLanguage = 'Go'; commands.test = 'go test ./...' }
+  return { name: path.basename(workspace), stack: [...new Set(stack)], primaryLanguage, commands }
 }

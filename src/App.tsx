@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { Activity as ActivityIcon, Brain, Check, ChevronRight, Code2, Command, ExternalLink, Eye, FileCode2, FileDown, Folder, FolderOpen, GitBranch, History, ListChecks, LoaderCircle, Menu, MessageSquarePlus, MoonStar, PackageOpen, Paperclip, PanelRight, Search, Send, Settings, ShieldCheck, Sparkles, Square, Trash2, X } from 'lucide-react'
+import { Activity as ActivityIcon, Brain, Check, ChevronRight, Code2, Command, Copy, ExternalLink, Eye, FileCode2, FileDown, Folder, FolderOpen, GitBranch, History, ListChecks, LoaderCircle, Menu, MessageSquarePlus, MoonStar, PackageOpen, Paperclip, PanelRight, Search, Send, Settings, ShieldCheck, Sparkles, Square, Star, Terminal, Trash2, X } from 'lucide-react'
 import { useAppStore } from './store'
 import type { Activity, Artifact, Attachment, ChangedFile, CodexEvent, CodexSettings, FilePreview, GitInfo, Message, PlanStep, Workspace, WorkspaceMemory } from './types'
 import './App.css'
@@ -21,7 +21,7 @@ function App() {
   const [settings, setSettings] = useState<CodexSettings>({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request' })
   const [gitInfo, setGitInfo] = useState<GitInfo | null>(null)
   const [preview, setPreview] = useState<FilePreview | null>(null)
-  const [memory, setMemory] = useState<WorkspaceMemory>({ content: '', updatedAt: '' })
+  const [memory, setMemory] = useState<WorkspaceMemory>({ content: '', rules: '', updatedAt: '' })
   const [memoryOpen, setMemoryOpen] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
   const active = store.conversations.find((item) => item.id === store.activeId)
@@ -145,7 +145,7 @@ function App() {
   function addItemActivity(item?: Record<string, unknown>) {
     if (!item) return
     const type = String(item.type)
-    if (type === 'commandExecution') store.upsertActivity({ id: String(item.id), type: 'command', label: String(item.command ?? 'Executando comando'), status: 'running' })
+    if (type === 'commandExecution') store.upsertActivity({ id: String(item.id), type: 'command', label: humanizeCommand(String(item.command ?? '')), detail: String(item.command ?? ''), status: 'running' })
     if (type === 'fileChange') store.upsertActivity({ id: String(item.id), type: 'file', label: 'Preparando alterações em arquivos', status: 'running' })
     if (type === 'mcpToolCall' || type === 'dynamicToolCall') store.upsertActivity({ id: String(item.id), type: 'read', label: `Ferramenta: ${String(item.tool ?? type)}`, detail: JSON.stringify(item.arguments ?? ''), status: 'running' })
   }
@@ -158,7 +158,7 @@ function App() {
   function completeItem(item?: Record<string, unknown>) {
     if (!item) return
     const type = String(item.type)
-    if (type === 'commandExecution') store.upsertActivity({ id: String(item.id), type: 'command', label: String(item.command ?? 'Comando executado'), detail: String(item.aggregatedOutput ?? ''), status: item.status === 'failed' ? 'failed' : 'completed' })
+    if (type === 'commandExecution') store.upsertActivity({ id: String(item.id), type: 'command', label: humanizeCommand(String(item.command ?? '')), detail: [String(item.command ?? ''), String(item.aggregatedOutput ?? '')].filter(Boolean).join('\n\n'), status: item.status === 'failed' ? 'failed' : 'completed' })
     if (type === 'fileChange') {
       store.upsertActivity({ id: String(item.id), type: 'file', label: 'Arquivos atualizados', detail: describeChanges(item.changes), status: item.status === 'failed' ? 'failed' : 'completed' })
       store.addFiles(parseChanges(item.changes))
@@ -236,9 +236,9 @@ function App() {
 
   async function refreshArtifacts() { if (store.activeId) store.setArtifacts(await window.nocturne.artifacts.list(store.activeId)) }
 
-  async function saveMemory(content: string) {
+  async function saveMemory(content: string, rules: string) {
     if (!store.activeId) return
-    try { setMemory(await window.nocturne.memory.set(store.activeId, content)); setMemoryOpen(false) }
+    try { setMemory(await window.nocturne.memory.set(store.activeId, content, rules)); setMemoryOpen(false) }
     catch (error) { store.setError(errorMessage(error)) }
   }
 
@@ -264,7 +264,7 @@ function App() {
         {!filtered.length && <p className="empty-list">Nenhuma conversa ainda.</p>}
       </nav>
       <div className="sidebar-footer">
-        {workspaces.slice(0, 3).map((item) => <button key={item.path} className={`workspace-mini ${workspace === item.path ? 'active' : ''}`} onClick={() => chooseSavedWorkspace(item.path)}><Folder size={13}/><span>{item.name}</span></button>)}
+        {workspaces.slice(0, 4).map((item) => <div key={item.path} className={`workspace-mini ${workspace === item.path ? 'active' : ''}`}><button onClick={() => chooseSavedWorkspace(item.path)}><Folder size={13}/><span>{item.name}</span></button><button title={item.favorite ? 'Remover dos favoritos' : 'Favoritar'} onClick={async () => { await window.nocturne.workspace.favorite(item.path, !item.favorite); setWorkspaces(await window.nocturne.workspace.list()) }}><Star size={12} fill={item.favorite ? 'currentColor' : 'none'}/></button></div>)}
         <button className="workspace-card" onClick={selectWorkspace}><span className="workspace-icon"><FolderOpen size={17}/></span><span><small>Workspace</small><strong>{workspace ? workspace.split(/[/\\]/).pop() : 'Selecionar projeto'}</strong></span><ChevronRight size={15}/></button>
         <div className="profile"><div className="avatar">G</div><span><strong>Ambiente local</strong><small>{settings.codexVersion || 'Codex CLI'}</small></span><span className={`status-dot ${store.status}`}/><button className="settings-button" onClick={() => setSettingsOpen(true)}><Settings size={14}/></button></div>
       </div>
@@ -274,7 +274,7 @@ function App() {
       <header className="topbar">
         {!sidebarOpen && <button className="icon-button" onClick={() => setSidebarOpen(true)}><Menu size={18}/></button>}
         <div className="title-block"><h1>{title}</h1>{pathLabel && <button className="path-pill" onClick={selectWorkspace}><Folder size={13}/>{pathLabel.split(/[/\\]/).pop()}<ChevronRight size={12}/></button>}</div>
-        <div className="top-actions">{gitInfo && <span className="branch-pill"><GitBranch size={12}/>{gitInfo.branch}</span>}<button className={`connection ${store.status}`} onClick={reconnect} title="Reconectar ao App Server"><span/>{statusText(store.status)}</button><button className={`icon-button ${memory.content ? 'has-memory' : ''}`} onClick={() => store.activeId ? setMemoryOpen(true) : store.setError('Abra uma conversa para configurar a memória do workspace.')} title="Memória do workspace"><Brain size={17}/></button><button className="icon-button" onClick={() => setSettingsOpen(true)}><Settings size={17}/></button><button className={`icon-button ${rightOpen ? 'selected' : ''}`} onClick={() => setRightOpen(!rightOpen)}><PanelRight size={18}/></button></div>
+        <div className="top-actions">{gitInfo && <span className="branch-pill"><GitBranch size={12}/>{gitInfo.branch}</span>}{pathLabel && <><button className="icon-button" title="Abrir no VS Code" onClick={() => window.nocturne.workspace.openTool(pathLabel, 'editor').catch((error) => store.setError(errorMessage(error)))}><Code2 size={16}/></button><button className="icon-button" title="Abrir terminal" onClick={() => window.nocturne.workspace.openTool(pathLabel, 'terminal').catch((error) => store.setError(errorMessage(error)))}><Terminal size={16}/></button></>}<button className={`connection ${store.status}`} onClick={reconnect} title="Reconectar ao App Server"><span/>{statusText(store.status)}</button><button className={`icon-button ${memory.content ? 'has-memory' : ''}`} onClick={() => store.activeId ? setMemoryOpen(true) : store.setError('Abra uma conversa para configurar a memória do workspace.')} title="Memória do workspace"><Brain size={17}/></button><button className="icon-button" onClick={() => setSettingsOpen(true)}><Settings size={17}/></button><button className={`icon-button ${rightOpen ? 'selected' : ''}`} onClick={() => setRightOpen(!rightOpen)}><PanelRight size={18}/></button></div>
       </header>
 
       <section className="chat-scroll">
@@ -294,7 +294,7 @@ function App() {
       </form><small className="composer-hint">Enter para enviar · Shift + Enter para nova linha</small></div>
     </main>
 
-    {rightOpen && <Inspector activities={store.activities} approvals={store.approvals} diff={store.diff} files={store.files} artifacts={store.artifacts} plan={store.plan} planExplanation={store.planExplanation} activeId={store.activeId} gitInfo={gitInfo} documentContent={documentContent} onDecide={decide} onError={store.setError} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact}/>} 
+    {rightOpen && <Inspector activities={store.activities} approvals={store.approvals} diff={store.diff} files={store.files} artifacts={store.artifacts} plan={store.plan} planExplanation={store.planExplanation} activeId={store.activeId} gitInfo={gitInfo} documentContent={documentContent} onDecide={decide} onError={store.setError} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onPlanChange={(plan) => store.setPlan(plan, store.planExplanation)} onPlanExecute={(plan) => submitPrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`)}/>} 
     {settingsOpen && <SettingsDialog value={settings} status={store.status} onClose={() => setSettingsOpen(false)} onSave={saveSettings}/>} 
     {memoryOpen && <MemoryDialog value={memory} workspace={workspace} onClose={() => setMemoryOpen(false)} onSave={saveMemory}/>} 
     {preview && <PreviewDialog preview={preview} activeId={store.activeId} onClose={() => setPreview(null)} onError={store.setError}/>} 
@@ -316,7 +316,7 @@ function AssistantMessage({ content, streaming }: { content: string; streaming?:
   return <div className="assistant-row"><div className="assistant-avatar"><Sparkles size={15}/></div><div className="assistant-content"><div className="assistant-name">Nocturne Codex {streaming && <span>escrevendo</span>}</div><ReactMarkdown>{content}</ReactMarkdown>{streaming && <span className="caret"/>}</div></div>
 }
 
-function Inspector({ activities, approvals, diff, files, artifacts, plan, planExplanation, activeId, gitInfo, documentContent, onDecide, onError, onGitRefresh, onArtifactsRefresh, onPreview, onArtifact, onDeleteArtifact }: { activities: Activity[]; approvals: ReturnType<typeof useAppStore.getState>['approvals']; diff: string; files: ChangedFile[]; artifacts: Artifact[]; plan: PlanStep[]; planExplanation: string; activeId: string | null; gitInfo: GitInfo | null; documentContent: string; onDecide(key: string, accepted: boolean): void; onError(value: string): void; onGitRefresh(): void; onArtifactsRefresh(): void; onPreview(filePath: string): void; onArtifact(artifact: Artifact): void; onDeleteArtifact(id: string): void }) {
+function Inspector({ activities, approvals, diff, files, artifacts, plan, planExplanation, activeId, gitInfo, documentContent, onDecide, onError, onGitRefresh, onArtifactsRefresh, onPreview, onArtifact, onDeleteArtifact, onPlanChange, onPlanExecute }: { activities: Activity[]; approvals: ReturnType<typeof useAppStore.getState>['approvals']; diff: string; files: ChangedFile[]; artifacts: Artifact[]; plan: PlanStep[]; planExplanation: string; activeId: string | null; gitInfo: GitInfo | null; documentContent: string; onDecide(key: string, accepted: boolean): void; onError(value: string): void; onGitRefresh(): void; onArtifactsRefresh(): void; onPreview(filePath: string): void; onArtifact(artifact: Artifact): void; onDeleteArtifact(id: string): void; onPlanChange(plan: PlanStep[]): void; onPlanExecute(plan: PlanStep[]): void }) {
   const [commitMessage, setCommitMessage] = useState('')
   const [tab, setTab] = useState<'activity' | 'plan' | 'artifacts'>('activity')
   const open = async (filePath: string, action: 'file' | 'folder' | 'editor') => { if (!activeId) return; try { await window.nocturne.files.open(activeId, filePath, action) } catch (error) { onError(errorMessage(error)) } }
@@ -331,23 +331,29 @@ function Inspector({ activities, approvals, diff, files, artifacts, plan, planEx
     <div className="inspector-scroll">
       {tab === 'activity' && <>
       {approvals.map((approval) => <div className={`approval-card ${approval.status}`} key={approval.key}><div className="approval-title"><span>{approval.kind === 'command' ? <Command size={15}/> : <FileCode2 size={15}/>}</span><strong>{approval.title}</strong></div><pre>{approval.detail}</pre>{approval.status === 'pending' ? <div className="approval-actions"><button onClick={() => onDecide(approval.key, false)}><X size={14}/>Recusar</button><button className="accept" onClick={() => onDecide(approval.key, true)}><Check size={14}/>Aprovar</button></div> : <small>{approval.status === 'accepted' ? 'Aprovado' : 'Recusado'}</small>}</div>)}
-      <div className="timeline">{activities.map((item) => <div className="timeline-item" key={item.id}><span className={`timeline-dot ${item.status}`}>{item.status === 'running' ? <LoaderCircle size={13}/> : item.type === 'command' ? <Command size={12}/> : item.type === 'file' ? <FileCode2 size={12}/> : <Sparkles size={12}/>}</span><div><strong>{item.label}</strong>{item.detail && <pre>{item.detail.slice(0, 700)}</pre>}</div></div>)}</div>
+      <ActivityTimeline activities={activities}/>
       {!!files.length && <div className="files-panel"><div className="diff-title"><FileCode2 size={14}/>Arquivos alterados <span>{files.length}</span></div>{files.map((file) => <div className="changed-file" key={file.path}><span className={`file-kind ${file.kind}`}>{file.kind[0].toUpperCase()}</span><button title="Visualizar" onClick={() => onPreview(file.path)}>{file.path.split(/[/\\]/).pop()}</button><button title="Visualizar" onClick={() => onPreview(file.path)}><Eye size={12}/></button><button title="Abrir no editor" onClick={() => open(file.path, 'editor')}><ExternalLink size={12}/></button><button title="Mostrar na pasta" onClick={() => open(file.path, 'folder')}><FolderOpen size={12}/></button></div>)}</div>}
       {diff && <div className="diff-panel"><div className="diff-title"><FileCode2 size={14}/>Alterações propostas</div><pre>{diff.split('\n').map((line, i) => <span key={i} className={line.startsWith('+') ? 'added' : line.startsWith('-') ? 'removed' : ''}>{line}{'\n'}</span>)}</pre></div>}
       {gitInfo && <div className="git-panel"><div className="diff-title"><GitBranch size={14}/>Git · {gitInfo.branch}</div><pre>{gitInfo.status || 'Workspace limpo'}</pre><div className="commit-row"><input value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} placeholder="Mensagem do commit"/><button disabled={!commitMessage.trim() || !gitInfo.status} onClick={commit}><Check size={13}/></button></div></div>}
       <div className="document-panel"><div className="diff-title"><FileDown size={14}/>Documento da resposta</div><div className="export-actions"><button onClick={() => exportDocument('md')}>MD</button><button onClick={() => exportDocument('html')}>HTML</button><button onClick={() => exportDocument('docx')}>DOCX</button><button onClick={() => exportDocument('pdf')}>PDF</button></div></div>
       {!activities.length && !approvals.length && !diff && <div className="inspector-empty"><div><ActivityIcon size={22}/></div><p>A atividade do agente aparecerá aqui.</p><small>Comandos, arquivos e aprovações em tempo real.</small></div>}
       </>}
-      {tab === 'plan' && <PlanPanel plan={plan} explanation={planExplanation}/>} 
+      {tab === 'plan' && <PlanPanel plan={plan} explanation={planExplanation} onChange={onPlanChange} onExecute={onPlanExecute}/>} 
       {tab === 'artifacts' && <ArtifactsPanel artifacts={artifacts} onOpen={onArtifact} onDelete={onDeleteArtifact}/>} 
     </div>
   </aside>
 }
 
-function PlanPanel({ plan, explanation }: { plan: PlanStep[]; explanation: string }) {
+function PlanPanel({ plan, explanation, onChange, onExecute }: { plan: PlanStep[]; explanation: string; onChange(plan: PlanStep[]): void; onExecute(plan: PlanStep[]): void }) {
+  const [editing, setEditing] = useState(false)
   const completed = plan.filter((item) => item.status === 'completed').length
   if (!plan.length) return <div className="inspector-empty"><div><ListChecks size={22}/></div><p>Nenhum plano publicado.</p><small>Quando o agente estruturar o trabalho, as etapas aparecerão aqui.</small></div>
-  return <div className="plan-panel"><div className="plan-progress"><div><strong>Progresso do agente</strong><span>{completed}/{plan.length}</span></div><div className="progress-track"><span style={{ width: `${(completed / plan.length) * 100}%` }}/></div>{explanation && <p>{explanation}</p>}</div><div className="plan-list">{plan.map((item, index) => <div className={`plan-step ${item.status}`} key={`${index}-${item.step}`}><span>{item.status === 'completed' ? <Check size={12}/> : item.status === 'inProgress' ? <LoaderCircle size={12}/> : index + 1}</span><div><strong>{item.step}</strong><small>{item.status === 'completed' ? 'Concluído' : item.status === 'inProgress' ? 'Em andamento' : 'Pendente'}</small></div></div>)}</div></div>
+  return <div className="plan-panel"><div className="plan-progress"><div><strong>Progresso do agente</strong><span>{completed}/{plan.length}</span></div><div className="progress-track"><span style={{ width: `${(completed / plan.length) * 100}%` }}/></div>{explanation && <p>{explanation}</p>}</div><div className="plan-list">{plan.map((item, index) => <div className={`plan-step ${item.status}`} key={`${index}-${item.step}`}><span>{item.status === 'completed' ? <Check size={12}/> : item.status === 'inProgress' ? <LoaderCircle size={12}/> : index + 1}</span><div>{editing ? <input value={item.step} onChange={(event) => onChange(plan.map((entry, entryIndex) => entryIndex === index ? { ...entry, step: event.target.value } : entry))}/> : <strong>{item.step}</strong>}<small>{item.status === 'completed' ? 'Concluído' : item.status === 'inProgress' ? 'Em andamento' : 'Pendente'}</small></div></div>)}</div><div className="plan-actions"><button onClick={() => setEditing(!editing)}>{editing ? 'Concluir edição' : 'Editar plano'}</button><button className="primary" onClick={() => onExecute(plan)} disabled={editing || !plan.every((item) => item.step.trim())}>Aprovar e executar</button></div></div>
+}
+
+function ActivityTimeline({ activities }: { activities: Activity[] }) {
+  const [details, setDetails] = useState(false)
+  return <><div className="activity-detail-toggle"><button onClick={() => setDetails(!details)}>{details ? 'Ocultar detalhes técnicos' : 'Ver detalhes técnicos'}</button></div><div className="timeline">{activities.map((item) => <div className="timeline-item" key={item.id}><span className={`timeline-dot ${item.status}`}>{item.status === 'running' ? <LoaderCircle size={13}/> : item.type === 'command' ? <Command size={12}/> : item.type === 'file' ? <FileCode2 size={12}/> : <Sparkles size={12}/>}</span><div><strong>{item.label}</strong>{details && item.detail && <pre>{item.detail.slice(0, 1400)}</pre>}</div></div>)}</div></>
 }
 
 function ArtifactsPanel({ artifacts, onOpen, onDelete }: { artifacts: Artifact[]; onOpen(artifact: Artifact): void; onDelete(id: string): void }) {
@@ -355,14 +361,16 @@ function ArtifactsPanel({ artifacts, onOpen, onDelete }: { artifacts: Artifact[]
   return <div className="artifact-list">{artifacts.map((artifact) => <div className="artifact-card" key={artifact.id}><button className="artifact-main" onClick={() => onOpen(artifact)}><span className={`artifact-icon ${artifact.type}`}>{artifact.type === 'file' ? <FileCode2 size={15}/> : artifact.type === 'diff' ? <GitBranch size={15}/> : <FileDown size={15}/>}</span><span><strong>{artifact.title}</strong><small>{artifact.type} · {relativeTime(artifact.updatedAt)}</small></span><Eye size={13}/></button><button className="artifact-delete" title="Remover do painel" onClick={() => onDelete(artifact.id)}><Trash2 size={12}/></button></div>)}</div>
 }
 
-function MemoryDialog({ value, workspace, onClose, onSave }: { value: WorkspaceMemory; workspace: string; onClose(): void; onSave(content: string): void }) {
+function MemoryDialog({ value, workspace: _workspace, onClose, onSave }: { value: WorkspaceMemory; workspace: string; onClose(): void; onSave(content: string, rules: string): void }) {
   const [content, setContent] = useState(value.content)
-  return <div className="modal-backdrop" onMouseDown={onClose}><div className="settings-dialog memory-dialog" onMouseDown={(event) => event.stopPropagation()}><div className="modal-title"><Brain size={17}/><strong>Memória do workspace</strong><button onClick={onClose}><X size={16}/></button></div><p className="memory-description">Preferências, decisões arquiteturais e contexto durável para <b>{workspace.split(/[/\\]/).pop()}</b>. Esta memória é enviada ao Codex em novos turnos.</p><textarea value={content} onChange={(event) => setContent(event.target.value)} maxLength={20_000} placeholder={'Exemplos:\n- Use pnpm e Node 22\n- Componentes seguem o padrão X\n- Nunca alterar a API pública sem avisar'}/><div className="memory-footer"><small>{content.length.toLocaleString()}/20.000 · {value.updatedAt ? `Atualizada ${relativeTime(value.updatedAt)}` : 'Ainda não salva'}</small><div className="modal-actions"><button onClick={onClose}>Cancelar</button><button className="primary" onClick={() => onSave(content)}>Salvar memória</button></div></div></div></div>
+  const [rules, setRules] = useState(value.rules)
+  return <div className="modal-backdrop" onMouseDown={onClose}><div className="settings-dialog memory-dialog" onMouseDown={(event) => event.stopPropagation()}><div className="modal-title"><Brain size={17}/><strong>Contexto do workspace</strong><button onClick={onClose}><X size={16}/></button></div><p className="memory-description">Arquivos reais em <b>.nocturne/</b>, enviados ao Codex em cada novo turno.</p>{value.project && <div className="project-summary"><strong>{value.project.name}</strong><small>{value.project.primaryLanguage} · {value.project.stack.join(', ') || 'Stack não detectada'}</small></div>}<label>Memória e decisões<textarea value={content} onChange={(event) => setContent(event.target.value)} maxLength={20_000}/></label><label>Regras e padrões<textarea value={rules} onChange={(event) => setRules(event.target.value)} maxLength={20_000}/></label><div className="memory-footer"><small>{(content.length + rules.length).toLocaleString()} caracteres · {value.updatedAt ? `Atualizada ${relativeTime(value.updatedAt)}` : 'Ainda não salva'}</small><div className="modal-actions"><button onClick={onClose}>Cancelar</button><button className="primary" onClick={() => onSave(content, rules)}>Salvar contexto</button></div></div></div></div>
 }
 
 function PreviewDialog({ preview, activeId, onClose, onError }: { preview: FilePreview; activeId: string | null; onClose(): void; onError(value: string): void }) {
-  const openExternal = async () => { if (!activeId || !preview.filePath) return; try { await window.nocturne.files.open(activeId, preview.filePath, 'editor') } catch (error) { onError(errorMessage(error)) } }
-  return <div className="preview-backdrop" onMouseDown={onClose}><section className="preview-dialog" onMouseDown={(event) => event.stopPropagation()}><header><div><Eye size={16}/><span><strong>{preview.name}</strong><small>{formatBytes(preview.size)}{preview.filePath && ` · ${preview.filePath}`}</small></span></div><div>{preview.filePath && <button onClick={openExternal} title="Abrir no editor"><ExternalLink size={15}/></button>}<button onClick={onClose}><X size={17}/></button></div></header><div className={`preview-content ${preview.kind}`}>{preview.kind === 'image' ? <img src={preview.content} alt={preview.name}/> : preview.kind === 'markdown' ? <ReactMarkdown>{preview.content}</ReactMarkdown> : <pre><code>{preview.content}</code></pre>}</div></section></div>
+  const open = async (action: 'editor' | 'folder') => { if (!activeId || !preview.filePath) return; try { await window.nocturne.files.open(activeId, preview.filePath, action) } catch (error) { onError(errorMessage(error)) } }
+  const copy = async () => { try { await navigator.clipboard.writeText(preview.content); } catch (error) { onError(errorMessage(error)) } }
+  return <div className="preview-backdrop" onMouseDown={onClose}><section className="preview-dialog" onMouseDown={(event) => event.stopPropagation()}><header><div><Eye size={16}/><span><strong>{preview.name}</strong><small>{formatBytes(preview.size)}{preview.filePath && ` · ${preview.filePath}`}</small></span></div><div>{preview.kind !== 'image' && <button onClick={copy} title="Copiar conteúdo"><Copy size={15}/></button>}{preview.filePath && <><button onClick={() => open('folder')} title="Abrir pasta"><FolderOpen size={15}/></button><button onClick={() => open('editor')} title="Abrir arquivo"><ExternalLink size={15}/></button></>}<button onClick={onClose}><X size={17}/></button></div></header><div className={`preview-content ${preview.kind}`}>{preview.kind === 'image' ? <img src={preview.content} alt={preview.name}/> : preview.kind === 'markdown' ? <ReactMarkdown>{preview.content}</ReactMarkdown> : <pre><code>{preview.content}</code></pre>}</div></section></div>
 }
 
 function SettingsDialog({ value, status, onClose, onSave }: { value: CodexSettings; status: string; onClose(): void; onSave(value: CodexSettings): void }) {
@@ -373,6 +381,20 @@ function SettingsDialog({ value, status, onClose, onSave }: { value: CodexSettin
 function describeChanges(value: unknown) { if (!Array.isArray(value)) return ''; return value.map((item) => String((item as Record<string, unknown>).path ?? '')).filter(Boolean).join('\n') }
 function parseChanges(value: unknown): ChangedFile[] { if (!Array.isArray(value)) return []; return value.map((item) => { const change = item as Record<string, unknown>; const rawKind = String(change.kind ?? 'modified').toLowerCase(); return { path: String(change.path ?? ''), kind: (rawKind.includes('add') ? 'created' : rawKind.includes('delete') ? 'deleted' : 'modified') as ChangedFile['kind'], status: String(change.status ?? 'completed') } }).filter((item) => item.path) }
 function errorMessage(error: unknown) { return error instanceof Error ? error.message : String(error) }
+function humanizeCommand(command: string) {
+  const value = command.replace(/^bash\s+-lc\s+['"]?/, '').replace(/['"]$/, '').trim()
+  if (/\b(cat|sed|head|tail|less)\b/.test(value)) return `Lendo ${commandTarget(value)}`
+  if (/\b(rg|grep|find)\b/.test(value)) return 'Procurando arquivos e referências'
+  if (/\b(npm|pnpm|yarn|bun)\s+(test|run test)|\b(pytest|cargo test|go test)\b/.test(value)) return 'Executando testes'
+  if (/\b(tsc|typecheck)\b/.test(value)) return 'Verificando tipos TypeScript'
+  if (/\b(eslint|lint)\b/.test(value)) return 'Verificando qualidade do código'
+  if (/\b(npm|pnpm|yarn|bun)\s+(install|i)\b/.test(value)) return 'Instalando dependências'
+  if (/\bgit\s+(status|diff)\b/.test(value)) return 'Analisando alterações Git'
+  if (/\bgit\s+commit\b/.test(value)) return 'Criando commit'
+  if (/\b(mkdir|touch|cp|mv)\b/.test(value)) return 'Organizando arquivos do projeto'
+  return 'Executando comando'
+}
+function commandTarget(command: string) { return command.match(/[\w./-]+\.[a-zA-Z0-9]+/)?.[0] ?? 'arquivo' }
 function normalizePlanStatus(value: unknown): PlanStep['status'] { const status = String(value).toLowerCase(); return status.includes('complete') ? 'completed' : status.includes('progress') ? 'inProgress' : 'pending' }
 function formatBytes(value: number) { return value < 1024 ? `${value} B` : value < 1_048_576 ? `${(value / 1024).toFixed(1)} KB` : `${(value / 1_048_576).toFixed(1)} MB` }
 function relativeTime(date: string) { const mins = Math.floor((Date.now() - new Date(date).getTime()) / 60000); return mins < 1 ? 'agora' : mins < 60 ? `${mins} min` : mins < 1440 ? `${Math.floor(mins / 60)} h` : `${Math.floor(mins / 1440)} d` }

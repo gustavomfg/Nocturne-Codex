@@ -16,17 +16,22 @@ export class CodexClient extends EventEmitter {
   private starting: Promise<void> | null = null
   private loadedThreads = new Set<string>()
   private activeTurns = new Map<string, string>()
+  private reconnectTimer: NodeJS.Timeout | null = null
+  private reconnectAttempt = 0
+  private intentionalStop = false
   status: CodexStatus = 'offline'
 
   constructor() {
     super()
     this.process.on('message', (message) => this.handleMessage(message))
     this.process.on('error', (error) => { this.rejectPending(error); this.setStatus('error', error.message) })
-    this.process.on('exit', (code) => {
+    this.process.on('exit', (code, _signal, intentional: boolean) => {
       this.loadedThreads.clear()
       this.activeTurns.clear()
       this.rejectPending(new Error(`Codex App Server foi encerrado${code === null ? '.' : ` com código ${code}.`}`))
-      this.setStatus(code === 0 ? 'offline' : 'error', code === 0 ? undefined : `Codex App Server foi encerrado com código ${code}.`)
+      const message = `Conexão com o Codex perdida${code === null ? '.' : ` (código ${code}).`}`
+      this.setStatus(intentional || this.intentionalStop ? 'offline' : 'error', intentional ? undefined : message)
+      if (!intentional && !this.intentionalStop) this.scheduleReconnect()
     })
     this.process.on('log', (line) => this.emit('log', line))
   }
@@ -34,8 +39,15 @@ export class CodexClient extends EventEmitter {
   async start() {
     if (this.status === 'ready' || this.status === 'running') return
     if (this.starting) return this.starting
+    this.intentionalStop = false
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null }
     this.starting = this.initialize()
-    try { await this.starting } finally { this.starting = null }
+    try { await this.starting }
+    catch (error) {
+      const reason = error instanceof Error ? error : new Error(String(error))
+      this.setStatus('error', `Não foi possível iniciar o Codex: ${reason.message}`)
+      throw reason
+    } finally { this.starting = null }
   }
 
   async createThread(workspace: string, settings: Record<string, string> = {}, memory = '') {
@@ -66,6 +78,7 @@ export class CodexClient extends EventEmitter {
   }
 
   async sendTurn(threadId: string, workspace: string, prompt: string, settings: Record<string, string> = {}, attachments: string[] = [], memory = '') {
+    if (this.activeTurns.size) throw new Error('Já existe uma execução do agente em andamento. Cancele-a antes de iniciar outra.')
     await this.resumeThread(threadId, workspace, settings)
     this.setStatus('running')
     const result = await this.call('turn/start', {
@@ -102,7 +115,7 @@ export class CodexClient extends EventEmitter {
     this.approvalRequests.delete(key)
   }
 
-  stop() { this.process.stop() }
+  stop() { this.intentionalStop = true; if (this.reconnectTimer) clearTimeout(this.reconnectTimer); this.reconnectTimer = null; this.process.stop() }
 
   async readConfig() { await this.start(); return this.call('config/read', {}) }
 
@@ -114,6 +127,7 @@ export class CodexClient extends EventEmitter {
       capabilities: { experimentalApi: true, requestAttestation: false },
     })
     this.notify('initialized')
+    this.reconnectAttempt = 0
     this.setStatus('ready')
   }
 
@@ -169,6 +183,20 @@ export class CodexClient extends EventEmitter {
   private rejectPending(error: Error) {
     for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(error) }
     this.pending.clear()
+  }
+
+  private scheduleReconnect() {
+    if (this.reconnectTimer || this.intentionalStop) return
+    const delay = Math.min(1_000 * 2 ** this.reconnectAttempt, 15_000)
+    this.reconnectAttempt += 1
+    this.emit('status', { status: 'error', error: `Codex desconectado. Nova tentativa em ${Math.ceil(delay / 1000)}s.` })
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      void this.start().catch((error: unknown) => {
+        this.setStatus('error', error instanceof Error ? error.message : String(error))
+        this.scheduleReconnect()
+      })
+    }, delay)
   }
 }
 

@@ -20,7 +20,7 @@ export interface MessageRow {
   createdAt: string
 }
 
-export interface WorkspaceRow { path: string; name: string; createdAt: string; lastOpenedAt: string }
+export interface WorkspaceRow { path: string; name: string; favorite: boolean; createdAt: string; lastOpenedAt: string }
 export interface ArtifactRow { id: string; conversationId: string; workspace: string; type: string; title: string; filePath: string | null; content: string | null; metadata: string | null; createdAt: string; updatedAt: string }
 
 export class LocalDatabase {
@@ -42,7 +42,7 @@ export class LocalDatabase {
       );
       CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, created_at);
       CREATE TABLE IF NOT EXISTS workspaces (
-        path TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL, last_opened_at TEXT NOT NULL
+        path TEXT PRIMARY KEY, name TEXT NOT NULL, favorite INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, last_opened_at TEXT NOT NULL
       );
       CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS workspace_memory (
@@ -58,6 +58,8 @@ export class LocalDatabase {
       INSERT OR IGNORE INTO workspaces(path,name,created_at,last_opened_at)
         SELECT workspace, workspace, MIN(created_at), MAX(updated_at) FROM conversations GROUP BY workspace;
     `)
+    const columns = this.db.prepare('PRAGMA table_info(workspaces)').all() as Array<{ name: string }>
+    if (!columns.some((column) => column.name === 'favorite')) this.db.exec('ALTER TABLE workspaces ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0')
   }
 
   listConversations(): ConversationRow[] {
@@ -80,8 +82,9 @@ export class LocalDatabase {
   clearThread(id: string) { this.db.prepare('UPDATE conversations SET codex_thread_id=NULL WHERE id=?').run(id) }
 
   listWorkspaces(): WorkspaceRow[] {
-    return this.db.prepare(`SELECT path, name, created_at createdAt, last_opened_at lastOpenedAt
-      FROM workspaces ORDER BY last_opened_at DESC`).all() as WorkspaceRow[]
+    const rows = this.db.prepare(`SELECT path, name, favorite, created_at createdAt, last_opened_at lastOpenedAt
+      FROM workspaces ORDER BY favorite DESC, last_opened_at DESC`).all() as Array<Omit<WorkspaceRow, 'favorite'> & { favorite: number }>
+    return rows.map((row) => ({ ...row, favorite: Boolean(row.favorite) }))
   }
 
   touchWorkspace(workspace: string) {
@@ -92,6 +95,7 @@ export class LocalDatabase {
   }
 
   removeWorkspace(workspace: string) { this.db.prepare('DELETE FROM workspaces WHERE path=?').run(workspace) }
+  setWorkspaceFavorite(workspace: string, favorite: boolean) { this.db.prepare('UPDATE workspaces SET favorite=? WHERE path=?').run(favorite ? 1 : 0, workspace) }
 
   getSettings(): Record<string, string> {
     const rows = this.db.prepare('SELECT key,value FROM settings').all() as Array<{ key: string; value: string }>
