@@ -19,7 +19,7 @@ export interface RpcNotification {
 
 export type RpcMessage = RpcRequest | RpcResponse | RpcNotification
 
-export type CodexStatus = 'offline' | 'starting' | 'ready' | 'running' | 'error'
+export type { AgentState as CodexStatus } from '../../shared/agentState'
 
 export interface CodexEvent {
   method: string

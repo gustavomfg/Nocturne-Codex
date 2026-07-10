@@ -13,7 +13,7 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  conversations: [], activeId: null, messages: [], status: 'offline', streaming: '', diff: '', activities: [], approvals: [], files: [], artifacts: [], plan: [], planExplanation: '', error: null,
+  conversations: [], activeId: null, messages: [], status: 'disconnected', streaming: '', diff: '', activities: [], approvals: [], files: [], artifacts: [], plan: [], planExplanation: '', error: null,
   setConversations: (conversations) => set({ conversations }), setActive: (activeId) => set({ activeId }),
   setMessages: (messages) => set({ messages }), addMessage: (message) => set((state) => ({ messages: [...state.messages, message] })),
   setStatus: (status) => set({ status }), appendStream: (value) => set((state) => ({ streaming: state.streaming + value })),

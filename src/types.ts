@@ -12,9 +12,10 @@ export interface ProjectContext { name: string; stack: string[]; primaryLanguage
 export interface WorkspaceMemory { content: string; rules: string; project?: ProjectContext; updatedAt: string }
 export interface PlanStep { step: string; status: 'pending' | 'inProgress' | 'completed' }
 export interface GitInfo { branch: string; status: string; diff: string }
-export interface CodexSettings { model: string; sandbox: 'read-only' | 'workspace-write'; approvalPolicy: 'untrusted' | 'on-request' | 'never'; codexPath?: string; codexVersion?: string; pandocVersion?: string; serverStatus?: CodexStatus }
+export interface CodexSettings { model: string; sandbox: 'read-only' | 'workspace-write'; approvalPolicy: 'untrusted' | 'on-request' | 'never'; codexPath?: string; codexVersion?: string; pandocVersion?: string; serverStatus?: CodexStatus; diagnosticMode?: boolean }
+export interface CodexDiagnostics { executable: string; version?: string; pid: number | null; state: CodexStatus; lastFailure: string | null; logsPath: string }
 export interface CodexEvent { method: string; params: Record<string, unknown> }
-export type CodexStatus = 'offline' | 'starting' | 'ready' | 'running' | 'error'
+export type CodexStatus = AgentState
 
 declare global {
   interface Window {
@@ -23,6 +24,8 @@ declare global {
       conversations: { list(): Promise<Conversation[]>; create(workspace: string): Promise<Conversation>; messages(id: string): Promise<Message[]>; delete(id: string): Promise<void> }
       codex: {
         start(): Promise<{ status: CodexStatus }>
+        restart(): Promise<CodexDiagnostics>
+        diagnostics(): Promise<CodexDiagnostics>
         send(conversationId: string, prompt: string, attachments?: string[]): Promise<{ threadId: string; recreated: boolean }>
         resume(conversationId: string): Promise<{ resumed: boolean }>
         interrupt(conversationId: string): Promise<void>
@@ -34,9 +37,12 @@ declare global {
       files: { attach(conversationId: string): Promise<Attachment[]>; open(conversationId: string, filePath: string, action: 'file' | 'folder' | 'editor'): Promise<void>; preview(conversationId: string, filePath: string): Promise<FilePreview> }
       memory: { get(conversationId: string): Promise<WorkspaceMemory>; set(conversationId: string, content: string, rules: string): Promise<WorkspaceMemory> }
       artifacts: { list(conversationId: string): Promise<Artifact[]>; delete(conversationId: string, artifactId: string): Promise<void> }
-      settings: { get(): Promise<CodexSettings>; set(settings: Pick<CodexSettings, 'model' | 'sandbox' | 'approvalPolicy'>): Promise<CodexSettings> }
+      data: { export(): Promise<string | null>; import(): Promise<boolean> }
+      diagnostics: { openLogs(): Promise<string>; copy(): Promise<string> }
+      settings: { get(): Promise<CodexSettings>; set(settings: Pick<CodexSettings, 'model' | 'sandbox' | 'approvalPolicy' | 'codexPath' | 'diagnosticMode'>): Promise<CodexSettings> }
       git: { status(conversationId: string): Promise<GitInfo>; commit(conversationId: string, message: string): Promise<{ output: string }> }
       documents: { saveMarkdown(conversationId: string, content: string, name?: string): Promise<string | null>; export(conversationId: string, content: string, format: 'docx' | 'pdf' | 'html'): Promise<string | null> }
     }
   }
 }
+import type { AgentState } from '../shared/agentState'

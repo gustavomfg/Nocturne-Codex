@@ -4,6 +4,7 @@ import path from 'node:path'
 import { CodexClient } from './codex/CodexClient'
 import { LocalDatabase } from './database/Database'
 import { registerIpc } from './ipc/registerIpc'
+import { Logger } from './logging/Logger'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 app.disableHardwareAcceleration()
@@ -14,6 +15,7 @@ export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 let win: BrowserWindow | null = null
 let database: LocalDatabase | null = null
 const codex = new CodexClient()
+let logger: Logger | null = null
 
 function createWindow() {
   win = new BrowserWindow({
@@ -28,7 +30,7 @@ function createWindow() {
   })
   win.setMenuBarVisibility(false)
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://')) void shell.openExternal(url)
+    try { const parsed = new URL(url); if (parsed.protocol === 'https:') void shell.openExternal(parsed.toString()) } catch { /* deny malformed URL */ }
     return { action: 'deny' }
   })
   win.webContents.on('will-navigate', (event, url) => {
@@ -37,12 +39,14 @@ function createWindow() {
   })
 
   database = new LocalDatabase(app.getPath('userData'))
-  registerIpc(win, database, codex)
+  logger = new Logger(app.getPath('logs'), database.getSettings().diagnosticMode === 'true')
+  logger.info('app', 'Janela principal iniciada', { packaged: app.isPackaged })
+  registerIpc(win, database, codex, logger)
   if (VITE_DEV_SERVER_URL) void win.loadURL(VITE_DEV_SERVER_URL)
   else void win.loadFile(path.join(RENDERER_DIST, 'index.html'))
 }
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
-app.on('before-quit', () => { codex.stop(); database?.close() })
+app.on('before-quit', () => { logger?.info('app', 'Encerrando aplicação'); codex.stop(); database?.close() })
 void app.whenReady().then(createWindow)

@@ -39,8 +39,12 @@
   },
   "linux": {
     "target": [
-      "AppImage"
+      "AppImage",
+      "tar.gz"
     ],
-    "artifactName": "${productName}-Linux-${version}.${ext}"
+    "artifactName": "${productName}-Linux-${version}.${ext}",
+    "category": "Development",
+    "synopsis": "Cliente desktop local para o Codex CLI",
+    "description": "Cliente independente para desenvolvimento assistido por IA usando a autenticação local do Codex CLI."
   }
 }

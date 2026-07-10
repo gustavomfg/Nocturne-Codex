@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { CodexProcess } from './CodexProcess'
 import type { CodexEvent, CodexStatus, RpcId, RpcMessage, RpcResponse } from './protocol'
+import { AgentStateMachine } from '../../shared/agentState'
 
 interface PendingCall {
   resolve: (value: unknown) => void
@@ -19,33 +20,38 @@ export class CodexClient extends EventEmitter {
   private reconnectTimer: NodeJS.Timeout | null = null
   private reconnectAttempt = 0
   private intentionalStop = false
-  status: CodexStatus = 'offline'
+  private lastFailure: string | null = null
+  private executable = 'codex'
+  private machine = new AgentStateMachine('disconnected', (from, to) => this.emit('diagnostic', { level: 'warn', message: `Transição inválida do agente: ${from} → ${to}` }))
+  status: CodexStatus = 'disconnected'
 
   constructor() {
     super()
     this.process.on('message', (message) => this.handleMessage(message))
-    this.process.on('error', (error) => { this.rejectPending(error); this.setStatus('error', error.message) })
+    this.process.on('error', (error) => { this.rejectPending(error); this.setStatus('failed', error.message) })
     this.process.on('exit', (code, _signal, intentional: boolean) => {
       this.loadedThreads.clear()
       this.activeTurns.clear()
       this.rejectPending(new Error(`Codex App Server foi encerrado${code === null ? '.' : ` com código ${code}.`}`))
       const message = `Conexão com o Codex perdida${code === null ? '.' : ` (código ${code}).`}`
-      this.setStatus(intentional || this.intentionalStop ? 'offline' : 'error', intentional ? undefined : message)
+      this.setStatus(intentional || this.intentionalStop ? 'disconnected' : 'failed', intentional ? undefined : message)
       if (!intentional && !this.intentionalStop) this.scheduleReconnect()
     })
-    this.process.on('log', (line) => this.emit('log', line))
+    this.process.on('stdout', (line) => this.emit('log', { stream: 'stdout', line }))
+    this.process.on('stderr', (line) => this.emit('log', { stream: 'stderr', line }))
   }
 
-  async start() {
-    if (this.status === 'ready' || this.status === 'running') return
+  async start(executable = this.executable) {
+    if (this.status === 'ready' || this.status === 'running' || this.status === 'planning' || this.status === 'waiting-approval' || this.status === 'completed') return
     if (this.starting) return this.starting
     this.intentionalStop = false
+    this.executable = executable
     if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null }
     this.starting = this.initialize()
     try { await this.starting }
     catch (error) {
       const reason = error instanceof Error ? error : new Error(String(error))
-      this.setStatus('error', `Não foi possível iniciar o Codex: ${reason.message}`)
+      this.setStatus('failed', `Não foi possível iniciar o Codex: ${reason.message}`)
       throw reason
     } finally { this.starting = null }
   }
@@ -55,7 +61,7 @@ export class CodexClient extends EventEmitter {
     const result = await this.call('thread/start', {
       cwd: workspace,
       runtimeWorkspaceRoots: [workspace],
-      approvalPolicy: settings.approvalPolicy || 'on-request',
+      approvalPolicy: safeApprovalPolicy(settings.approvalPolicy),
       approvalsReviewer: 'user',
       sandbox: settings.sandbox || 'workspace-write',
       model: settings.model || undefined,
@@ -71,7 +77,7 @@ export class CodexClient extends EventEmitter {
     if (this.loadedThreads.has(threadId)) return
     await this.call('thread/resume', {
       threadId, cwd: workspace, runtimeWorkspaceRoots: [workspace],
-      approvalPolicy: settings.approvalPolicy || 'on-request', approvalsReviewer: 'user',
+      approvalPolicy: safeApprovalPolicy(settings.approvalPolicy), approvalsReviewer: 'user',
       sandbox: settings.sandbox || 'workspace-write', model: settings.model || undefined,
     })
     this.loadedThreads.add(threadId)
@@ -85,7 +91,7 @@ export class CodexClient extends EventEmitter {
       threadId,
       cwd: workspace,
       runtimeWorkspaceRoots: [workspace],
-      approvalPolicy: settings.approvalPolicy || 'on-request',
+      approvalPolicy: safeApprovalPolicy(settings.approvalPolicy),
       approvalsReviewer: 'user',
       model: settings.model || undefined,
       sandboxPolicy: toSandboxPolicy(settings.sandbox, workspace),
@@ -102,7 +108,9 @@ export class CodexClient extends EventEmitter {
   async interrupt(threadId: string) {
     const turnId = this.activeTurns.get(threadId)
     if (!turnId) throw new Error('Nenhuma execução ativa para cancelar.')
-    await this.call('turn/interrupt', { threadId, turnId })
+    this.setStatus('cancelling')
+    try { await this.call('turn/interrupt', { threadId, turnId }) }
+    catch (error) { this.setStatus('failed', error instanceof Error ? error.message : String(error)); throw error }
   }
 
   async resolveApproval(key: string, accepted: boolean, forSession = false) {
@@ -113,15 +121,24 @@ export class CodexClient extends EventEmitter {
       result: { decision: accepted ? (forSession ? 'acceptForSession' : 'accept') : 'decline' },
     })
     this.approvalRequests.delete(key)
+    this.setStatus(accepted ? 'running' : 'failed', accepted ? undefined : 'Execução recusada pelo usuário.')
   }
 
   stop() { this.intentionalStop = true; if (this.reconnectTimer) clearTimeout(this.reconnectTimer); this.reconnectTimer = null; this.process.stop() }
+  async restart(executable = this.executable) {
+    const exited = this.process.isRunning() ? new Promise<void>((resolve) => { const timer = setTimeout(resolve, 3_500); this.process.once('exit', () => { clearTimeout(timer); resolve() }) }) : Promise.resolve()
+    this.stop()
+    await exited
+    this.intentionalStop = false
+    await this.start(executable)
+  }
+  getDiagnostics() { return { executable: this.process.path, pid: this.process.pid, state: this.status, lastFailure: this.lastFailure } }
 
   async readConfig() { await this.start(); return this.call('config/read', {}) }
 
   private async initialize() {
     this.setStatus('starting')
-    this.process.start()
+    this.process.start(this.executable)
     await this.call('initialize', {
       clientInfo: { name: 'nocturne-codex', title: 'Nocturne Codex', version: '0.1.0' },
       capabilities: { experimentalApi: true, requestAttestation: false },
@@ -163,12 +180,15 @@ export class CodexClient extends EventEmitter {
       if ('id' in message) {
         const itemId = String(params.itemId ?? message.id)
         this.approvalRequests.set(itemId, message.id)
+        this.setStatus('waiting-approval')
         this.emit('event', { method: message.method, params: { ...params, approvalKey: itemId } } satisfies CodexEvent)
       } else {
+        if (message.method === 'turn/plan/updated' && this.status === 'running') this.setStatus('planning')
+        if (message.method === 'item/started' && this.status === 'planning') this.setStatus('running')
         if (message.method === 'turn/completed') {
           const threadId = String(params.threadId ?? '')
           if (threadId) this.activeTurns.delete(threadId)
-          this.setStatus('ready')
+          this.setStatus(this.status === 'cancelling' ? 'ready' : 'completed')
         }
         this.emit('event', { method: message.method, params } satisfies CodexEvent)
       }
@@ -176,8 +196,10 @@ export class CodexClient extends EventEmitter {
   }
 
   private setStatus(status: CodexStatus, error?: string) {
-    this.status = status
-    this.emit('status', { status, error })
+    if (!this.machine.transition(status)) return
+    this.status = this.machine.state
+    if (error) this.lastFailure = error
+    this.emit('status', { status: this.status, error })
   }
 
   private rejectPending(error: Error) {
@@ -189,11 +211,11 @@ export class CodexClient extends EventEmitter {
     if (this.reconnectTimer || this.intentionalStop) return
     const delay = Math.min(1_000 * 2 ** this.reconnectAttempt, 15_000)
     this.reconnectAttempt += 1
-    this.emit('status', { status: 'error', error: `Codex desconectado. Nova tentativa em ${Math.ceil(delay / 1000)}s.` })
+    this.emit('status', { status: 'failed', error: `Codex desconectado. Nova tentativa em ${Math.ceil(delay / 1000)}s.` })
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
       void this.start().catch((error: unknown) => {
-        this.setStatus('error', error instanceof Error ? error.message : String(error))
+        this.setStatus('failed', error instanceof Error ? error.message : String(error))
         this.scheduleReconnect()
       })
     }, delay)
@@ -205,6 +227,8 @@ function toSandboxPolicy(mode: string | undefined, workspace: string) {
     ? { type: 'readOnly', networkAccess: false }
     : { type: 'workspaceWrite', writableRoots: [workspace], networkAccess: false, excludeTmpdirEnvVar: false, excludeSlashTmp: false }
 }
+
+function safeApprovalPolicy(policy: string | undefined) { return policy === 'untrusted' ? 'untrusted' : 'on-request' }
 
 function workspaceMemoryInstructions(memory: string) {
   return `Memória persistente deste workspace, fornecida pelo usuário. Use como contexto e preferências do projeto; instruções explícitas da mensagem atual têm prioridade.\n\n${memory}`

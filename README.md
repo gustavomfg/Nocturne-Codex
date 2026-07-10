@@ -1,63 +1,67 @@
 # Nocturne Codex
 
-Cliente desktop local para o Codex App Server. Oferece conversas persistentes por projeto, respostas em streaming, visualização de atividades e diffs, e aprovação explícita de comandos e alterações de arquivos.
+Cliente desktop local e independente para o Codex CLI/App Server. Reúne conversas persistentes por projeto, streaming, planos, atividades, artefatos, memória de workspace, Git e exportação de documentos em uma interface Electron.
+
+> O Nocturne Codex é um projeto independente e não é um produto oficial da OpenAI. Ele reutiliza a instalação e a autenticação local do Codex CLI; não solicita nem empacota tokens.
+
+## Capturas de tela
+
+![Janela principal do Nocturne Codex](docs/images/main-window-placeholder.png)
+
+_Placeholder: substitua por uma captura atual antes de uma release pública._
+
+## Funcionalidades
+
+- threads reais do Codex com streaming, cancelamento, aprovações e reconexão;
+- máquina de estados central do agente e diagnóstico de processo;
+- workspaces recentes/favoritos e memória em `.nocturne/`;
+- atividades humanas, planos editáveis e artefatos com preview;
+- status/diff/commit Git e exportação MD, HTML, DOCX e PDF;
+- SQLite versionado, backup pré-migração e exportação/importação JSON;
+- logs estruturados rotativos com redação de dados sensíveis;
+- onboarding local e atalhos de teclado.
 
 ## Requisitos
 
-- Node.js 20+
-- Codex CLI instalado e autenticado (`codex --version`)
-- Toolchain nativa compatível com o Electron para o `better-sqlite3`
+- Node.js 20+ e npm;
+- Codex CLI instalado e autenticado;
+- toolchain nativa para `better-sqlite3`;
+- Pandoc opcional para HTML/DOCX/PDF.
 
-## Desenvolvimento
+## Instalação e desenvolvimento
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
-Validação e build sem gerar instalador:
-
 ```bash
 npm run typecheck
-npm run build:app
+npm run lint
+npm test
+npm run build
+npm run package
 ```
 
-Para gerar o instalador da plataforma atual, use `npm run build`.
+`npm run package` produz AppImage e tar.gz em `release/<versão>/` no Linux. O Codex CLI e a autenticação do usuário não são incluídos.
 
-## Arquitetura
+## Segurança
 
-- `electron/codex`: processo do App Server, transporte JSON-RPC e gerenciamento de aprovações.
-- `electron/database`: banco SQLite local em `app.getPath('userData')/nocturne.db`.
-- `electron/ipc`: handlers validados com Zod e acesso restrito às operações necessárias.
-- `electron/preload.ts`: API mínima exposta ao renderer via `contextBridge`.
-- `src`: interface React, estado Zustand e renderização Markdown.
+O renderer não acessa Node.js. IPC é limitado pelo preload e validado no processo principal. Caminhos são confinados ao workspace, comandos sensíveis são classificados e aprovações ficam auditadas localmente. Ainda assim, revise todo comando antes de aprová-lo e use `read-only` para trabalhos de análise.
 
-O processo renderer não possui acesso a Node.js. O App Server inicia com `workspace-write`, `on-request` e a pasta escolhida como única raiz de runtime. Tokens não passam pelo renderer: o aplicativo reutiliza a autenticação já existente do Codex CLI.
+## Limitações
 
-## Escopo do MVP
+- o App Server é uma API experimental e pode mudar entre versões do Codex;
+- PDF depende de uma engine compatível usada pelo Pandoc;
+- recuperação reconecta a thread, mas não retoma um turno perdido no meio;
+- preview interno de DOCX/PDF ainda não está disponível;
+- `better-sqlite3` precisa ser reconstruído para Node ao testar e para Electron ao empacotar.
 
-- múltiplos workspaces com conversas separadas e histórico SQLite;
-- criação, retomada (`thread/resume`) e continuidade de threads reais do Codex;
-- streaming, cancelamento de turnos e reconexão do App Server;
-- atividades de raciocínio, ferramentas, comandos, alterações, erros e conclusão;
-- aprovação ou recusa de comandos e patches;
-- arquivos alterados, abertura pelo sistema e diff do Codex/Git;
-- anexos de texto locais limitados ao workspace e a 1 MB por arquivo;
-- atalhos para análise, documentação e revisão Git;
-- salvamento Markdown e exportação HTML, DOCX ou PDF com Pandoc;
-- configurações de modelo, sandbox e política de aprovação;
-- status/branch/diff Git e criação confirmada de commits.
-- sistema de artefatos por conversa para respostas, arquivos, diffs e documentos exportados;
-- preview interno seguro para texto, Markdown e imagens de até 2 MB;
-- memória persistente e editável por workspace, enviada ao Codex em cada turno;
-- painel de planejamento com etapas, estados e progresso emitidos pelo App Server.
+## Roadmap
 
-## Dependências opcionais
+- teste end-to-end com Electron/Playwright;
+- atualização automática assinada;
+- diff por hunk e geração dedicada de mensagem de commit;
+- matriz de compatibilidade de versões do App Server.
 
-O Pandoc precisa estar disponível no `PATH` para exportar HTML, DOCX e PDF. A geração de PDF também depende de um mecanismo PDF compatível instalado no sistema. Quando uma dependência externa falha, a mensagem original é exibida na interface.
-
-## Segurança operacional
-
-Arquivos anexados e abertos são validados contra a raiz do workspace. Comandos do Codex seguem a política escolhida e, por padrão, usam `workspace-write` com rede desabilitada. A criação de commit exige confirmação e inclui um `git add -A`; o aplicativo não executa push. Exclusão de conversas remove apenas o histórico local do Nocturne.
-
-Previews e documentos salvos pelo aplicativo também permanecem dentro do workspace. Remover um artefato do painel apaga somente seu registro local, nunca o arquivo correspondente.
+Veja [arquitetura](docs/architecture.md), [segurança](docs/security.md), [desenvolvimento](docs/development.md) e [solução de problemas](docs/troubleshooting.md).

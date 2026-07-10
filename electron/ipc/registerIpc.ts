@@ -6,18 +6,29 @@ import { promisify } from 'node:util'
 import { z } from 'zod'
 import { CodexClient } from '../codex/CodexClient'
 import { LocalDatabase, type ConversationRow } from '../database/Database'
+import { Logger } from '../logging/Logger'
+import { assessCommand, resolveInsideWorkspace } from '../security/ExecutionPolicy'
 
 const idSchema = z.string().uuid()
 const execFileAsync = promisify(execFile)
 const sendSchema = z.object({ conversationId: z.string().uuid(), prompt: z.string().trim().min(1).max(100_000), attachments: z.array(z.string()).max(10).default([]) })
 const approvalSchema = z.object({ key: z.string().min(1), accepted: z.boolean(), forSession: z.boolean().optional() })
 
-export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: CodexClient) {
+export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: CodexClient, logger: Logger) {
+  const approvalDetails = new Map<string, { command?: string; risk?: string }>()
   const push = (channel: string, payload: unknown) => {
     if (!win.isDestroyed()) win.webContents.send(channel, payload)
   }
-  codex.on('event', (event) => push('codex:event', event))
+  codex.on('event', (event: { method: string; params: Record<string, unknown> }) => {
+    const command = event.params.command
+    const assessment = typeof command === 'string' || Array.isArray(command) ? assessCommand(command as string | string[]) : undefined
+    const approvalKey = typeof event.params.approvalKey === 'string' ? event.params.approvalKey : undefined
+    if (approvalKey) approvalDetails.set(approvalKey, { command: Array.isArray(command) ? command.join(' ') : typeof command === 'string' ? command : undefined, risk: assessment?.risk })
+    push('codex:event', assessment ? { ...event, params: { ...event.params, commandAssessment: assessment } } : event)
+  })
   codex.on('status', (status) => push('codex:status', status))
+  codex.on('log', (entry) => logger.debug('codex', 'Saída do App Server', entry))
+  codex.on('diagnostic', (entry) => logger.warn('codex', 'Diagnóstico do agente', entry))
 
   ipcMain.handle('workspace:select', async () => {
     const result = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], title: 'Selecionar workspace' })
@@ -119,11 +130,33 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     if (!database.listArtifacts(data.conversationId).some((artifact) => artifact.id === data.artifactId)) throw new Error('Artefato não encontrado.')
     database.deleteArtifact(data.artifactId)
   })
+  ipcMain.handle('data:export', async () => {
+    const result = await dialog.showSaveDialog(win, { title: 'Exportar dados do Nocturne', defaultPath: 'nocturne-backup.json', filters: [{ name: 'JSON', extensions: ['json'] }] })
+    if (result.canceled || !result.filePath) return null
+    fs.writeFileSync(result.filePath, `${JSON.stringify(database.exportData(), null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
+    logger.info('persistence', 'Dados exportados')
+    return result.filePath
+  })
+  ipcMain.handle('data:import', async () => {
+    const result = await dialog.showOpenDialog(win, { title: 'Importar dados do Nocturne', properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] })
+    if (result.canceled || !result.filePaths[0]) return false
+    const schema = z.object({ schemaVersion: z.number().int().min(1).max(3), conversations: z.array(z.record(z.string(), z.unknown())).max(100_000), workspaces: z.array(z.record(z.string(), z.unknown())).max(10_000), messages: z.array(z.record(z.string(), z.unknown())).max(1_000_000), artifacts: z.array(z.record(z.string(), z.unknown())).max(1_000_000), memories: z.array(z.record(z.string(), z.unknown())).max(10_000) })
+    database.importData(schema.parse(JSON.parse(fs.readFileSync(result.filePaths[0], 'utf8'))))
+    logger.info('persistence', 'Dados importados')
+    return true
+  })
 
   ipcMain.handle('codex:start', async () => {
-    await codex.start()
+    await codex.start(database.getSettings().codexPath || 'codex')
     return { status: codex.status }
   })
+  ipcMain.handle('codex:restart', async () => {
+    await codex.restart(database.getSettings().codexPath || 'codex')
+    return codex.getDiagnostics()
+  })
+  ipcMain.handle('codex:diagnostics', () => ({ ...codex.getDiagnostics(), version: database.getSettings().codexVersion || undefined, logsPath: logger.path }))
+  ipcMain.handle('diagnostics:openLogs', () => shell.openPath(logger.path))
+  ipcMain.handle('diagnostics:copy', async () => JSON.stringify({ app: 'Nocturne Codex', platform: process.platform, arch: process.arch, codex: codex.getDiagnostics() }, null, 2))
 
   ipcMain.handle('codex:send', async (_event, value: unknown) => {
     const { conversationId, prompt, attachments } = sendSchema.parse(value)
@@ -182,13 +215,20 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
 
   ipcMain.handle('codex:approve', (_event, value: unknown) => {
     const data = approvalSchema.parse(value)
+    const detail = approvalDetails.get(data.key)
+    database.recordApproval(data.key, data.accepted, detail?.command, detail?.risk)
+    approvalDetails.delete(data.key)
+    logger.info('codex', data.accepted ? 'Aprovação concedida' : 'Aprovação recusada', { approvalKey: data.key, risk: detail?.risk })
     return codex.resolveApproval(data.key, data.accepted, data.forSession)
   })
 
-  ipcMain.handle('settings:get', async () => ({ ...database.getSettings(), ...(await getCodexInfo(codex)) }))
+  ipcMain.handle('settings:get', async () => { const saved = database.getSettings(); return { ...saved, diagnosticMode: saved.diagnosticMode === 'true', ...(await getCodexInfo(codex)) } })
   ipcMain.handle('settings:set', (_event, value: unknown) => {
-    const data = z.object({ model: z.string().max(100), sandbox: z.enum(['read-only', 'workspace-write']), approvalPolicy: z.enum(['untrusted', 'on-request', 'never']) }).parse(value)
-    database.setSettings(data)
+    const data = z.object({ model: z.string().max(100), sandbox: z.enum(['read-only', 'workspace-write']), approvalPolicy: z.enum(['untrusted', 'on-request', 'never']), codexPath: z.string().trim().max(1_000).optional(), diagnosticMode: z.boolean().optional() }).parse(value)
+    if (data.codexPath && !path.isAbsolute(data.codexPath) && data.codexPath !== 'codex') throw new Error('Use um caminho absoluto para o executável do Codex.')
+    if (data.codexPath && path.isAbsolute(data.codexPath) && (!fs.existsSync(data.codexPath) || !fs.statSync(data.codexPath).isFile())) throw new Error('Executável do Codex não encontrado.')
+    logger.setDiagnostic(Boolean(data.diagnosticMode))
+    database.setSettings({ ...data, diagnosticMode: String(Boolean(data.diagnosticMode)) })
     return database.getSettings()
   })
 
@@ -247,9 +287,7 @@ function assertInsideWorkspace(filePath: string, workspace: string) {
 }
 
 function resolveWorkspaceFile(filePath: string, workspace: string) {
-  const resolved = path.isAbsolute(filePath) ? path.resolve(filePath) : path.resolve(workspace, filePath)
-  assertInsideWorkspace(resolved, workspace)
-  return resolved
+  return resolveInsideWorkspace(filePath, workspace)
 }
 
 function isTextFile(extension: string) {

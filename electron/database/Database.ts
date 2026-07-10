@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
+import fs from 'node:fs'
 
 export interface ConversationRow {
   id: string
@@ -25,11 +26,19 @@ export interface ArtifactRow { id: string; conversationId: string; workspace: st
 
 export class LocalDatabase {
   private db: Database.Database
+  private readonly databasePath: string
 
   constructor(userDataPath: string) {
-    this.db = new Database(path.join(userDataPath, 'nocturne.db'))
+    this.databasePath = path.join(userDataPath, 'nocturne.db')
+    this.db = new Database(this.databasePath)
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('foreign_keys = ON')
+    const integrity = this.db.pragma('quick_check', { simple: true }) as string
+    if (integrity !== 'ok') throw new Error(`Banco de dados corrompido (${integrity}). Preserve o arquivo e restaure um backup.`)
+    const schemaVersion = this.db.pragma('user_version', { simple: true }) as number
+    if (schemaVersion < 3 && fs.existsSync(this.databasePath)) {
+      fs.copyFileSync(this.databasePath, `${this.databasePath}.backup-${Date.now()}`)
+    }
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS conversations (
         id TEXT PRIMARY KEY, title TEXT NOT NULL, workspace TEXT NOT NULL,
@@ -55,11 +64,17 @@ export class LocalDatabase {
         FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
       );
       CREATE INDEX IF NOT EXISTS idx_artifacts_conversation ON artifacts(conversation_id, updated_at);
+      CREATE TABLE IF NOT EXISTS approval_audit (
+        id TEXT PRIMARY KEY, approval_key TEXT NOT NULL, decision TEXT NOT NULL,
+        command TEXT, risk TEXT, created_at TEXT NOT NULL
+      );
       INSERT OR IGNORE INTO workspaces(path,name,created_at,last_opened_at)
         SELECT workspace, workspace, MIN(created_at), MAX(updated_at) FROM conversations GROUP BY workspace;
     `)
     const columns = this.db.prepare('PRAGMA table_info(workspaces)').all() as Array<{ name: string }>
     if (!columns.some((column) => column.name === 'favorite')) this.db.exec('ALTER TABLE workspaces ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0')
+    this.db.pragma('user_version = 3')
+    this.cleanupOrphans()
   }
 
   listConversations(): ConversationRow[] {
@@ -137,6 +152,29 @@ export class LocalDatabase {
   }
 
   deleteArtifact(id: string) { this.db.prepare('DELETE FROM artifacts WHERE id=?').run(id) }
+  recordApproval(key: string, accepted: boolean, command?: string, risk?: string) { this.db.prepare('INSERT INTO approval_audit(id,approval_key,decision,command,risk,created_at) VALUES(?,?,?,?,?,?)').run(randomUUID(), key, accepted ? 'accepted' : 'declined', command?.slice(0, 4_000) ?? null, risk ?? null, new Date().toISOString()) }
+
+  exportData() {
+    return { schemaVersion: 3, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), settings: this.getSettings() }
+  }
+
+  importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[] }) {
+    const insert = (table: string, rows: unknown[]) => {
+      for (const raw of rows) {
+        if (!raw || typeof raw !== 'object') continue
+        const row = raw as Record<string, unknown>
+        const keys = Object.keys(row).filter((key) => /^[a-z_]+$/.test(key))
+        if (!keys.length) continue
+        this.db.prepare(`INSERT OR IGNORE INTO ${table} (${keys.join(',')}) VALUES (${keys.map((key) => `@${key}`).join(',')})`).run(row)
+      }
+    }
+    this.db.transaction(() => { insert('workspaces', data.workspaces); insert('conversations', data.conversations); insert('messages', data.messages); insert('artifacts', data.artifacts); insert('workspace_memory', data.memories) })()
+    this.cleanupOrphans()
+  }
+
+  private cleanupOrphans() {
+    this.db.exec(`DELETE FROM messages WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM artifacts WHERE conversation_id NOT IN (SELECT id FROM conversations);`)
+  }
 
   renameFromPrompt(id: string, prompt: string) {
     const title = prompt.replace(/\s+/g, ' ').trim().slice(0, 52) || 'Nova conversa'

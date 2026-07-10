@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('nocturne', {
   },
   codex: {
     start: () => ipcRenderer.invoke('codex:start'),
+    restart: () => ipcRenderer.invoke('codex:restart'),
+    diagnostics: () => ipcRenderer.invoke('codex:diagnostics'),
     send: (conversationId: string, prompt: string, attachments: string[] = []) => ipcRenderer.invoke('codex:send', { conversationId, prompt, attachments }),
     resume: (conversationId: string) => ipcRenderer.invoke('codex:resume', conversationId),
     interrupt: (conversationId: string) => ipcRenderer.invoke('codex:interrupt', conversationId),
@@ -38,6 +40,8 @@ contextBridge.exposeInMainWorld('nocturne', {
   },
   memory: { get: (conversationId: string) => ipcRenderer.invoke('memory:get', conversationId), set: (conversationId: string, content: string, rules: string) => ipcRenderer.invoke('memory:set', { conversationId, content, rules }) },
   artifacts: { list: (conversationId: string) => ipcRenderer.invoke('artifacts:list', conversationId), delete: (conversationId: string, artifactId: string) => ipcRenderer.invoke('artifacts:delete', { conversationId, artifactId }) },
+  data: { export: () => ipcRenderer.invoke('data:export'), import: () => ipcRenderer.invoke('data:import') },
+  diagnostics: { openLogs: () => ipcRenderer.invoke('diagnostics:openLogs'), copy: () => ipcRenderer.invoke('diagnostics:copy') },
   settings: { get: () => ipcRenderer.invoke('settings:get'), set: (settings: unknown) => ipcRenderer.invoke('settings:set', settings) },
   git: { status: (conversationId: string) => ipcRenderer.invoke('git:status', conversationId), commit: (conversationId: string, message: string) => ipcRenderer.invoke('git:commit', { conversationId, message }) },
   documents: {
