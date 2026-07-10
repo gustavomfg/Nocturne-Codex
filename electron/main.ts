@@ -45,6 +45,11 @@ function createWindow() {
   logger = new Logger(app.getPath('logs'), database.getSettings().diagnosticMode === 'true')
   logger.info('app', 'Janela principal iniciada', { packaged: app.isPackaged })
   registerIpc(win, database, codex, logger)
+  win.webContents.on('preload-error', (_event, preloadPath, error) => logger?.error('app', `Falha no preload: ${preloadPath}`, error))
+  win.webContents.on('did-fail-load', (_event, code, description, url) => logger?.error('app', 'Falha ao carregar renderer', { code, description, url }))
+  win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    if (level >= 2) logger?.warn('app', 'Console do renderer', { level, message: message.slice(0, 8_000), line, sourceId })
+  })
   win.webContents.on('render-process-gone', (_event, details) => {
     logger?.error('app', 'Renderer encerrado inesperadamente', details)
     codex.stop()
