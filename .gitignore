@@ -19,6 +19,32 @@ coverage
 *.tar.gz
 *.local
 
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+
+# Local application data
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+
+# Crash dumps and temporary files
+core
+core.*
+*.dmp
+*.crash
+.cache
+.tmp
+tmp
+
+# Test and tooling output
+.nyc_output
+test-results
+playwright-report
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
