@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 360" role="img" aria-labelledby="title desc">
+  <title id="title">Nocturne Codex</title><desc id="desc">Nocturne crescent mark with the Nocturne Codex wordmark</desc>
+  <defs><linearGradient id="wordmark-violet" x1="40" y1="28" x2="328" y2="332" gradientUnits="userSpaceOnUse"><stop stop-color="#A58AFF"/><stop offset="1" stop-color="#493374"/></linearGradient></defs>
+  <g transform="translate(20 20) scale(.625)"><rect width="512" height="512" rx="112" fill="#0D0D12"/><circle cx="256" cy="256" r="166" fill="url(#wordmark-violet)"/><circle cx="315" cy="205" r="154" fill="#0D0D12"/><path d="M154 344c72 38 151 23 208-34-31 82-129 128-208 76z" fill="#C8B6F4"/><circle cx="166" cy="167" r="15" fill="#F2EDFF"/><circle cx="125" cy="237" r="8" fill="#BDA8ED"/></g>
+  <text x="390" y="215" fill="#F2F1F5" font-family="Geist, Inter, system-ui, sans-serif" font-size="132" font-weight="560" letter-spacing="-5">Nocturne</text>
+  <text x="995" y="215" fill="#A58AFF" font-family="Geist, Inter, system-ui, sans-serif" font-size="132" font-weight="650" letter-spacing="-5">Codex</text>
+</svg>

@@ -1,5 +1,5 @@
-import type { RefObject } from 'react'
-import { ChevronRight, Code2, Folder, FolderOpen, History, Menu, MessageSquarePlus, MoonStar, Search, Settings, Star, Trash2 } from 'lucide-react'
+import { useEffect, useRef, type RefObject } from 'react'
+import { ChevronRight, Code2, Folder, FolderOpen, History, Menu, MessageSquarePlus, Search, Settings, Star, Trash2 } from 'lucide-react'
 import type { CodexSettings, Conversation, Workspace } from '../../types'
 import { relativeTime } from '../../shared/format'
 
@@ -9,8 +9,10 @@ interface SidebarProps {
 }
 
 export function Sidebar({ open, conversations, activeId, search, searchRef, workspace, workspaces, settings, status, onClose, onNew, onSearch, onConversation, onDelete, onWorkspace, onSavedWorkspace, onFavorite, onSettings }: SidebarProps) {
-  return <aside className={`sidebar ${open ? '' : 'collapsed'}`}>
-    <div className="brand"><div className="brand-mark"><MoonStar size={18}/></div><span>Nocturne <b>Codex</b></span><button className="icon-button sidebar-toggle" aria-label="Recolher barra lateral" title="Recolher barra lateral" onClick={onClose}><Menu size={17}/></button></div>
+  const sidebarRef = useRef<HTMLElement>(null)
+  useEffect(() => { if (sidebarRef.current) sidebarRef.current.inert = !open }, [open])
+  return <aside ref={sidebarRef} className={`sidebar ${open ? 'open' : 'collapsed'}`} aria-hidden={!open}>
+    <div className="brand"><div className="brand-mark"><img src="/nocturne.svg" alt=""/></div><span>Nocturne <b>Codex</b></span><button className="icon-button sidebar-toggle" aria-label="Recolher barra lateral" title="Recolher barra lateral" onClick={onClose}><Menu size={17}/></button></div>
     <button className="new-chat" onClick={onNew}><MessageSquarePlus size={17}/><span>Nova conversa</span><kbd>⌘ N</kbd></button>
     <div className="search-box"><Search size={15}/><input ref={searchRef} value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Buscar conversas"/></div>
     <div className="section-label"><span>Recentes</span><History size={13}/></div>

@@ -17,6 +17,41 @@ The product philosophy remains the design test for every screen:
 
 > The Nocturne Codex doesn't try to replace the developer. It organizes the collaboration between the developer and AI.
 
+## Visual Identity
+
+The definitive identity is the Nocturne crescent: a violet orbital disc interrupted by a dark crescent, supported by two quiet stars and a pale horizon accent. It represents focused work during the hours when distractions disappear, without using literal robot or chat imagery.
+
+Canonical assets live in `assets/`:
+
+- `logo/nocturne-mark.svg`: primary square mark;
+- `logo/nocturne-mark-dark.svg`: separated dark-surface treatment;
+- `logo/nocturne-mark-monochrome.svg`: constrained single-color use;
+- `logo/nocturne-logo.svg`: horizontal wordmark;
+- `icons/nocturne-32.png`, `nocturne-128.png`, and `nocturne-512.png`: small, medium, and large raster sizes;
+- `icons/favicon.png`, `electron.png`, and `github.png`: platform-specific exports.
+
+The mark must retain its geometry, dark base, and restrained violet gradient. Do not rotate, skew, add glow, replace the gradient with saturated colors, or separate its stars from the crescent. Clear space equals at least one eighth of the mark width. The interface uses the mark without accompanying animation.
+
+### Icons
+
+Interface icons use Lucide with consistent optical sizing: 12–14 px inside compact metadata, 15–18 px in controls, and 20–30 px only in empty or welcome states. Icon-only controls require an accessible name and tooltip. Icons inherit semantic foreground color; they do not introduce unrelated colors or filled illustration styles.
+
+## Interaction Philosophy
+
+Every interactive element should acknowledge the user's intention.
+
+Hover should invite.
+
+Click should confirm.
+
+Motion should preserve continuity.
+
+Feedback should build confidence.
+
+If the user wonders whether something is clickable, the interface has failed.
+
+If the user notices the animation, it is probably too much.
+
 ## Typography
 
 Geist Variable is the primary interface typeface. Geist Mono is reserved for code, commands, paths, diffs, logs, keyboard shortcuts, and diagnostic output. Both fonts are bundled with the application and do not require network access.
@@ -272,8 +307,12 @@ Counters use a contained surface and border so they remain distinguishable from 
 | Token | Duration | Use |
 | --- | ---: | --- |
 | `--motion-fast` | 120 ms | Hover, color, border, and button feedback |
-| `--motion-base` | 160 ms | Focus, surfaces, dialogs, and state transitions |
-| `--motion-slow` | 240 ms | Progress or larger contextual changes |
+| `--motion-card` | 140 ms | Cards and repeated rows |
+| `--motion-tab` | 150 ms | Tab indicator and content fade |
+| `--motion-base` | 160 ms | Focus, surfaces, and state transitions |
+| `--motion-panel` | 180 ms | Both sidebars and panel geometry |
+| `--motion-dialog` | 180 ms | Dialog surfaces |
+| `--motion-slow` | 240 ms | Progress or exceptional contextual changes |
 
 All standard transitions use `--ease-standard`, a restrained ease-out curve. Pressed controls move down by no more than 1 px. Home cards may lift by 1 px on hover. Dialog entrance uses 3 px translation and less than one percent scale change. Reduced-motion preferences collapse these durations globally.
 
@@ -284,8 +323,11 @@ Motion in Nocturne Codex exists to preserve spatial continuity, confirm input, a
 ### Durations and easing
 
 - **Fast — 120 ms:** hover, pressed, icon, border, color, and badge feedback.
-- **Normal — 160 ms:** focus, tab content, attachments, dialog content, and state transitions.
-- **Slow — 240 ms:** sidebars, panel geometry, progress, and larger contextual surfaces.
+- **Cards — 140 ms:** cards and repeated row feedback.
+- **Tabs/Fade — 150 ms:** tab indicators, backdrop, and content fade.
+- **Normal — 160 ms:** focus, attachments, and state transitions.
+- **Panels/Dialogs — 180 ms:** both sidebars, panel geometry, and dialog surfaces.
+- **Slow — 240 ms:** progress and exceptional contextual changes.
 - **Standard easing:** `cubic-bezier(.2, .8, .2, 1)` for entrances, exits, and direct manipulation feedback.
 
 Do not create component-specific easings without documenting a physical reason. Components of the same class must use the same duration even when placed in different panels.
@@ -302,11 +344,11 @@ Do not create component-specific easings without documenting a physical reason. 
 
 ### Sidebars
 
-- The left sidebar transitions width, flex basis, padding, opacity, and border together over 160 ms.
-- The agent inspector transitions width, flex basis, clip, opacity, and border over 240 ms.
+- Both sidebars transition width, flex basis, opacity, border, and content position over 180 ms with the same easing.
+- The left sidebar content moves 8–10 px left; the agent inspector content moves 8–10 px right.
 - Inspector content uses a synchronized 8–10 px horizontal movement with opacity.
 - Closed panels remain mounted for the duration and become `inert`, preventing invisible keyboard targets.
-- Panel state must reverse cleanly if the toggle is pressed before the transition finishes.
+- Panel state must reverse cleanly if the toggle is pressed before the transition finishes. Neither sidebar has a timing or acceleration advantage over the other.
 
 ### Panels and tabs
 
@@ -317,8 +359,8 @@ Do not create component-specific easings without documenting a physical reason. 
 
 ### Dialogs
 
-- Backdrops fade over 160 ms.
-- Dialog surfaces enter with 3 px vertical movement and a scale change from `.996` to `1`.
+- Backdrops fade over 150 ms.
+- Dialog surfaces enter over 180 ms with 3 px vertical movement and a scale change from `.996` to `1`.
 - Dialog shadows do not animate independently because large blurred paints are expensive.
 - Dismissal should feel immediate; when a future shared presence primitive is introduced, it should mirror the entrance without extending interaction latency.
 
@@ -429,7 +471,7 @@ The motion review followed the questions “does this feel instant?”, “does 
 
 - The largest renderer cost remains Markdown parsing/rendering for long responses. Persisted messages now skip unrelated re-renders; the actively streaming message still updates by design and retains existing throttling.
 - Activity is capped at 300 entries and detail text at 64,000 characters. `content-visibility` reduces paint for offscreen entries without changing those safety limits.
-- Panel width transitions cause deliberate shell layout work for 240 ms. This is bounded, infrequent, and preferable to transform-based panel composition, which would interfere with fixed preview dialogs nested inside the inspector.
+- Panel width transitions cause deliberate shell layout work for 180 ms. This is bounded, infrequent, and preferable to transform-based panel composition, which would interfere with fixed preview dialogs nested inside the inspector.
 - Large shadows and backdrop blur remain static during motion to avoid expensive repaints.
 
 ### Remaining polish opportunities — not implemented
@@ -440,3 +482,27 @@ The motion review followed the questions “does this feel instant?”, “does 
 - Native tooltips could eventually be replaced by a lightweight shared tooltip primitive.
 
 These items were intentionally left for a future approved phase because they require shared behavioral primitives or broader profiling infrastructure.
+
+## UX review — Phase 5.4 final
+
+The final v0.5 review evaluated professional confidence, comfort, affordance, and desktop continuity.
+
+### Resolved
+
+- The product now uses its canonical mark in the application chrome instead of a generic icon.
+- Window title and favicon no longer expose the Vite scaffold identity.
+- Left and right sidebars share the same 180 ms timing, easing, fade, and mirrored content travel.
+- Composer writing and toolbar areas remain one uninterrupted surface.
+- Buttons, cards, rows, tabs, chips, and icon controls acknowledge hover, focus, pressed, active, and disabled states.
+- Semantic states retain text or icons in addition to color.
+- Geist weights, 13 px minimum text, stable scroll gutters, and bounded reading width support long sessions.
+- Brand, Electron, GitHub, favicon, monochrome, dark, and raster exports have documented canonical sources.
+
+### Remaining considerations for v0.6 — not implemented
+
+- Introduce shared Button, Badge, Tooltip, and Dialog primitives only as an approved architectural task.
+- Capture new README screenshots with the canonical logo and synchronized sidebars.
+- Add automated screenshot and contrast regression checks.
+- Validate packaged builds with keyboard-only navigation on multiple Linux desktop environments.
+
+No new behavior or product capability was introduced during this final polish review.

@@ -62,7 +62,7 @@
 .health-grid { margin-top: var(--spacing-md); }
 .health-grid span { transition: background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard); }
 .health-grid span:hover { background: var(--color-surface-raised); border-color: var(--color-border); }
-.suggestion-card { padding: var(--spacing-lg); transition: background-color var(--motion-base) var(--ease-standard), border-color var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard); }
+.suggestion-card { padding: var(--spacing-lg); transition: background-color var(--motion-card) var(--ease-standard), border-color var(--motion-card) var(--ease-standard), box-shadow var(--motion-card) var(--ease-standard); }
 .suggestion-card:hover { background: #17171c; border-top-color: var(--color-border-strong); border-right-color: var(--color-border-strong); border-bottom-color: var(--color-border-strong); box-shadow: 0 8px 24px rgb(0 0 0 / 16%); }
 .suggestion-card header::before { content: ''; width: 7px; height: 7px; flex: 0 0 7px; background: var(--color-text-subtle); border-radius: 50%; }
 .suggestion-card.high header::before, .suggestion-card.critical header::before { background: var(--color-danger); }

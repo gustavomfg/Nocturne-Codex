@@ -273,9 +273,34 @@ button { border:0; background:none; cursor:pointer; }
 .modal-backdrop button:disabled,
 .preview-backdrop button:disabled { cursor: not-allowed; opacity: .48; }
 
+.new-chat:hover {
+  background: linear-gradient(135deg, #9075e9, #7658d8);
+  box-shadow: 0 9px 28px rgb(96 64 194 / 34%);
+  transform: translateY(-1px);
+}
+.new-chat:hover svg { transform: scale(1.06); }
+.new-chat svg { transition: transform var(--motion-fast) var(--ease-standard); }
+.new-chat:active:not(:disabled) { transform: translateY(1px); }
+.welcome-actions button:hover {
+  color: var(--color-text);
+  background: #211f27;
+  border-color: #55466d;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 22%);
+  transform: translateY(-1px);
+}
+.welcome-actions button:first-child:hover {
+  background: #8a6be5;
+  border-color: #8a6be5;
+  box-shadow: 0 8px 22px rgb(91 65 173 / 32%);
+}
+.welcome-actions button svg { transition: transform var(--motion-fast) var(--ease-standard); }
+.welcome-actions button:hover svg { transform: scale(1.06); }
+.welcome-actions button:active:not(:disabled) { transform: translateY(1px); }
+
 .sidebar { width: var(--sidebar-width); flex-basis: var(--sidebar-width); padding: var(--spacing-lg) var(--spacing-md) var(--spacing-md); }
 .brand { height: 50px; padding: 0 var(--spacing-sm) var(--spacing-xs); }
-.brand-mark { box-shadow: inset 0 0 0 1px #594785, 0 6px 20px rgb(81 59 139 / 16%); }
+.brand-mark { overflow: hidden; background: transparent; box-shadow: inset 0 0 0 1px #594785, 0 6px 20px rgb(81 59 139 / 16%); }
+.brand-mark img { display: block; width: 100%; height: 100%; }
 .new-chat { margin-top: var(--spacing-lg); margin-bottom: var(--spacing-lg); }
 .new-chat:hover { background: linear-gradient(135deg, #8a70e6, #7153d4); box-shadow: 0 9px 26px rgb(96 64 194 / 26%); }
 .new-chat:active { box-shadow: 0 4px 14px rgb(96 64 194 / 18%); }
@@ -372,8 +397,8 @@ button { border:0; background:none; cursor:pointer; }
 .onboarding-check, .timeline-dot, .status-dot, .connection > span { transition: color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard), border-color var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard); }
 .caret { width: 3px; border-radius: 2px; animation-duration: 1.15s; }
 .timeline-dot.running svg { animation-duration: 1.6s; }
-.modal-backdrop, .preview-backdrop { animation: nocturne-fade-in var(--motion-base) var(--ease-standard); }
-.settings-dialog, .preview-dialog, .suggestion-dialog { animation: nocturne-dialog-in var(--motion-base) var(--ease-standard); }
+.modal-backdrop, .preview-backdrop { animation: nocturne-fade-in var(--motion-fade) var(--ease-standard); }
+.settings-dialog, .preview-dialog, .suggestion-dialog { animation: nocturne-dialog-in var(--motion-dialog) var(--ease-standard); }
 @keyframes nocturne-fade-in { from { opacity: 0; } }
 @keyframes nocturne-dialog-in { from { opacity: 0; transform: translateY(3px) scale(.996); } }
 
@@ -390,23 +415,27 @@ button { border:0; background:none; cursor:pointer; }
 
 /* Motion, continuity, and perceived performance */
 .sidebar {
-  transition: width var(--motion-base) var(--ease-standard), flex-basis var(--motion-base) var(--ease-standard), padding var(--motion-base) var(--ease-standard), opacity var(--motion-fast) var(--ease-standard), border-color var(--motion-base) var(--ease-standard);
+  transition: var(--transition-panel), padding var(--motion-panel) var(--ease-standard), border-color var(--motion-panel) var(--ease-standard);
 }
 .sidebar.collapsed { opacity: 0; }
+.sidebar.open > * { animation: sidebar-content-in var(--motion-panel) var(--ease-standard); }
+.sidebar.collapsed > * { animation: sidebar-content-out var(--motion-panel) var(--ease-standard) both; }
+@keyframes sidebar-content-in { from { opacity: 0; transform: translateX(-10px); } }
+@keyframes sidebar-content-out { to { opacity: 0; transform: translateX(-8px); } }
 
 .inspector {
   min-width: 0;
   overflow: hidden;
   opacity: 1;
   clip-path: inset(0 0 0 0);
-  transition: width var(--motion-slow) var(--ease-standard), flex-basis var(--motion-slow) var(--ease-standard), opacity var(--motion-base) var(--ease-standard), clip-path var(--motion-slow) var(--ease-standard), border-color var(--motion-base) var(--ease-standard);
+  transition: var(--transition-panel), clip-path var(--motion-panel) var(--ease-standard), border-color var(--motion-panel) var(--ease-standard);
 }
 .inspector > .inspector-header,
 .inspector > .inspector-tabs,
 .inspector > .inspector-scroll { min-width: var(--inspector-width); }
 .inspector.open > .inspector-header,
 .inspector.open > .inspector-tabs,
-.inspector.open > .inspector-scroll { animation: inspector-content-in var(--motion-slow) var(--ease-standard); }
+.inspector.open > .inspector-scroll { animation: inspector-content-in var(--motion-panel) var(--ease-standard); }
 .inspector.closed {
   width: 0;
   flex-basis: 0;
@@ -417,7 +446,7 @@ button { border:0; background:none; cursor:pointer; }
 }
 .inspector.closed > .inspector-header,
 .inspector.closed > .inspector-tabs,
-.inspector.closed > .inspector-scroll { animation: inspector-content-out var(--motion-base) var(--ease-standard) both; }
+.inspector.closed > .inspector-scroll { animation: inspector-content-out var(--motion-panel) var(--ease-standard) both; }
 @keyframes inspector-content-in { from { opacity: 0; transform: translateX(10px); } }
 @keyframes inspector-content-out { to { opacity: 0; transform: translateX(8px); } }
 
@@ -466,7 +495,7 @@ button { border:0; background:none; cursor:pointer; }
   border-radius: 2px;
   opacity: 0;
   transform: scaleX(.65);
-  transition: opacity var(--motion-fast) var(--ease-standard), transform var(--motion-base) var(--ease-standard);
+  transition: opacity var(--motion-fast) var(--ease-standard), transform var(--motion-tab) var(--ease-standard);
 }
 .inspector-tabs button.active::after { opacity: 1; transform: scaleX(1); }
 
@@ -502,4 +531,6 @@ button { border:0; background:none; cursor:pointer; }
   .suggestions-view,
   .artifact-list,
   .inspector-scroll > .inspector-empty { animation: none; }
+  .sidebar.open > *,
+  .sidebar.collapsed > * { animation: none; }
 }

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Nocturne Codex dark mark</title>
+  <defs><linearGradient id="dark-violet" x1="72" y1="64" x2="424" y2="448" gradientUnits="userSpaceOnUse"><stop stop-color="#B199FF"/><stop offset="1" stop-color="#574080"/></linearGradient></defs>
+  <rect x="8" y="8" width="496" height="496" rx="108" fill="#101014" stroke="#302F37" stroke-width="16"/>
+  <circle cx="256" cy="256" r="166" fill="url(#dark-violet)"/>
+  <circle cx="315" cy="205" r="154" fill="#101014"/>
+  <path d="M154 344c72 38 151 23 208-34-31 82-129 128-208 76z" fill="#D2C4F8"/>
+  <circle cx="166" cy="167" r="15" fill="#F6F2FF"/><circle cx="125" cy="237" r="8" fill="#C6B4F1"/>
+</svg>

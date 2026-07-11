@@ -12,6 +12,9 @@ process.env.APP_ROOT = path.join(__dirname, '..')
 process.env.NOCTURNE_APP_RUNNING = '1'
 export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
+const APP_NAME = 'Nocturne Codex'
+const APP_ICON = path.join(process.env.APP_ROOT, 'build', 'icon.png')
+app.setName(APP_NAME)
 
 let win: BrowserWindow | null = null
 let database: LocalDatabase | null = null
@@ -24,13 +27,17 @@ process.on('unhandledRejection', (reason) => { logger?.error('app', 'unhandledRe
 function createWindow() {
   win = new BrowserWindow({
     width: 1440, height: 920, minWidth: 980, minHeight: 680,
-    title: 'Nocturne Codex', backgroundColor: '#0b0b0e',
+    title: APP_NAME, icon: APP_ICON, backgroundColor: '#0b0b0e',
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
     },
+  })
+  win.on('page-title-updated', (event) => {
+    event.preventDefault()
+    win?.setTitle(APP_NAME)
   })
   win.setMenuBarVisibility(false)
   win.webContents.setWindowOpenHandler(({ url }) => {
