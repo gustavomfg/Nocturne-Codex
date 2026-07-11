@@ -37,7 +37,7 @@ Do not introduce text below 13 px. Use color, spacing, and weight to lower empha
 
 ## Design tokens
 
-Global tokens live in `src/index.css`. Component styles should consume these tokens instead of adding isolated values.
+Global tokens live in `src/styles/tokens.css`. Component styles should consume these tokens instead of adding isolated values. Typography is defined in `src/styles/typography.css`, shared motion in `src/styles/motion.css`, and global browser/Electron defaults in `src/styles/globals.css`.
 
 ### Typography tokens
 

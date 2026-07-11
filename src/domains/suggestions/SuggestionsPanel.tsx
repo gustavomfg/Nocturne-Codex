@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { AlertTriangle, Check, Clipboard, Eye, FileCode2, GitCommit, ShieldAlert, X } from 'lucide-react'
-import { suggestedCommit } from '../shared/suggestions'
-import type { Suggestion, SuggestionStatus } from './types'
-import './SuggestionsPanel.css'
+import { suggestedCommit } from '../../../shared/suggestions'
+import type { Suggestion, SuggestionStatus } from '../../types'
+import './suggestions.css'
 
 interface Props { suggestions: Suggestion[]; onStatus(suggestion: Suggestion, status: SuggestionStatus): void; onApply(suggestion: Suggestion): void; onOpenFile(filePath: string): void }
 const labels: Record<string, string> = { architecture: 'Arquitetura', security: 'Segurança', performance: 'Performance', bug: 'Bug', cleanup: 'Limpeza', testing: 'Testes', documentation: 'Documentação', dependency: 'Dependência', accessibility: 'Acessibilidade' }

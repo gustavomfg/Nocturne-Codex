@@ -264,7 +264,7 @@ button { border:0; background:none; cursor:pointer; }
 .app-shell button,
 .modal-backdrop button,
 .preview-backdrop button {
-  transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard), opacity var(--motion-fast) var(--ease-standard), transform var(--motion-fast) var(--ease-standard);
+  transition: var(--transition-interactive);
 }
 .app-shell button:active:not(:disabled),
 .modal-backdrop button:active:not(:disabled),

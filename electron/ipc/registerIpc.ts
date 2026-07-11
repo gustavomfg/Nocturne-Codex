@@ -8,12 +8,10 @@ import { CodexClient } from '../codex/CodexClient'
 import { LocalDatabase, type ConversationRow } from '../database/Database'
 import { Logger } from '../logging/Logger'
 import { assessCommand, resolveInsideWorkspace } from '../security/ExecutionPolicy'
-import { agentModes, extractSuggestions, suggestionStatuses } from '../../shared/suggestions'
+import { agentModes, extractSuggestions } from '../../shared/suggestions'
+import { approvalSchema, codexSendSchema, fileActionSchema, filePreviewSchema, idSchema, suggestionStatusSchema, workspaceFavoriteSchema, workspaceToolSchema } from '../../shared/ipc/schemas'
 
-const idSchema = z.string().uuid()
 const execFileAsync = promisify(execFile)
-const sendSchema = z.object({ conversationId: z.string().uuid(), prompt: z.string().trim().min(1).max(100_000), attachments: z.array(z.string()).max(10).default([]), mode: z.enum(agentModes).default('build') })
-const approvalSchema = z.object({ key: z.string().min(1), accepted: z.boolean(), forSession: z.boolean().optional() })
 
 export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: CodexClient, logger: Logger) {
   const approvalDetails = new Map<string, { command?: string; risk?: string }>()
@@ -47,11 +45,11 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   ipcMain.handle('workspaces:list', () => database.listWorkspaces())
   ipcMain.handle('workspaces:remove', (_event, value: unknown) => database.removeWorkspace(z.string().min(1).parse(value)))
   ipcMain.handle('workspaces:favorite', (_event, value: unknown) => {
-    const data = z.object({ workspace: z.string().min(1), favorite: z.boolean() }).parse(value)
+    const data = workspaceFavoriteSchema.parse(value)
     database.setWorkspaceFavorite(data.workspace, data.favorite)
   })
   ipcMain.handle('workspace:openTool', async (_event, value: unknown) => {
-    const data = z.object({ workspace: z.string().min(1), tool: z.enum(['editor', 'terminal']) }).parse(value)
+    const data = workspaceToolSchema.parse(value)
     const workspace = path.resolve(data.workspace)
     if (!fs.existsSync(workspace)) throw new Error('Workspace não encontrado.')
     if (data.tool === 'editor') {
@@ -90,7 +88,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   })
 
   ipcMain.handle('files:open', async (_event, value: unknown) => {
-    const data = z.object({ conversationId: z.string().uuid(), filePath: z.string().min(1), action: z.enum(['file', 'folder', 'editor']) }).parse(value)
+    const data = fileActionSchema.parse(value)
     const conversation = getConversation(database, data.conversationId)
     const filePath = resolveWorkspaceFile(data.filePath, conversation.workspace)
     if (!fs.existsSync(filePath)) throw new Error('Arquivo não encontrado.')
@@ -100,7 +98,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   })
 
   ipcMain.handle('files:preview', (_event, value: unknown) => {
-    const data = z.object({ conversationId: z.string().uuid(), filePath: z.string().min(1) }).parse(value)
+    const data = filePreviewSchema.parse(value)
     const conversation = getConversation(database, data.conversationId)
     const filePath = resolveWorkspaceFile(data.filePath, conversation.workspace)
     if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) throw new Error('Arquivo não encontrado.')
@@ -168,7 +166,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   })
 
   ipcMain.handle('codex:send', async (_event, value: unknown) => {
-    const { conversationId, prompt, attachments, mode } = sendSchema.parse(value)
+    const { conversationId, prompt, attachments, mode } = codexSendSchema.parse(value)
     const conversation = getConversation(database, conversationId)
     assertWorkspace(conversation)
     attachments.forEach((filePath) => assertInsideWorkspace(filePath, conversation.workspace))
@@ -232,7 +230,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     return { suggestions, content: extracted.content }
   })
   ipcMain.handle('suggestions:status', (_event, value: unknown) => {
-    const data = z.object({ conversationId: z.string().uuid(), suggestionId: z.string().uuid(), status: z.enum(suggestionStatuses), result: z.string().max(20_000).optional() }).parse(value)
+    const data = suggestionStatusSchema.parse(value)
     const suggestion = database.listSuggestions(data.conversationId).find((item) => item.id === data.suggestionId)
     if (!suggestion) throw new Error('Sugestão não pertence a esta conversa.')
     const updated = database.setSuggestionStatus(data.suggestionId, data.status, data.result)

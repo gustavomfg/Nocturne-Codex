@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { RENDERER_LIMITS } from '../shared/constants'
 import type { Activity, Approval, Artifact, ChangedFile, CodexStatus, Conversation, Message, PlanStep, Suggestion } from './types'
 
 interface AppState {
@@ -12,9 +13,7 @@ interface AppState {
   setArtifacts(value: Artifact[]): void; setSuggestions(value: Suggestion[]): void; setPlan(value: PlanStep[], explanation?: string): void
 }
 
-const MAX_ACTIVITIES = 300
-const MAX_ACTIVITY_DETAIL = 64_000
-const MAX_STREAM_SIZE = 2_000_000
+const { activities: MAX_ACTIVITIES, activityDetailCharacters: MAX_ACTIVITY_DETAIL, streamCharacters: MAX_STREAM_SIZE } = RENDERER_LIMITS
 
 export const useAppStore = create<AppState>((set) => ({
   conversations: [], activeId: null, messages: [], status: 'disconnected', streaming: '', diff: '', activities: [], approvals: [], files: [], artifacts: [], suggestions: [], plan: [], planExplanation: '', error: null,

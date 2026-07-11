@@ -1,10 +1,16 @@
-import { FormEvent, memo, useEffect, useRef, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
-import { Activity as ActivityIcon, Brain, Check, ChevronRight, Code2, Command, Copy, ExternalLink, Eye, FileCode2, FileDown, Folder, FolderOpen, GitBranch, History, ListChecks, LoaderCircle, Menu, MessageSquarePlus, MoonStar, PackageOpen, Paperclip, PanelRight, Search, Send, Settings, ShieldCheck, Sparkles, Square, Star, Terminal, Trash2, X } from 'lucide-react'
+import { FormEvent, useEffect, useRef, useState } from 'react'
+import { Brain, ChevronRight, Code2, Folder, GitBranch, Menu, PanelRight, Settings, Terminal, X } from 'lucide-react'
 import { useAppStore } from './store'
-import type { Activity, AgentMode, Artifact, Attachment, ChangedFile, CodexEvent, CodexSettings, FilePreview, GitInfo, Message, PlanStep, Suggestion, SuggestionStatus, Workspace, WorkspaceMemory } from './types'
-import { SuggestionsPanel } from './SuggestionsPanel'
-import './App.css'
+import type { Activity, AgentMode, Artifact, Attachment, ChangedFile, CodexEvent, CodexSettings, FilePreview, GitInfo, PlanStep, Suggestion, SuggestionStatus, Workspace, WorkspaceMemory } from './types'
+import { Sidebar } from './domains/workspaces/Sidebar'
+import { Composer } from './domains/chat/Composer'
+import { AssistantMessage, MessageBubble, Welcome } from './domains/chat/ChatContent'
+import { AgentPanel } from './domains/agent/AgentPanel'
+import { MemoryDialog, OnboardingDialog, PreviewDialog } from './domains/settings/Dialogs'
+import { SettingsDialog } from './domains/settings/SettingsDialog'
+import { describeChanges, errorMessage, humanizeCommand, isBusy, normalizePlanStatus, parseChanges, statusText } from './shared/format'
+import { UI_TIMING } from '../shared/constants'
+import './styles/components.css'
 
 const now = () => new Date().toISOString()
 const fakeId = () => crypto.randomUUID()
@@ -71,7 +77,7 @@ function App() {
   })
   useEffect(() => {
     if (!isBusy(store.status)) return
-    const timer = setInterval(() => { const state = useAppStore.getState(); void window.nocturne.diagnostics.rendererStats({ responseSize: state.streaming.length, activities: state.activities.length, messages: state.messages.length }) }, 10_000)
+    const timer = setInterval(() => { const state = useAppStore.getState(); void window.nocturne.diagnostics.rendererStats({ responseSize: state.streaming.length, activities: state.activities.length, messages: state.messages.length }) }, UI_TIMING.diagnosticsIntervalMs)
     return () => clearInterval(timer)
   }, [store.status])
 
@@ -177,7 +183,7 @@ function App() {
     streamBufferRef.current += delta
     if (streamBufferRef.current.length > 100_000) streamBufferRef.current = streamBufferRef.current.slice(-100_000)
     if (streamTimerRef.current) return
-    streamTimerRef.current = setTimeout(flushStream, 80)
+    streamTimerRef.current = setTimeout(flushStream, UI_TIMING.streamFlushMs)
   }
 
   function flushStream() {
@@ -199,7 +205,7 @@ function App() {
   function appendActivityDetail(id: string, type: Activity['type'], label: string, delta: string) {
     const buffered = activityBuffersRef.current.get(id)
     activityBuffersRef.current.set(id, { type, label: buffered?.label || label, detail: `${buffered?.detail || ''}${delta}`.slice(-64_000) })
-    if (!activityTimerRef.current) activityTimerRef.current = setTimeout(flushActivityDetails, 150)
+    if (!activityTimerRef.current) activityTimerRef.current = setTimeout(flushActivityDetails, UI_TIMING.activityFlushMs)
   }
 
   function flushActivityDetails() {
@@ -350,24 +356,7 @@ function App() {
   const pathLabel = active?.workspace ?? workspace
 
   return <div className="app-shell">
-    <aside className={`sidebar ${sidebarOpen ? '' : 'collapsed'}`}>
-      <div className="brand"><div className="brand-mark"><MoonStar size={18}/></div><span>Nocturne <b>Codex</b></span><button className="icon-button sidebar-toggle" aria-label="Recolher barra lateral" title="Recolher barra lateral" onClick={() => setSidebarOpen(false)}><Menu size={17}/></button></div>
-      <button className="new-chat" onClick={createConversation}><MessageSquarePlus size={17}/><span>Nova conversa</span><kbd>⌘ N</kbd></button>
-      <div className="search-box"><Search size={15}/><input ref={searchRef} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar conversas"/></div>
-      <div className="section-label"><span>Recentes</span><History size={13}/></div>
-      <nav className="conversation-list">
-        {filtered.map((conversation) => <button key={conversation.id} className={`conversation-item ${conversation.id === store.activeId ? 'active' : ''}`} onClick={() => openConversation(conversation.id)}>
-          <span className="conversation-icon"><Code2 size={15}/></span><span className="conversation-copy"><strong>{conversation.title}</strong><small>{relativeTime(conversation.updatedAt)}</small></span>
-          <span className="delete-button" role="button" tabIndex={0} aria-label={`Excluir conversa ${conversation.title}`} title="Excluir conversa" onClick={(event) => { event.stopPropagation(); void removeConversation(conversation.id) }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); void removeConversation(conversation.id) } }}><Trash2 size={13}/></span>
-        </button>)}
-        {!filtered.length && <p className="empty-list">Nenhuma conversa ainda.</p>}
-      </nav>
-      <div className="sidebar-footer">
-        {workspaces.slice(0, 4).map((item) => <div key={item.path} className={`workspace-mini ${workspace === item.path ? 'active' : ''}`}><button onClick={() => chooseSavedWorkspace(item.path)}><Folder size={13}/><span>{item.name}</span></button><button title={item.favorite ? 'Remover dos favoritos' : 'Favoritar'} onClick={async () => { await window.nocturne.workspace.favorite(item.path, !item.favorite); setWorkspaces(await window.nocturne.workspace.list()) }}><Star size={12} fill={item.favorite ? 'currentColor' : 'none'}/></button></div>)}
-        <button className="workspace-card" onClick={selectWorkspace}><span className="workspace-icon"><FolderOpen size={17}/></span><span><small>Workspace</small><strong>{workspace ? workspace.split(/[/\\]/).pop() : 'Selecionar projeto'}</strong></span><ChevronRight size={15}/></button>
-        <div className="profile"><div className="avatar">G</div><span><strong>Ambiente local</strong><small>{settings.codexVersion || 'Codex CLI'}</small></span><span className={`status-dot ${store.status}`}/><button className="settings-button" aria-label="Abrir configurações" title="Abrir configurações" onClick={() => setSettingsOpen(true)}><Settings size={14}/></button></div>
-      </div>
-    </aside>
+    <Sidebar open={sidebarOpen} conversations={filtered} activeId={store.activeId} search={search} searchRef={searchRef} workspace={workspace} workspaces={workspaces} settings={settings} status={store.status} onClose={() => setSidebarOpen(false)} onNew={createConversation} onSearch={setSearch} onConversation={openConversation} onDelete={(id) => void removeConversation(id)} onWorkspace={selectWorkspace} onSavedWorkspace={chooseSavedWorkspace} onFavorite={(item) => void window.nocturne.workspace.favorite(item.path, !item.favorite).then(() => window.nocturne.workspace.list()).then(setWorkspaces)} onSettings={() => setSettingsOpen(true)}/>
 
     <main className="main-panel">
       <header className="topbar">
@@ -386,14 +375,10 @@ function App() {
         </div>}
       </section>
 
-      <div className="composer-wrap"><div className="agent-mode-switch" aria-label="Modo do agente"><button type="button" className={agentMode === 'build' ? 'active' : ''} onClick={() => setAgentMode('build')}><span/>Build <small>Pode modificar</small></button><button type="button" className={agentMode === 'review' ? 'active' : ''} onClick={() => setAgentMode('review')}><span/>Review <small>Apenas sugere</small></button><button type="button" className={agentMode === 'docs' ? 'active' : ''} onClick={() => setAgentMode('docs')}><span/>Docs <small>Foco documentação</small></button></div><div className="quick-actions"><button onClick={() => submitPrompt('Analise este projeto e resuma arquitetura, dependências, riscos e próximos passos.')}><Code2 size={11}/>Analisar</button><button onClick={() => submitPrompt('Crie documentação completa em Markdown para este projeto e salve em DOCUMENTACAO.md.', 'docs')}><FileCode2 size={11}/>Documentar</button><button onClick={() => submitPrompt('Revise as alterações Git atuais, buscando bugs, riscos e testes ausentes. Não modifique arquivos sem pedir.', 'review')}><GitBranch size={11}/>Revisar diff</button></div><form className="composer" onSubmit={send}>
-        {!!attachments.length && <div className="attachment-list">{attachments.map((item) => <span key={item.path}><Paperclip size={11}/>{item.name}<button type="button" aria-label={`Remover anexo ${item.name}`} title="Remover anexo" onClick={() => setAttachments((current) => current.filter((file) => file.path !== item.path))}><X size={11}/></button></span>)}</div>}
-        <textarea ref={composerRef} value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit() } }} placeholder={store.activeId ? 'Peça ao Codex para criar, analisar ou modificar...' : 'Selecione um workspace e descreva o que deseja criar...'} rows={1}/>
-        <div className="composer-bottom"><div className="composer-tools"><button type="button" aria-label="Anexar arquivo" title="Anexar arquivo" onClick={attachFiles}><Paperclip size={16}/></button><span><ShieldCheck size={14}/> {settings.sandbox}</span></div><button type={isBusy(store.status) ? 'button' : 'submit'} aria-label={isBusy(store.status) ? 'Cancelar execução' : 'Enviar mensagem'} title={isBusy(store.status) ? 'Cancelar execução' : 'Enviar mensagem'} onClick={isBusy(store.status) && store.status !== 'cancelling' ? cancelRun : undefined} className={`send-button ${isBusy(store.status) ? 'stop' : ''}`} disabled={store.status === 'cancelling' || (!prompt.trim() && !isBusy(store.status))}>{isBusy(store.status) ? <Square size={14} fill="currentColor"/> : <Send size={16}/>}</button></div>
-      </form><small className="composer-hint">Enter para enviar · Shift + Enter para nova linha</small></div>
+      <Composer agentMode={agentMode} attachments={attachments} prompt={prompt} status={store.status} settings={settings} active={Boolean(store.activeId)} composerRef={composerRef} onMode={setAgentMode} onPrompt={setPrompt} onRemoveAttachment={(path) => setAttachments((current) => current.filter((file) => file.path !== path))} onAttach={attachFiles} onCancel={cancelRun} onSubmit={send} onQuick={submitPrompt}/>
     </main>
 
-    <Inspector open={rightOpen} activities={store.activities} approvals={store.approvals} diff={store.diff} files={store.files} artifacts={store.artifacts} suggestions={store.suggestions} plan={store.plan} planExplanation={store.planExplanation} activeId={store.activeId} gitInfo={gitInfo} documentContent={documentContent} onDecide={decide} onError={store.setError} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onSuggestionStatus={updateSuggestion} onSuggestionApply={applySuggestion} onPlanChange={(plan) => store.setPlan(plan, store.planExplanation)} onPlanExecute={(plan) => submitPrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`, 'build')}/>
+    <AgentPanel open={rightOpen} activities={store.activities} approvals={store.approvals} diff={store.diff} files={store.files} artifacts={store.artifacts} suggestions={store.suggestions} plan={store.plan} planExplanation={store.planExplanation} activeId={store.activeId} gitInfo={gitInfo} documentContent={documentContent} onDecide={decide} onError={store.setError} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onSuggestionStatus={updateSuggestion} onSuggestionApply={applySuggestion} onPlanChange={(plan) => store.setPlan(plan, store.planExplanation)} onPlanExecute={(plan) => submitPrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`, 'build')}/>
     {settingsOpen && <SettingsDialog
       value={settings}
       status={store.status}
@@ -402,147 +387,10 @@ function App() {
       onSave={saveSettings}
       onOnboarding={() => { setSettingsOpen(false); setOnboardingOpen(true) }}
     />}
-    {memoryOpen && <MemoryDialog value={memory} workspace={workspace} onClose={() => setMemoryOpen(false)} onSave={saveMemory}/>}
+    {memoryOpen && <MemoryDialog value={memory} onClose={() => setMemoryOpen(false)} onSave={saveMemory}/>}
     {preview && <PreviewDialog preview={preview} activeId={store.activeId} onClose={() => setPreview(null)} onError={store.setError}/>}
     {onboardingOpen && <OnboardingDialog settings={settings} status={store.status} hasWorkspace={Boolean(workspace)} onWorkspace={selectWorkspace} onClose={() => { localStorage.setItem('nocturne.onboarding.completed', 'true'); setOnboardingOpen(false); composerRef.current?.focus() }}/>}
   </div>
 }
-
-function OnboardingDialog({ settings, status, hasWorkspace, onWorkspace, onClose }: { settings: CodexSettings; status: string; hasWorkspace: boolean; onWorkspace(): void; onClose(): void }) {
-  const [step, setStep] = useState(0)
-  const items = [
-    { title: 'Codex CLI', ok: Boolean(settings.codexVersion && !settings.codexVersion.includes('indisponível')), body: settings.codexVersion && !settings.codexVersion.includes('indisponível') ? `Encontrado: ${settings.codexVersion}` : 'Codex CLI não encontrado.', fix: 'Instale o Codex CLI e confirme com: codex --version' },
-    { title: 'Autenticação', ok: Boolean(settings.authenticated), body: settings.authStatus || 'Não foi possível verificar o login.', fix: 'Execute no terminal: codex login' },
-    { title: 'App Server', ok: ['ready', 'completed'].includes(status), body: `Estado atual: ${statusText(status)}.`, fix: 'Abra Configurações → Diagnóstico e use Reiniciar Codex.' },
-    { title: 'Primeiro workspace', ok: hasWorkspace, body: hasWorkspace ? 'Workspace selecionado e pronto.' : 'Escolha a pasta do primeiro projeto. O agente ficará limitado a essa raiz.', fix: 'Selecione uma pasta de projeto local.' },
-    { title: 'Aprovações e segurança', ok: true, body: 'Review apenas sugere; Build pode modificar. Revise comandos sensíveis antes de aprovar.', fix: '' },
-  ]
-  const current = items[step]
-  return <div className="modal-backdrop"><div className="settings-dialog onboarding-dialog"><div className="modal-title"><MoonStar size={18}/><strong>Bem-vindo ao Nocturne Codex</strong><button onClick={onClose}>Pular</button></div><div className="onboarding-progress">{items.map((_, index) => <span key={index} className={index <= step ? 'active' : ''}/>)}</div><div className={`onboarding-check ${current.ok ? 'ok' : 'failed'}`}>{current.ok ? <Check size={18}/> : <X size={18}/>}</div><h2>{current.title}</h2><p>{current.body}</p>{!current.ok && current.fix && <code className="onboarding-fix">{current.fix}</code>}{step === 3 && !hasWorkspace && <button className="onboarding-workspace" onClick={onWorkspace}><FolderOpen size={15}/>Escolher workspace</button>}<div className="modal-actions"><button disabled={step === 0} onClick={() => setStep(step - 1)}>Voltar</button><button className="primary" onClick={() => step === items.length - 1 ? onClose() : setStep(step + 1)}>{step === items.length - 1 ? 'Começar' : 'Continuar'}</button></div></div></div>
-}
-
-function Welcome({ onNew, onWorkspace, onPrompt }: { onNew(): void; onWorkspace(): void; onPrompt(prompt: string): void }) {
-  return <div className="welcome"><div className="welcome-orb"><Sparkles size={30}/></div><h2>O que vamos construir?</h2><p>Converse com o Codex, explore seu projeto e transforme ideias em código — com você no controle.</p><div className="welcome-actions"><button onClick={onWorkspace}><FolderOpen size={17}/>Abrir projeto</button><button onClick={onNew}><MessageSquarePlus size={17}/>Nova conversa</button></div><div className="suggestions"><button onClick={() => onPrompt('Analise este projeto. Explique a arquitetura, dependências, pontos de entrada, riscos e sugira próximos passos práticos.')}><Code2/><span><strong>Analisar este projeto</strong><small>Entenda arquitetura e dependências</small></span></button><button onClick={() => onPrompt('Crie uma documentação completa deste projeto em Markdown, incluindo instalação, arquitetura, uso, scripts e solução de problemas. Salve em DOCUMENTACAO.md.')}><FileCode2/><span><strong>Criar documentação</strong><small>Gere um guia completo do projeto</small></span></button><button onClick={() => onPrompt('Revise todas as alterações Git atuais. Aponte bugs, riscos, problemas de segurança e testes ausentes. Não modifique arquivos sem pedir.')}><GitBranch/><span><strong>Revisar alterações</strong><small>Encontre problemas antes do commit</small></span></button></div></div>
-}
-
-const MessageBubble = memo(function MessageBubble({ message }: { message: Message }) {
-  if (message.role !== 'user') return <AssistantMessage content={message.content}/>
-  let attachments: string[] = []
-  try { attachments = (JSON.parse(message.metadata || '{}') as { attachments?: string[] }).attachments || [] } catch { /* optional metadata */ }
-  return <div className="user-row"><div className="user-message">{message.content}{!!attachments.length && <div className="message-attachments">{attachments.map((filePath) => <span key={filePath}><Paperclip size={10}/>{filePath.split(/[/\\]/).pop()}</span>)}</div>}</div><div className="mini-avatar">G</div></div>
-})
-
-function AssistantMessage({ content, streaming }: { content: string; streaming?: boolean }) {
-  const renderAsText = content.length > 300_000
-  return <div className="assistant-row"><div className="assistant-avatar"><Sparkles size={15}/></div><div className="assistant-content"><div className="assistant-name">Nocturne Codex {streaming && <span>escrevendo</span>}</div>{renderAsText ? <><p>Resposta extensa; renderização Markdown simplificada para preservar estabilidade.</p><pre className="large-response">{content.slice(-300_000)}</pre></> : <ReactMarkdown>{content}</ReactMarkdown>}{streaming && <span className="caret"/>}</div></div>
-}
-
-function Inspector({ open: isOpen, activities, approvals, diff, files, artifacts, suggestions, plan, planExplanation, activeId, gitInfo, documentContent, onDecide, onError, onGitRefresh, onArtifactsRefresh, onPreview, onArtifact, onDeleteArtifact, onSuggestionStatus, onSuggestionApply, onPlanChange, onPlanExecute }: { open: boolean; activities: Activity[]; approvals: ReturnType<typeof useAppStore.getState>['approvals']; diff: string; files: ChangedFile[]; artifacts: Artifact[]; suggestions: Suggestion[]; plan: PlanStep[]; planExplanation: string; activeId: string | null; gitInfo: GitInfo | null; documentContent: string; onDecide(key: string, accepted: boolean): void; onError(value: string): void; onGitRefresh(): void; onArtifactsRefresh(): void; onPreview(filePath: string): void; onArtifact(artifact: Artifact): void; onDeleteArtifact(id: string): void; onSuggestionStatus(suggestion: Suggestion, status: SuggestionStatus): void; onSuggestionApply(suggestion: Suggestion): void; onPlanChange(plan: PlanStep[]): void; onPlanExecute(plan: PlanStep[]): void }) {
-  const [commitMessage, setCommitMessage] = useState('')
-  const [tab, setTab] = useState<'activity' | 'plan' | 'suggestions' | 'artifacts'>('activity')
-  const inspectorRef = useRef<HTMLElement>(null)
-  useEffect(() => { if (inspectorRef.current) inspectorRef.current.inert = !isOpen }, [isOpen])
-  const open = async (filePath: string, action: 'file' | 'folder' | 'editor') => { if (!activeId) return; try { await window.nocturne.files.open(activeId, filePath, action) } catch (error) { onError(errorMessage(error)) } }
-  const exportDocument = async (format: 'md' | 'docx' | 'pdf' | 'html') => {
-    if (!activeId || !documentContent) { onError('Não há uma resposta Markdown para exportar.'); return }
-    try { if (format === 'md') await window.nocturne.documents.saveMarkdown(activeId, documentContent); else await window.nocturne.documents.export(activeId, documentContent, format); onArtifactsRefresh() }
-    catch (error) { onError(errorMessage(error)) }
-  }
-  const commit = async () => { if (!activeId || !commitMessage.trim()) return; try { await window.nocturne.git.commit(activeId, commitMessage); setCommitMessage(''); onGitRefresh() } catch (error) { onError(errorMessage(error)) } }
-  return <aside ref={inspectorRef} className={`inspector ${isOpen ? 'open' : 'closed'}`} aria-hidden={!isOpen}><div className="inspector-header"><div><ActivityIcon size={16}/><strong>Agente</strong></div><span>{activities.filter((a) => a.status === 'running').length ? 'Em execução' : 'Em espera'}</span></div>
-    <div className="inspector-tabs"><button className={tab === 'activity' ? 'active' : ''} onClick={() => setTab('activity')}><ActivityIcon size={12}/>Atividade</button><button className={tab === 'plan' ? 'active' : ''} onClick={() => setTab('plan')}><ListChecks size={12}/>Plano{plan.length > 0 && <b>{plan.length}</b>}</button><button className={tab === 'suggestions' ? 'active' : ''} onClick={() => setTab('suggestions')}><ShieldCheck size={12}/>Sugestões{suggestions.length > 0 && <b>{suggestions.length}</b>}</button><button className={tab === 'artifacts' ? 'active' : ''} onClick={() => setTab('artifacts')}><PackageOpen size={12}/>Artefatos{artifacts.length > 0 && <b>{artifacts.length}</b>}</button></div>
-    <div className="inspector-scroll">
-      {tab === 'activity' && <div className="tab-panel activity-panel">
-      {approvals.map((approval) => <div className={`approval-card ${approval.status}`} key={approval.key}><div className="approval-title"><span>{approval.kind === 'command' ? <Command size={15}/> : <FileCode2 size={15}/>}</span><strong>{approval.title}</strong></div><pre>{approval.detail}</pre>{approval.status === 'pending' ? <div className="approval-actions"><button onClick={() => onDecide(approval.key, false)}><X size={14}/>Recusar</button><button className="accept" onClick={() => onDecide(approval.key, true)}><Check size={14}/>Aprovar</button></div> : <small>{approval.status === 'accepted' ? 'Aprovado' : 'Recusado'}</small>}</div>)}
-      <ActivityTimeline activities={activities}/>
-      {!!files.length && <div className="files-panel"><div className="diff-title"><FileCode2 size={14}/>Arquivos alterados <span>{files.length}</span></div>{files.map((file) => <div className="changed-file" key={file.path}><span className={`file-kind ${file.kind}`}>{file.kind[0].toUpperCase()}</span><button title="Visualizar" onClick={() => onPreview(file.path)}>{file.path.split(/[/\\]/).pop()}</button><button title="Visualizar" onClick={() => onPreview(file.path)}><Eye size={12}/></button><button title="Abrir no editor" onClick={() => open(file.path, 'editor')}><ExternalLink size={12}/></button><button title="Mostrar na pasta" onClick={() => open(file.path, 'folder')}><FolderOpen size={12}/></button></div>)}</div>}
-      {diff && <div className="diff-panel"><div className="diff-title"><FileCode2 size={14}/>Alterações propostas</div><pre>{diff.split('\n').map((line, i) => <span key={i} className={line.startsWith('+') ? 'added' : line.startsWith('-') ? 'removed' : ''}>{line}{'\n'}</span>)}</pre></div>}
-      {gitInfo && <div className="git-panel"><div className="diff-title"><GitBranch size={14}/>Git · {gitInfo.branch}</div><pre>{gitInfo.status || 'Workspace limpo'}</pre><div className="commit-row"><input value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} placeholder="Mensagem do commit"/><button disabled={!commitMessage.trim() || !gitInfo.status} onClick={commit}><Check size={13}/></button></div></div>}
-      <div className="document-panel"><div className="diff-title"><FileDown size={14}/>Documento da resposta</div><div className="export-actions"><button onClick={() => exportDocument('md')}>MD</button><button onClick={() => exportDocument('html')}>HTML</button><button onClick={() => exportDocument('docx')}>DOCX</button><button onClick={() => exportDocument('pdf')}>PDF</button></div></div>
-      {!activities.length && !approvals.length && !diff && <div className="inspector-empty"><div><ActivityIcon size={22}/></div><p>A atividade do agente aparecerá aqui.</p><small>Comandos, arquivos e aprovações em tempo real.</small></div>}
-      </div>}
-      {tab === 'plan' && <PlanPanel plan={plan} explanation={planExplanation} onChange={onPlanChange} onExecute={onPlanExecute}/>} 
-      {tab === 'suggestions' && <SuggestionsPanel suggestions={suggestions} onStatus={onSuggestionStatus} onApply={onSuggestionApply} onOpenFile={onPreview}/>}
-      {tab === 'artifacts' && <ArtifactsPanel artifacts={artifacts} onOpen={onArtifact} onDelete={onDeleteArtifact}/>} 
-    </div>
-  </aside>
-}
-
-function PlanPanel({ plan, explanation, onChange, onExecute }: { plan: PlanStep[]; explanation: string; onChange(plan: PlanStep[]): void; onExecute(plan: PlanStep[]): void }) {
-  const [editing, setEditing] = useState(false)
-  const completed = plan.filter((item) => item.status === 'completed').length
-  if (!plan.length) return <div className="inspector-empty"><div><ListChecks size={22}/></div><p>Nenhum plano publicado.</p><small>Quando o agente estruturar o trabalho, as etapas aparecerão aqui.</small></div>
-  return <div className="plan-panel"><div className="plan-progress"><div><strong>Progresso do agente</strong><span>{completed}/{plan.length}</span></div><div className="progress-track"><span style={{ width: `${(completed / plan.length) * 100}%` }}/></div>{explanation && <p>{explanation}</p>}</div><div className="plan-list">{plan.map((item, index) => <div className={`plan-step ${item.status}`} key={`${index}-${item.step}`}><span>{item.status === 'completed' ? <Check size={12}/> : item.status === 'inProgress' ? <LoaderCircle size={12}/> : index + 1}</span><div>{editing ? <input value={item.step} onChange={(event) => onChange(plan.map((entry, entryIndex) => entryIndex === index ? { ...entry, step: event.target.value } : entry))}/> : <strong>{item.step}</strong>}<small>{item.status === 'completed' ? 'Concluído' : item.status === 'inProgress' ? 'Em andamento' : 'Pendente'}</small></div></div>)}</div><div className="plan-actions"><button onClick={() => setEditing(!editing)}>{editing ? 'Concluir edição' : 'Editar plano'}</button><button className="primary" onClick={() => onExecute(plan)} disabled={editing || !plan.every((item) => item.step.trim())}>Aprovar e executar</button></div></div>
-}
-
-function ActivityTimeline({ activities }: { activities: Activity[] }) {
-  const [details, setDetails] = useState(false)
-  return <><div className="activity-detail-toggle"><button onClick={() => setDetails(!details)}>{details ? 'Ocultar detalhes técnicos' : 'Ver detalhes técnicos'}</button></div><div className="timeline">{activities.map((item) => <div className="timeline-item" key={item.id}><span className={`timeline-dot ${item.status}`}>{item.status === 'running' ? <LoaderCircle size={13}/> : item.type === 'command' ? <Command size={12}/> : item.type === 'file' ? <FileCode2 size={12}/> : <Sparkles size={12}/>}</span><div><strong>{item.label}</strong>{details && item.detail && <pre>{item.detail.slice(0, 1400)}</pre>}</div></div>)}</div></>
-}
-
-function ArtifactsPanel({ artifacts, onOpen, onDelete }: { artifacts: Artifact[]; onOpen(artifact: Artifact): void; onDelete(id: string): void }) {
-  if (!artifacts.length) return <div className="inspector-empty"><div><PackageOpen size={22}/></div><p>Nenhum artefato ainda.</p><small>Respostas, diffs e arquivos produzidos pelo agente serão preservados aqui.</small></div>
-  return <div className="artifact-list">{artifacts.map((artifact) => <div className="artifact-card" key={artifact.id}><button className="artifact-main" onClick={() => onOpen(artifact)}><span className={`artifact-icon ${artifact.type}`}>{artifact.type === 'file' ? <FileCode2 size={15}/> : artifact.type === 'diff' ? <GitBranch size={15}/> : <FileDown size={15}/>}</span><span><strong>{artifact.title}</strong><small>{artifact.type} · {relativeTime(artifact.updatedAt)}</small></span><Eye size={13}/></button><button className="artifact-delete" title="Remover do painel" onClick={() => onDelete(artifact.id)}><Trash2 size={12}/></button></div>)}</div>
-}
-
-function MemoryDialog({ value, workspace, onClose, onSave }: { value: WorkspaceMemory; workspace: string; onClose(): void; onSave(content: string, rules: string): void }) {
-  void workspace
-  const [content, setContent] = useState(value.content)
-  const [rules, setRules] = useState(value.rules)
-  return <div className="modal-backdrop" onMouseDown={onClose}><div className="settings-dialog memory-dialog" onMouseDown={(event) => event.stopPropagation()}><div className="modal-title"><Brain size={17}/><strong>Contexto do workspace</strong><button onClick={onClose}><X size={16}/></button></div><p className="memory-description">Arquivos reais em <b>.nocturne/</b>, enviados ao Codex em cada novo turno.</p>{value.project && <div className="project-summary"><strong>{value.project.name}</strong><small>{value.project.primaryLanguage} · {value.project.stack.join(', ') || 'Stack não detectada'}</small></div>}<label>Memória e decisões<textarea value={content} onChange={(event) => setContent(event.target.value)} maxLength={20_000}/></label><label>Regras e padrões<textarea value={rules} onChange={(event) => setRules(event.target.value)} maxLength={20_000}/></label><div className="memory-footer"><small>{(content.length + rules.length).toLocaleString()} caracteres · {value.updatedAt ? `Atualizada ${relativeTime(value.updatedAt)}` : 'Ainda não salva'}</small><div className="modal-actions"><button onClick={onClose}>Cancelar</button><button className="primary" onClick={() => onSave(content, rules)}>Salvar contexto</button></div></div></div></div>
-}
-
-function PreviewDialog({ preview, activeId, onClose, onError }: { preview: FilePreview; activeId: string | null; onClose(): void; onError(value: string): void }) {
-  const open = async (action: 'editor' | 'folder') => { if (!activeId || !preview.filePath) return; try { await window.nocturne.files.open(activeId, preview.filePath, action) } catch (error) { onError(errorMessage(error)) } }
-  const copy = async () => { try { await navigator.clipboard.writeText(preview.content); } catch (error) { onError(errorMessage(error)) } }
-  return <div className="preview-backdrop" onMouseDown={onClose}><section className="preview-dialog" onMouseDown={(event) => event.stopPropagation()}><header><div><Eye size={16}/><span><strong>{preview.name}</strong><small>{formatBytes(preview.size)}{preview.filePath && ` · ${preview.filePath}`}</small></span></div><div>{preview.kind !== 'image' && <button onClick={copy} title="Copiar conteúdo"><Copy size={15}/></button>}{preview.filePath && <><button onClick={() => open('folder')} title="Abrir pasta"><FolderOpen size={15}/></button><button onClick={() => open('editor')} title="Abrir arquivo"><ExternalLink size={15}/></button></>}<button onClick={onClose}><X size={17}/></button></div></header><div className={`preview-content ${preview.kind}`}>{preview.kind === 'image' ? <img src={preview.content} alt={preview.name}/> : preview.kind === 'markdown' ? <ReactMarkdown>{preview.content}</ReactMarkdown> : <pre><code>{preview.content}</code></pre>}</div></section></div>
-}
-
-function SettingsDialog({ value, status, workspaces, onClose, onSave, onOnboarding }: { value: CodexSettings; status: string; workspaces: Workspace[]; onClose(): void; onSave(value: CodexSettings): void; onOnboarding(): void }) {
-  const [form, setForm] = useState(value)
-  const [diagnostic, setDiagnostic] = useState('Carregando diagnóstico…')
-  useEffect(() => { void window.nocturne.codex.diagnostics().then((item) => setDiagnostic(`PID: ${item.pid ?? '—'} · ${item.executable}\nÚltima falha: ${item.lastFailure || 'nenhuma'}`)).catch((error) => setDiagnostic(errorMessage(error))) }, [])
-  const copyDiagnostic = async () => { const content = await window.nocturne.diagnostics.copy(); await navigator.clipboard.writeText(content) }
-  return <div className="modal-backdrop" onMouseDown={onClose}><div className="settings-dialog beta-settings" onMouseDown={(event) => event.stopPropagation()}><div className="modal-title"><Settings size={17}/><strong>Configurações</strong><button onClick={onClose}><X size={16}/></button></div><div className="settings-scroll">
-    <SettingsSection title="Codex"><div className="codex-info"><span className={`status-dot ${status}`}/><div><strong>{statusText(status)}</strong><small>{value.codexVersion || 'Versão indisponível'} · {value.authenticated ? 'Autenticado' : 'Login necessário'}</small></div></div><label>Executável<input value={form.codexPath || ''} onChange={(event) => setForm({ ...form, codexPath: event.target.value })} placeholder="codex ou caminho absoluto"/></label><label>Modelo<input value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} placeholder="Padrão do Codex"/></label><div className="settings-columns"><label>Sandbox<select value={form.sandbox} onChange={(event) => setForm({ ...form, sandbox: event.target.value as CodexSettings['sandbox'] })}><option value="read-only">Somente leitura</option><option value="workspace-write">Escrita no workspace</option></select></label><label>Aprovações<select value={form.approvalPolicy} onChange={(event) => setForm({ ...form, approvalPolicy: event.target.value as CodexSettings['approvalPolicy'] })}><option value="untrusted">Não confiáveis</option><option value="on-request">Quando solicitado</option><option value="never">Sempre proteger riscos</option></select></label></div></SettingsSection>
-    <SettingsSection title="Workspace"><div className="settings-workspaces">{workspaces.slice(0, 6).map((workspace) => <div key={workspace.path}><Folder size={13}/><span><strong>{workspace.name}</strong><small>{workspace.path}</small></span>{workspace.favorite && <Star size={12} fill="currentColor"/>}</div>)}{!workspaces.length && <p>Nenhum workspace recente.</p>}</div></SettingsSection>
-    <SettingsSection title="Aplicação"><div className="settings-columns"><label>Tema<select value={form.theme || 'dark'} onChange={(event) => setForm({ ...form, theme: event.target.value as CodexSettings['theme'] })}><option value="dark">Nocturne escuro</option><option value="system">Seguir sistema</option></select></label><label>Modo padrão<select value={form.defaultAgentMode || 'review'} onChange={(event) => setForm({ ...form, defaultAgentMode: event.target.value as AgentMode })}><option value="review">Review</option><option value="build">Build</option><option value="docs">Docs</option></select></label></div><label className="check-label"><input type="checkbox" checked={Boolean(form.diagnosticMode)} onChange={(event) => setForm({ ...form, diagnosticMode: event.target.checked })}/>Ativar logs detalhados</label><button className="secondary-setting" onClick={onOnboarding}>Reabrir primeira execução</button></SettingsSection>
-    <SettingsSection title="Diagnóstico"><pre className="diagnostic-summary">{diagnostic}</pre><div className="diagnostic-actions"><button onClick={() => window.nocturne.codex.restart().then(() => setDiagnostic('Codex reiniciado com sucesso.')).catch((error) => setDiagnostic(errorMessage(error)))}>Reiniciar Codex</button><button onClick={() => window.nocturne.diagnostics.openLogs()}>Abrir logs</button><button onClick={copyDiagnostic}>Copiar informações</button><button onClick={() => window.nocturne.data.export()}>Exportar dados</button></div></SettingsSection>
-  </div><div className="modal-actions"><button onClick={onClose}>Cancelar</button><button className="primary" onClick={() => onSave(form)}>Salvar</button></div></div></div>
-}
-
-function SettingsSection({ title, children }: { title: string; children: React.ReactNode }) { return <section className="settings-section"><h3>{title}</h3>{children}</section> }
-
-function describeChanges(value: unknown) { if (!Array.isArray(value)) return ''; return value.map((item) => String((item as Record<string, unknown>).path ?? '')).filter(Boolean).join('\n') }
-function parseChanges(value: unknown): ChangedFile[] { if (!Array.isArray(value)) return []; return value.map((item) => { const change = item as Record<string, unknown>; const rawKind = String(change.kind ?? 'modified').toLowerCase(); return { path: String(change.path ?? ''), kind: (rawKind.includes('add') ? 'created' : rawKind.includes('delete') ? 'deleted' : 'modified') as ChangedFile['kind'], status: String(change.status ?? 'completed') } }).filter((item) => item.path) }
-function errorMessage(error: unknown) {
-  const detail = error instanceof Error ? error.message : String(error)
-  if (/ENOENT.*codex|spawn codex ENOENT/i.test(detail)) return 'Codex CLI não foi encontrado. Selecione o executável nas configurações.'
-  if (/auth|login|unauthor/i.test(detail)) return 'O Codex CLI não está autenticado. Faça login pelo terminal e tente novamente.'
-  if (/thread.*not found|thread.*não encontrada/i.test(detail)) return 'A conversa remota não existe mais. Tente novamente para criar uma nova thread.'
-  if (/EACCES|permission denied/i.test(detail)) return 'Permissão negada ao acessar o arquivo. Verifique as permissões do workspace.'
-  if (/pandoc/i.test(detail)) return 'Não foi possível exportar com Pandoc. Verifique a instalação e abra os detalhes de diagnóstico.'
-  if (/tim(e|ed).*out|tempo esgotado/i.test(detail)) return 'A operação excedeu o tempo limite. Reinicie o Codex e tente novamente.'
-  return detail
-}
-function humanizeCommand(command: string) {
-  const value = command.replace(/^bash\s+-lc\s+['"]?/, '').replace(/['"]$/, '').trim()
-  if (/\b(cat|sed|head|tail|less)\b/.test(value)) return `Lendo ${commandTarget(value)}`
-  if (/\b(rg|grep|find)\b/.test(value)) return 'Procurando arquivos e referências'
-  if (/\b(npm|pnpm|yarn|bun)\s+(test|run test)|\b(pytest|cargo test|go test)\b/.test(value)) return 'Executando testes'
-  if (/\b(tsc|typecheck)\b/.test(value)) return 'Verificando tipos TypeScript'
-  if (/\b(eslint|lint)\b/.test(value)) return 'Verificando qualidade do código'
-  if (/\b(npm|pnpm|yarn|bun)\s+(install|i)\b/.test(value)) return 'Instalando dependências'
-  if (/\bgit\s+(status|diff)\b/.test(value)) return 'Analisando alterações Git'
-  if (/\bgit\s+commit\b/.test(value)) return 'Criando commit'
-  if (/\b(mkdir|touch|cp|mv)\b/.test(value)) return 'Organizando arquivos do projeto'
-  return 'Executando comando'
-}
-function commandTarget(command: string) { return command.match(/[\w./-]+\.[a-zA-Z0-9]+/)?.[0] ?? 'arquivo' }
-function normalizePlanStatus(value: unknown): PlanStep['status'] { const status = String(value).toLowerCase(); return status.includes('complete') ? 'completed' : status.includes('progress') ? 'inProgress' : 'pending' }
-function formatBytes(value: number) { return value < 1024 ? `${value} B` : value < 1_048_576 ? `${(value / 1024).toFixed(1)} KB` : `${(value / 1_048_576).toFixed(1)} MB` }
-function relativeTime(date: string) { const mins = Math.floor((Date.now() - new Date(date).getTime()) / 60000); return mins < 1 ? 'agora' : mins < 60 ? `${mins} min` : mins < 1440 ? `${Math.floor(mins / 60)} h` : `${Math.floor(mins / 1440)} d` }
-function isBusy(status: string) { return ['planning', 'running', 'waiting-approval', 'cancelling'].includes(status) }
-function statusText(status: string) { return ({ disconnected: 'Codex desconectado', starting: 'Conectando', ready: 'Codex pronto', planning: 'Planejando', running: 'Executando', 'waiting-approval': 'Aguardando aprovação', cancelling: 'Cancelando', completed: 'Concluído', failed: 'Falha no Codex' } as Record<string, string>)[status] ?? status }
 
 export default App
