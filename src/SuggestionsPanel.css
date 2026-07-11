@@ -55,3 +55,24 @@
 @media (max-width: 1100px) {
   .health-grid { grid-template-columns: 1fr; }
 }
+
+/* Premium hierarchy and state treatment */
+.health-card { padding: var(--spacing-lg); background: linear-gradient(145deg, #17151c, #131217); box-shadow: var(--shadow-sm); }
+.health-card > div:first-child { padding-bottom: var(--spacing-sm); border-bottom: 1px solid var(--color-border-subtle); }
+.health-grid { margin-top: var(--spacing-md); }
+.health-grid span { transition: background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard); }
+.health-grid span:hover { background: var(--color-surface-raised); border-color: var(--color-border); }
+.suggestion-card { padding: var(--spacing-lg); transition: background-color var(--motion-base) var(--ease-standard), border-color var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard); }
+.suggestion-card:hover { background: #17171c; border-top-color: var(--color-border-strong); border-right-color: var(--color-border-strong); border-bottom-color: var(--color-border-strong); box-shadow: 0 8px 24px rgb(0 0 0 / 16%); }
+.suggestion-card header::before { content: ''; width: 7px; height: 7px; flex: 0 0 7px; background: var(--color-text-subtle); border-radius: 50%; }
+.suggestion-card.high header::before, .suggestion-card.critical header::before { background: var(--color-danger); }
+.suggestion-card.medium header::before { background: var(--color-warning); }
+.suggestion-card.low header::before { background: var(--color-info); }
+.suggestion-card h4 { margin-top: var(--spacing-md); }
+.suggestion-card footer { padding-top: var(--spacing-sm); border-top: 1px solid var(--color-border-subtle); }
+.suggestion-card footer .apply:hover { background: #7454a2; border-color: #8864b8; }
+.suggestion-files button:hover, .dialog-files button:hover { color: #cbb9e5; background: #261f31; border-color: #493b59; }
+.suggestion-dialog > header { background: rgb(255 255 255 / 1.5%); }
+.suggestion-dialog > footer { background: rgb(0 0 0 / 10%); }
+.suggestion-dialog > header button, .commit-suggestion > button { width: var(--control-sm); height: var(--control-sm); display: grid; place-items: center; border-radius: var(--radius-sm); }
+.suggestion-dialog > header button:hover, .commit-suggestion > button:hover { background: var(--color-surface-hover); }

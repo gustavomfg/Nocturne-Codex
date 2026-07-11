@@ -42,6 +42,21 @@
   --spacing-2xl: 32px;
   --spacing-3xl: 48px;
 
+  /* Component scale */
+  --control-sm: 32px;
+  --control-md: 38px;
+  --control-lg: 44px;
+  --sidebar-width: 300px;
+  --inspector-width: 390px;
+  --content-width: 840px;
+  --grid-unit: 4px;
+
+  /* Motion */
+  --motion-fast: 120ms;
+  --motion-base: 160ms;
+  --motion-slow: 240ms;
+  --ease-standard: cubic-bezier(.2, .8, .2, 1);
+
   /* Shape and elevation */
   --radius-xs: 5px;
   --radius-sm: 7px;

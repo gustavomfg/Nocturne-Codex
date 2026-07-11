@@ -109,10 +109,10 @@ Every state needs a text label or recognizable icon. A colored dot alone is insu
 
 ## Layout and density
 
-- Sidebar baseline: 280 px, reduced to 250 px on medium windows.
-- Inspector baseline: 360 px, reduced to 330 px on medium windows.
+- Sidebar baseline: 300 px, reduced to 270 px and then 250 px on medium windows.
+- Inspector baseline: 390 px, reduced to 350 px and then 320 px on medium windows.
 - Top bars: 64 px.
-- Reading column: maximum 820 px.
+- Reading column: maximum 840 px.
 - Dialog content should normally remain within 92% of the viewport.
 - Standard controls should be at least 32 px high; primary form controls are 36–42 px high.
 - Preserve meaningful whitespace between messages, cards, and logical sections.
@@ -203,3 +203,123 @@ Motion communicates state; it is not decoration.
 8. Add a new token only when the value is reusable across multiple components.
 
 Visual refinement should make the interface easier to ignore while working. If a treatment attracts more attention than the developer's code, decision, or agent state, reduce it.
+
+## Component scale
+
+Component dimensions use named tokens so similar controls keep the same rhythm:
+
+| Token | Size | Typical use |
+| --- | ---: | --- |
+| `--control-sm` | 32 px | Icon buttons, compact secondary actions |
+| `--control-md` | 38 px | Inputs, standard buttons, selectors |
+| `--control-lg` | 44 px | Primary navigation and prominent actions |
+| `--sidebar-width` | 300 px | Conversation and workspace navigation |
+| `--inspector-width` | 390 px | Agent activity, plan, suggestions, artifacts |
+| `--content-width` | 840 px | Chat, composer, modes, and quick actions |
+
+Controls may be taller when content requires it, but they should not be shorter than the closest scale token. Icon-only controls remain square. Pills derive height from `--control-sm` and use horizontal padding from the spacing scale.
+
+## Desktop grid
+
+The visual grid uses `--grid-unit: 4px`. Most dimensions and offsets should resolve to multiples of 4; the 6 px spacing token is reserved for close icon-label relationships.
+
+The desktop shell has three regions:
+
+```text
+┌──────────────────┬──────────────────────────────┬──────────────────────┐
+│ Sidebar 300 px   │ Flexible work area           │ Inspector 390 px     │
+│ navigation       │ content max 840 px           │ agent context        │
+└──────────────────┴──────────────────────────────┴──────────────────────┘
+```
+
+- At widths below 1320 px, navigation and inspector contract before content typography changes.
+- At widths below 1120 px, secondary inspector icons may be hidden while labels remain.
+- At compact desktop widths, the inspector hides before the reading column becomes cramped.
+- Layout never solves width pressure by reducing the type scale.
+
+## Premium component treatment
+
+### Navigation
+
+The sidebar has additional horizontal breathing room and a 50 px brand area. Conversations use 52 px rows with stable icon geometry. The selected row combines a subtle violet edge, low-contrast gradient, icon surface, and text contrast; selection never depends on color alone. Workspace rows use the same radius and interaction timing as conversations.
+
+### Agent inspector
+
+The wider inspector accommodates readable labels, status badges, code details, and action groups without premature wrapping. Its header, tabs, and scroll area establish three clear horizontal layers. Timeline markers, cards, diffs, Git, and exports share consistent spacing and border rhythm.
+
+### Home actions
+
+Home cards use a 96 px minimum height, 18 px padding, a dedicated icon surface, 15 px title, and one-pixel hover lift. Their presence comes from composition and whitespace rather than saturation or large shadows.
+
+### Primary composer
+
+The composer has a 72 px initial writing area and may grow to 220 px. The caret uses the accent color, placeholder contrast remains readable, and the focused surface changes only slightly. The send action uses restrained elevation; stop removes that elevation to feel controlled rather than promotional.
+
+### Badges and status
+
+Modes, connection state, branch, workspace, and compact metadata share pill geometry, readable 13 px type, and 30–34 px height. State badges combine label, dot, border, foreground, and background:
+
+- ready/completed: green semantic surface;
+- running/starting: violet semantic surface;
+- planning/waiting/cancelling: amber semantic surface;
+- failed: red semantic surface;
+- disconnected: neutral semantic surface.
+
+Counters use a contained surface and border so they remain distinguishable from labels.
+
+## Motion scale
+
+| Token | Duration | Use |
+| --- | ---: | --- |
+| `--motion-fast` | 120 ms | Hover, color, border, and button feedback |
+| `--motion-base` | 160 ms | Focus, surfaces, dialogs, and state transitions |
+| `--motion-slow` | 240 ms | Progress or larger contextual changes |
+
+All standard transitions use `--ease-standard`, a restrained ease-out curve. Pressed controls move down by no more than 1 px. Home cards may lift by 1 px on hover. Dialog entrance uses 3 px translation and less than one percent scale change. Reduced-motion preferences collapse these durations globally.
+
+## Desktop guidelines
+
+- Optimize for repeated use, not a first-impression animation.
+- Keep the work surface visually quieter than navigation and agent state.
+- Contract chrome before compressing text or controls.
+- Use elevation only to explain layering: composer, menu, dialog, preview.
+- Prefer separators and spacing over multiple nested card backgrounds.
+- Keep primary actions scarce; a section should rarely contain more than one filled button.
+- Preserve stable positions for navigation, send/stop, approvals, and dialog dismissal.
+- Test long project names, long responses, multiple activities, empty panels, and active approvals.
+- At 125% and 150% zoom, protect the chat column before peripheral panels.
+- Never make a desktop interface denser solely because more horizontal space exists.
+
+## UX review — Phase 5.2
+
+This review evaluates the current interface as a first-time user. It documents observations only; the remaining suggestions are not part of Phase 5.2 implementation.
+
+### Strengths
+
+- The three-part desktop layout immediately communicates navigation, work, and agent context.
+- The Nocturne palette is calm and consistent without reducing code or response readability.
+- Build, Review, and Docs remain visible near the composer, keeping agent authority understandable.
+- Agent activity, plans, suggestions, and artifacts use a shared panel structure and predictable tabs.
+- Empty states explain what will appear instead of presenting blank surfaces.
+- The composer is visually stable and comfortable enough for longer prompts.
+- Approval, failure, connection, and execution states use redundant visual cues.
+- Geist and the 13 px floor significantly improve prolonged reading compared with the prototype density.
+
+### Small remaining inconsistencies
+
+- Some legacy CSS declarations remain below the design-system layer even though they are overridden by the current tokens. Consolidating them would improve stylesheet maintainability, but would be a refactor outside this visual-only phase.
+- A few icon sizes are defined directly in JSX. They align visually, but future work should map icon sizes to explicit component primitives.
+- Native `title` tooltips depend on the operating system and do not have the same timing or surface as the application.
+- Dialog semantics and focus trapping are not uniform across every modal; addressing that requires behavioral work rather than visual styling.
+- Project Health explanations currently rely primarily on hover titles in the compact card layout.
+
+### Future suggestions — not implemented
+
+- Create small internal primitives for Button, IconButton, Badge, Tooltip, and Dialog to enforce the documented scale automatically.
+- Add a visual regression suite covering the main desktop widths and 100%, 125%, and 150% zoom.
+- Add a non-blocking command palette preview only if it becomes part of an approved product phase.
+- Standardize focus trapping and initial focus for every modal.
+- Provide a compact, visible explanation affordance for each Project Health metric.
+- Validate the palette with automated contrast tooling as part of CI.
+
+The interface now gives the developer's work the strongest visual weight. Navigation and agent context remain available, but their motion, elevation, and saturation stay deliberately restrained.
