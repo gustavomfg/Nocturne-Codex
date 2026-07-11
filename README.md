@@ -238,8 +238,8 @@ Nocturne Codex starts and supervises the App Server automatically. It does not b
 Download the AppImage from the GitHub Releases page, then:
 
 ```bash
-chmod +x "Nocturne Codex-Linux-0.5.0-beta.AppImage"
-./"Nocturne Codex-Linux-0.5.0-beta.AppImage"
+chmod +x "Nocturne Codex-Linux-0.6.0-beta.AppImage"
+./"Nocturne Codex-Linux-0.6.0-beta.AppImage"
 ```
 
 A `.tar.gz` archive is also produced for the Beta release.

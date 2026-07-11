@@ -3,6 +3,9 @@ import { CodexProcess } from './CodexProcess'
 import type { CodexEvent, CodexStatus, RpcId, RpcMessage, RpcResponse } from './protocol'
 import { AgentStateMachine } from '../../shared/agentState'
 import { reviewInstructions, sandboxModeForAgent, type AgentMode } from '../../shared/suggestions'
+import { APP_VERSION } from '../../shared/constants'
+
+const APPROVAL_METHODS = new Set(['item/commandExecution/requestApproval', 'item/fileChange/requestApproval'])
 
 interface PendingCall {
   resolve: (value: unknown) => void
@@ -35,6 +38,7 @@ export class CodexClient extends EventEmitter {
     this.process.on('exit', (code, _signal, intentional: boolean) => {
       this.loadedThreads.clear()
       this.activeTurns.clear()
+      this.approvalRequests.clear()
       this.rejectPending(new Error(`Codex App Server foi encerrado${code === null ? '.' : ` com código ${code}.`}`))
       const message = `Conexão com o Codex perdida${code === null ? '.' : ` (código ${code}).`}`
       this.setStatus(intentional || this.intentionalStop ? 'disconnected' : 'failed', intentional ? undefined : message)
@@ -134,7 +138,7 @@ export class CodexClient extends EventEmitter {
     this.setStatus(accepted ? 'running' : 'failed', accepted ? undefined : 'Execução recusada pelo usuário.')
   }
 
-  stop() { this.intentionalStop = true; if (this.reconnectTimer) clearTimeout(this.reconnectTimer); this.reconnectTimer = null; this.process.stop() }
+  stop() { this.intentionalStop = true; if (this.reconnectTimer) clearTimeout(this.reconnectTimer); this.reconnectTimer = null; this.approvalRequests.clear(); this.process.stop() }
   async restart(executable = this.executable) {
     const exited = this.process.isRunning() ? new Promise<void>((resolve) => { const timer = setTimeout(resolve, 3_500); this.process.once('exit', () => { clearTimeout(timer); resolve() }) }) : Promise.resolve()
     this.stop()
@@ -150,7 +154,7 @@ export class CodexClient extends EventEmitter {
     this.setStatus('starting')
     this.process.start(this.executable)
     await this.call('initialize', {
-      clientInfo: { name: 'nocturne-codex', title: 'Nocturne Codex', version: '0.5.0-beta' },
+      clientInfo: { name: 'nocturne-codex', title: 'Nocturne Codex', version: APP_VERSION },
       capabilities: { experimentalApi: true, requestAttestation: false },
     })
     this.notify('initialized')
@@ -166,7 +170,12 @@ export class CodexClient extends EventEmitter {
         reject(new Error(`Tempo esgotado ao chamar ${method}.`))
       }, 30_000)
       this.pending.set(id, { resolve, reject, timer })
-      this.process.send({ id, method, params })
+      try { this.process.send({ id, method, params }) }
+      catch (error) {
+        clearTimeout(timer)
+        this.pending.delete(id)
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
     })
   }
 
@@ -190,6 +199,11 @@ export class CodexClient extends EventEmitter {
       const params = (message.params ?? {}) as Record<string, unknown>
       if (message.method === 'item/agentMessage/delta') this.responseBytes += Buffer.byteLength(String(params.delta ?? ''), 'utf8')
       if ('id' in message) {
+        if (!APPROVAL_METHODS.has(message.method)) {
+          this.process.send({ id: message.id, error: { code: -32601, message: `Método do servidor não suportado: ${message.method}` } })
+          this.emit('diagnostic', { level: 'warn', message: `Request desconhecido do App Server recusado: ${message.method}` })
+          return
+        }
         const itemId = String(params.itemId ?? message.id)
         this.approvalRequests.set(itemId, message.id)
         this.setStatus('waiting-approval')

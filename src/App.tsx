@@ -1,19 +1,21 @@
-import { FormEvent, useEffect, useRef, useState } from 'react'
+import { FormEvent, lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Brain, ChevronRight, Code2, Folder, GitBranch, Menu, PanelRight, Settings, Terminal, X } from 'lucide-react'
 import { useAppStore } from './store'
 import type { Activity, AgentMode, Artifact, Attachment, ChangedFile, CodexEvent, CodexSettings, FilePreview, GitInfo, PlanStep, Suggestion, SuggestionStatus, Workspace, WorkspaceMemory } from './types'
 import { Sidebar } from './domains/workspaces/Sidebar'
 import { Composer } from './domains/chat/Composer'
 import { AssistantMessage, MessageBubble, Welcome } from './domains/chat/ChatContent'
-import { AgentPanel } from './domains/agent/AgentPanel'
-import { MemoryDialog, OnboardingDialog, PreviewDialog } from './domains/settings/Dialogs'
-import { SettingsDialog } from './domains/settings/SettingsDialog'
 import { describeChanges, errorMessage, humanizeCommand, isBusy, normalizePlanStatus, parseChanges, statusText } from './shared/format'
 import { UI_TIMING } from '../shared/constants'
 import './styles/components.css'
 
 const now = () => new Date().toISOString()
 const fakeId = () => crypto.randomUUID()
+const AgentPanel = lazy(() => import('./domains/agent/AgentPanel').then((module) => ({ default: module.AgentPanel })))
+const SettingsDialog = lazy(() => import('./domains/settings/SettingsDialog').then((module) => ({ default: module.SettingsDialog })))
+const MemoryDialog = lazy(() => import('./domains/settings/Dialogs').then((module) => ({ default: module.MemoryDialog })))
+const OnboardingDialog = lazy(() => import('./domains/settings/Dialogs').then((module) => ({ default: module.OnboardingDialog })))
+const PreviewDialog = lazy(() => import('./domains/settings/Dialogs').then((module) => ({ default: module.PreviewDialog })))
 
 function App() {
   const store = useAppStore()
@@ -378,18 +380,20 @@ function App() {
       <Composer agentMode={agentMode} attachments={attachments} prompt={prompt} status={store.status} settings={settings} active={Boolean(store.activeId)} composerRef={composerRef} onMode={setAgentMode} onPrompt={setPrompt} onRemoveAttachment={(path) => setAttachments((current) => current.filter((file) => file.path !== path))} onAttach={attachFiles} onCancel={cancelRun} onSubmit={send} onQuick={submitPrompt}/>
     </main>
 
-    <AgentPanel open={rightOpen} activities={store.activities} approvals={store.approvals} diff={store.diff} files={store.files} artifacts={store.artifacts} suggestions={store.suggestions} plan={store.plan} planExplanation={store.planExplanation} activeId={store.activeId} gitInfo={gitInfo} documentContent={documentContent} onDecide={decide} onError={store.setError} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onSuggestionStatus={updateSuggestion} onSuggestionApply={applySuggestion} onPlanChange={(plan) => store.setPlan(plan, store.planExplanation)} onPlanExecute={(plan) => submitPrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`, 'build')}/>
-    {settingsOpen && <SettingsDialog
+    <Suspense fallback={null}><AgentPanel open={rightOpen} activities={store.activities} approvals={store.approvals} diff={store.diff} files={store.files} artifacts={store.artifacts} suggestions={store.suggestions} plan={store.plan} planExplanation={store.planExplanation} activeId={store.activeId} gitInfo={gitInfo} documentContent={documentContent} onDecide={decide} onError={store.setError} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onSuggestionStatus={updateSuggestion} onSuggestionApply={applySuggestion} onPlanChange={(plan) => store.setPlan(plan, store.planExplanation)} onPlanExecute={(plan) => submitPrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`, 'build')}/></Suspense>
+    <Suspense fallback={null}>{settingsOpen && <SettingsDialog
       value={settings}
       status={store.status}
       workspaces={workspaces}
       onClose={() => setSettingsOpen(false)}
       onSave={saveSettings}
       onOnboarding={() => { setSettingsOpen(false); setOnboardingOpen(true) }}
-    />}
+    />}</Suspense>
+    <Suspense fallback={null}>
     {memoryOpen && <MemoryDialog value={memory} onClose={() => setMemoryOpen(false)} onSave={saveMemory}/>}
     {preview && <PreviewDialog preview={preview} activeId={store.activeId} onClose={() => setPreview(null)} onError={store.setError}/>}
     {onboardingOpen && <OnboardingDialog settings={settings} status={store.status} hasWorkspace={Boolean(workspace)} onWorkspace={selectWorkspace} onClose={() => { localStorage.setItem('nocturne.onboarding.completed', 'true'); setOnboardingOpen(false); composerRef.current?.focus() }}/>}
+    </Suspense>
   </div>
 }
 

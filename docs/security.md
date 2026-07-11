@@ -1,6 +1,7 @@
 # Segurança
 
 - `contextIsolation: true`, `nodeIntegration: false` e sandbox do renderer;
+- Content Security Policy explícita, sem scripts inline ou execução de objetos;
 - navegação interna restrita e abertura externa somente por HTTPS;
 - argumentos IPC validados com Zod;
 - caminhos normalizados e confinados ao workspace;

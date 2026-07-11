@@ -1,4 +1,5 @@
 import { app, BrowserWindow, shell } from 'electron'
+import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { CodexClient } from './codex/CodexClient'
@@ -53,6 +54,12 @@ function createWindow() {
   logger = new Logger(app.getPath('logs'), database.getSettings().diagnosticMode === 'true')
   logger.info('app', 'Janela principal iniciada', { packaged: app.isPackaged })
   registerIpc(win, database, codex, logger)
+  if (app.isPackaged && process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT) {
+    const output = path.resolve(process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT)
+    win.webContents.once('did-finish-load', () => {
+      void runPackageSmoke(output)
+    })
+  }
   win.webContents.on('preload-error', (_event, preloadPath, error) => logger?.error('app', `Falha no preload: ${preloadPath}`, error))
   win.webContents.on('did-fail-load', (_event, code, description, url) => logger?.error('app', 'Falha ao carregar renderer', { code, description, url }))
   win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
@@ -73,6 +80,21 @@ function createWindow() {
   win.on('closed', () => clearInterval(memoryTimer))
   if (VITE_DEV_SERVER_URL) void win.loadURL(VITE_DEV_SERVER_URL)
   else void win.loadFile(path.join(RENDERER_DIST, 'index.html'))
+}
+
+async function runPackageSmoke(output: string) {
+  try {
+    const preload = await win?.webContents.executeJavaScript(`(() => {
+      const api = window.nocturne
+      return { available: Boolean(api), settings: typeof api?.settings?.get === 'function', channels: api ? Object.keys(api).sort() : [] }
+    })()` ) as { available: boolean; settings: boolean; channels: string[] } | undefined
+    const sqlite = Boolean(database?.listConversations())
+    fs.writeFileSync(output, `${JSON.stringify({ ok: Boolean(preload?.available && preload.settings && sqlite), packaged: app.isPackaged, preload, sqlite })}\n`, { encoding: 'utf8', mode: 0o600 })
+    app.quit()
+  } catch (error) {
+    fs.writeFileSync(output, `${JSON.stringify({ ok: false, packaged: app.isPackaged, error: error instanceof Error ? error.message : String(error) })}\n`, { encoding: 'utf8', mode: 0o600 })
+    app.exit(1)
+  }
 }
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })

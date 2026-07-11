@@ -25,6 +25,16 @@ export interface MessageRow {
 export interface WorkspaceRow { path: string; name: string; favorite: boolean; createdAt: string; lastOpenedAt: string }
 export interface ArtifactRow { id: string; conversationId: string; workspace: string; type: string; title: string; filePath: string | null; content: string | null; metadata: string | null; createdAt: string; updatedAt: string }
 
+const importColumns: Record<string, ReadonlySet<string>> = {
+  workspaces: new Set(['path', 'name', 'favorite', 'created_at', 'last_opened_at']),
+  conversations: new Set(['id', 'title', 'workspace', 'codex_thread_id', 'created_at', 'updated_at']),
+  messages: new Set(['id', 'conversation_id', 'role', 'content', 'metadata', 'created_at']),
+  artifacts: new Set(['id', 'conversation_id', 'workspace', 'type', 'title', 'file_path', 'content', 'metadata', 'created_at', 'updated_at']),
+  workspace_memory: new Set(['workspace', 'content', 'updated_at']),
+  suggestions: new Set(['id', 'workspace_id', 'conversation_id', 'title', 'description', 'reasoning', 'category', 'severity', 'affected_files', 'proposed_changes', 'expected_benefits', 'complexity', 'risk', 'status', 'result', 'created_at', 'updated_at']),
+  suggestion_decisions: new Set(['id', 'suggestion_id', 'status', 'result', 'created_at']),
+}
+
 export class LocalDatabase {
   private db: Database.Database
   private readonly databasePath: string
@@ -202,18 +212,23 @@ export class LocalDatabase {
     return { schemaVersion: 5, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), suggestions: this.db.prepare('SELECT * FROM suggestions').all(), suggestionDecisions: this.db.prepare('SELECT * FROM suggestion_decisions').all(), settings: this.getSettings() }
   }
 
-  importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[]; suggestions?: unknown[]; suggestionDecisions?: unknown[] }) {
+  importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[]; suggestions?: unknown[]; suggestionDecisions?: unknown[]; settings?: Record<string, string> }) {
     const insert = (table: string, rows: unknown[]) => {
+      const allowed = importColumns[table]
+      if (!allowed) throw new Error(`Tabela de importação não permitida: ${table}.`)
       for (const raw of rows) {
         if (!raw || typeof raw !== 'object') continue
         const row = raw as Record<string, unknown>
-        const keys = Object.keys(row).filter((key) => /^[a-z_]+$/.test(key))
+        const keys = Object.keys(row).filter((key) => allowed.has(key))
         if (!keys.length) continue
         this.db.prepare(`INSERT OR IGNORE INTO ${table} (${keys.join(',')}) VALUES (${keys.map((key) => `@${key}`).join(',')})`).run(row)
       }
     }
-    this.db.transaction(() => { insert('workspaces', data.workspaces); insert('conversations', data.conversations); insert('messages', data.messages); insert('artifacts', data.artifacts); insert('workspace_memory', data.memories); insert('suggestions', data.suggestions ?? []); insert('suggestion_decisions', data.suggestionDecisions ?? []) })()
-    this.cleanupOrphans()
+    this.db.transaction(() => {
+      insert('workspaces', data.workspaces); insert('conversations', data.conversations); insert('messages', data.messages); insert('artifacts', data.artifacts); insert('workspace_memory', data.memories); insert('suggestions', data.suggestions ?? []); insert('suggestion_decisions', data.suggestionDecisions ?? [])
+      if (data.settings) this.setSettings(data.settings)
+      this.cleanupOrphans()
+    })()
   }
 
   private cleanupOrphans() {

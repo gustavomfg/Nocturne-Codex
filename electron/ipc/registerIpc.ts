@@ -46,11 +46,12 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   ipcMain.handle('workspaces:remove', (_event, value: unknown) => database.removeWorkspace(z.string().min(1).parse(value)))
   ipcMain.handle('workspaces:favorite', (_event, value: unknown) => {
     const data = workspaceFavoriteSchema.parse(value)
+    assertKnownWorkspace(database, data.workspace)
     database.setWorkspaceFavorite(data.workspace, data.favorite)
   })
   ipcMain.handle('workspace:openTool', async (_event, value: unknown) => {
     const data = workspaceToolSchema.parse(value)
-    const workspace = path.resolve(data.workspace)
+    const workspace = assertKnownWorkspace(database, data.workspace)
     if (!fs.existsSync(workspace)) throw new Error('Workspace não encontrado.')
     if (data.tool === 'editor') {
       try { await run('code', [workspace], workspace) } catch { throw new Error('Não foi possível abrir o VS Code. Verifique se o comando “code” está no PATH.') }
@@ -65,7 +66,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
 
   ipcMain.handle('conversations:list', () => database.listConversations())
   ipcMain.handle('conversations:create', (_event, value: unknown) => {
-    const workspace = z.string().min(1).parse(value)
+    const workspace = assertKnownWorkspace(database, z.string().min(1).parse(value))
     ensureNocturneWorkspace(workspace)
     return database.createConversation(workspace)
   })
@@ -139,8 +140,11 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   ipcMain.handle('data:import', async () => {
     const result = await dialog.showOpenDialog(win, { title: 'Importar dados do Nocturne', properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] })
     if (result.canceled || !result.filePaths[0]) return false
-    const schema = z.object({ schemaVersion: z.number().int().min(1).max(5), conversations: z.array(z.record(z.string(), z.unknown())).max(100_000), workspaces: z.array(z.record(z.string(), z.unknown())).max(10_000), messages: z.array(z.record(z.string(), z.unknown())).max(1_000_000), artifacts: z.array(z.record(z.string(), z.unknown())).max(1_000_000), memories: z.array(z.record(z.string(), z.unknown())).max(10_000), suggestions: z.array(z.record(z.string(), z.unknown())).max(100_000).optional(), suggestionDecisions: z.array(z.record(z.string(), z.unknown())).max(1_000_000).optional() })
-    database.importData(schema.parse(JSON.parse(fs.readFileSync(result.filePaths[0], 'utf8'))))
+    const importPath = result.filePaths[0]
+    if (fs.statSync(importPath).size > 100_000_000) throw new Error('O backup excede o limite de 100 MB.')
+    const importedSettings = z.object({ model: z.string().max(100).optional(), sandbox: z.enum(['read-only', 'workspace-write']).optional(), approvalPolicy: z.enum(['untrusted', 'on-request', 'never']).optional(), diagnosticMode: z.enum(['true', 'false']).optional(), theme: z.enum(['dark', 'system']).optional(), defaultAgentMode: z.enum(agentModes).optional() })
+    const schema = z.object({ schemaVersion: z.number().int().min(1).max(5), conversations: z.array(z.record(z.string(), z.unknown())).max(100_000), workspaces: z.array(z.record(z.string(), z.unknown())).max(10_000), messages: z.array(z.record(z.string(), z.unknown())).max(1_000_000), artifacts: z.array(z.record(z.string(), z.unknown())).max(1_000_000), memories: z.array(z.record(z.string(), z.unknown())).max(10_000), suggestions: z.array(z.record(z.string(), z.unknown())).max(100_000).optional(), suggestionDecisions: z.array(z.record(z.string(), z.unknown())).max(1_000_000).optional(), settings: importedSettings.optional() })
+    database.importData(schema.parse(JSON.parse(fs.readFileSync(importPath, 'utf8'))))
     logger.info('persistence', 'Dados importados')
     return true
   })
@@ -254,7 +258,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     if (data.codexPath && path.isAbsolute(data.codexPath) && (!fs.existsSync(data.codexPath) || !fs.statSync(data.codexPath).isFile())) throw new Error('Executável do Codex não encontrado.')
     logger.setDiagnostic(Boolean(data.diagnosticMode))
     database.setSettings({ ...data, diagnosticMode: String(Boolean(data.diagnosticMode)) })
-    return database.getSettings()
+    return { ...database.getSettings(), diagnosticMode: Boolean(data.diagnosticMode) }
   })
 
   ipcMain.handle('git:status', async (_event, value: unknown) => gitStatus(getConversation(database, idSchema.parse(value)).workspace))
@@ -299,6 +303,15 @@ function getConversation(database: LocalDatabase, id: string) {
   return conversation
 }
 
+function assertKnownWorkspace(database: LocalDatabase, value: string) {
+  const workspace = path.resolve(value)
+  const known = [...database.listWorkspaces().map((item) => item.path), ...database.listConversations().map((item) => item.workspace)]
+    .some((item) => path.resolve(item) === workspace)
+  if (!known) throw new Error('Workspace não autorizado. Selecione-o pelo aplicativo antes de continuar.')
+  if (!fs.existsSync(workspace) || !fs.statSync(workspace).isDirectory()) throw new Error('Workspace não encontrado.')
+  return workspace
+}
+
 function assertWorkspace(conversation: ConversationRow) {
   const workspace = path.resolve(conversation.workspace)
   if (!fs.existsSync(workspace) || !fs.statSync(workspace).isDirectory()) {
@@ -307,8 +320,8 @@ function assertWorkspace(conversation: ConversationRow) {
 }
 
 function assertInsideWorkspace(filePath: string, workspace: string) {
-  const relative = path.relative(path.resolve(workspace), path.resolve(filePath))
-  if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('O arquivo precisa estar dentro do workspace selecionado.')
+  try { resolveInsideWorkspace(filePath, workspace) }
+  catch { throw new Error('O arquivo precisa estar dentro do workspace selecionado.') }
 }
 
 function resolveWorkspaceFile(filePath: string, workspace: string) {
@@ -385,6 +398,7 @@ interface ProjectContext { name: string; stack: string[]; primaryLanguage: strin
 function ensureNocturneWorkspace(workspace: string) {
   const directory = path.join(workspace, '.nocturne')
   fs.mkdirSync(directory, { recursive: true })
+  resolveInsideWorkspace(directory, workspace)
   const projectPath = path.join(directory, 'project.json')
   const memoryPath = path.join(directory, 'memory.md')
   const rulesPath = path.join(directory, 'rules.md')

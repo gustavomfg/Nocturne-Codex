@@ -1,3 +1,5 @@
+export const APP_VERSION = '0.6.0-beta'
+
 export const RENDERER_LIMITS = {
   activities: 300,
   activityDetailCharacters: 64_000,

@@ -7,7 +7,7 @@ const on = (channel: string, listener: (payload: unknown) => void) => {
   return () => ipcRenderer.removeListener(channel, handler)
 }
 
-contextBridge.exposeInMainWorld('nocturne', {
+export const nocturneApi = {
   workspace: {
     select: () => ipcRenderer.invoke(channels.workspace.select),
     validate: (workspace: string) => ipcRenderer.invoke(channels.workspace.validate, workspace),
@@ -50,4 +50,6 @@ contextBridge.exposeInMainWorld('nocturne', {
     saveMarkdown: (conversationId: string, content: string, name?: string) => ipcRenderer.invoke(channels.documents.saveMarkdown, { conversationId, content, name }),
     export: (conversationId: string, content: string, format: 'docx' | 'pdf' | 'html') => ipcRenderer.invoke(channels.documents.export, { conversationId, content, format }),
   },
-})
+}
+
+contextBridge.exposeInMainWorld('nocturne', nocturneApi)

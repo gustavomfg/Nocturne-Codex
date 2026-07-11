@@ -1,4 +1,5 @@
 import path from 'node:path'
+import fs from 'node:fs'
 
 export type CommandRisk = 'safe' | 'sensitive' | 'dangerous'
 export interface CommandAssessment { risk: CommandRisk; reasons: string[]; requiresApproval: boolean; blockedAutomatic: boolean }
@@ -25,9 +26,22 @@ export function assessCommand(command: string | string[]): CommandAssessment {
 export function resolveInsideWorkspace(candidate: string, workspace: string) {
   const root = path.resolve(workspace)
   const resolved = path.resolve(root, candidate)
-  const relative = path.relative(root, resolved)
-  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw new Error('Acesso bloqueado: o caminho está fora do workspace.')
+  assertContained(resolved, root)
+  const realRoot = fs.realpathSync.native(root)
+  let existing = resolved
+  while (!fs.existsSync(existing)) {
+    const parent = path.dirname(existing)
+    if (parent === existing) break
+    existing = parent
+  }
+  const realExisting = fs.realpathSync.native(existing)
+  assertContained(realExisting, realRoot)
   return resolved
+}
+
+function assertContained(candidate: string, root: string) {
+  const relative = path.relative(root, candidate)
+  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw new Error('Acesso bloqueado: o caminho está fora do workspace.')
 }
 
 function tokenize(command: string) {

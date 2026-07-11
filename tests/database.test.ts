@@ -18,7 +18,14 @@ describe('persistência SQLite', () => {
     expect(db.listArtifacts(conversation.id)[0].type).toBe('markdown'); db.close()
   })
   it('exporta e importa um fluxo completo restaurável', () => {
-    const source = create(); const conversation = source.createConversation('/tmp/project'); source.addMessage(conversation.id, 'assistant', 'Resposta simulada'); const data = source.exportData(); source.close()
-    const target = create(); target.importData(data); expect(target.listConversations()).toHaveLength(1); expect(target.listMessages(conversation.id)[0].content).toBe('Resposta simulada'); target.close()
+    const source = create(); const conversation = source.createConversation('/tmp/project'); source.addMessage(conversation.id, 'assistant', 'Resposta simulada'); source.setSettings({ theme: 'dark', model: 'modelo-teste' }); const data = source.exportData(); source.close()
+    const target = create(); target.importData(data); expect(target.listConversations()).toHaveLength(1); expect(target.listMessages(conversation.id)[0].content).toBe('Resposta simulada'); expect(target.getSettings().model).toBe('modelo-teste'); target.close()
+  })
+  it('ignora colunas desconhecidas em backups sem executar SQL arbitrário', () => {
+    const db = create(); const conversation = db.createConversation('/tmp/project'); const data = db.exportData()
+    data.conversations[0] = { ...(data.conversations[0] as object), 'invalid_column': 'ignorada' }
+    expect(() => db.importData(data)).not.toThrow()
+    expect(db.listConversations().some((item) => item.id === conversation.id)).toBe(true)
+    db.close()
   })
 })

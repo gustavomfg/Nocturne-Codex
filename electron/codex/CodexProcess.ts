@@ -47,7 +47,7 @@ export class CodexProcess extends EventEmitter {
     this.stopping = true
     this.child.kill('SIGTERM')
     const child = this.child
-    setTimeout(() => { if (this.child === child && !child.killed) child.kill('SIGKILL') }, 3_000).unref()
+    setTimeout(() => { if (this.child === child) child.kill('SIGKILL') }, 3_000).unref()
   }
 
   isRunning() { return Boolean(this.child && !this.child.killed) }
