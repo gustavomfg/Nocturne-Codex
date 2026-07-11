@@ -387,3 +387,119 @@ button { border:0; background:none; cursor:pointer; }
   .inspector-tabs button svg { display: none; }
   .suggestions { gap: var(--spacing-md); }
 }
+
+/* Motion, continuity, and perceived performance */
+.sidebar {
+  transition: width var(--motion-base) var(--ease-standard), flex-basis var(--motion-base) var(--ease-standard), padding var(--motion-base) var(--ease-standard), opacity var(--motion-fast) var(--ease-standard), border-color var(--motion-base) var(--ease-standard);
+}
+.sidebar.collapsed { opacity: 0; }
+
+.inspector {
+  min-width: 0;
+  overflow: hidden;
+  opacity: 1;
+  clip-path: inset(0 0 0 0);
+  transition: width var(--motion-slow) var(--ease-standard), flex-basis var(--motion-slow) var(--ease-standard), opacity var(--motion-base) var(--ease-standard), clip-path var(--motion-slow) var(--ease-standard), border-color var(--motion-base) var(--ease-standard);
+}
+.inspector > .inspector-header,
+.inspector > .inspector-tabs,
+.inspector > .inspector-scroll { min-width: var(--inspector-width); }
+.inspector.open > .inspector-header,
+.inspector.open > .inspector-tabs,
+.inspector.open > .inspector-scroll { animation: inspector-content-in var(--motion-slow) var(--ease-standard); }
+.inspector.closed {
+  width: 0;
+  flex-basis: 0;
+  opacity: 0;
+  clip-path: inset(0 0 0 100%);
+  border-left-color: transparent;
+  pointer-events: none;
+}
+.inspector.closed > .inspector-header,
+.inspector.closed > .inspector-tabs,
+.inspector.closed > .inspector-scroll { animation: inspector-content-out var(--motion-base) var(--ease-standard) both; }
+@keyframes inspector-content-in { from { opacity: 0; transform: translateX(10px); } }
+@keyframes inspector-content-out { to { opacity: 0; transform: translateX(8px); } }
+
+.tab-panel,
+.plan-panel,
+.suggestions-view,
+.artifact-list,
+.inspector-scroll > .inspector-empty { animation: panel-content-in var(--motion-base) var(--ease-standard); }
+@keyframes panel-content-in { from { opacity: 0; transform: translateY(3px); } }
+
+.composer-bottom { border-top: 0; background: transparent; }
+.composer textarea { transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard); }
+.attachment-list { animation: panel-content-in var(--motion-base) var(--ease-standard); }
+.send-button svg { transition: opacity var(--motion-fast) var(--ease-standard), transform var(--motion-fast) var(--ease-standard); }
+.send-button:hover:not(:disabled) svg { transform: translateX(1px); }
+.send-button.stop:hover:not(:disabled) svg { transform: scale(.94); }
+
+.conversation-item,
+.workspace-mini,
+.workspace-card,
+.artifact-card,
+.changed-file,
+.suggestions button,
+.health-grid span {
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-standard);
+}
+.conversation-icon,
+.workspace-icon,
+.artifact-icon,
+.inspector-tabs b,
+.agent-mode-switch button span {
+  transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard), transform var(--motion-fast) var(--ease-standard);
+}
+.conversation-item:hover .conversation-icon,
+.workspace-card:hover .workspace-icon,
+.artifact-card:hover .artifact-icon { transform: scale(1.025); }
+.inspector-tabs button::after {
+  content: '';
+  position: absolute;
+  right: 22%;
+  bottom: -2px;
+  left: 22%;
+  height: 2px;
+  background: var(--color-accent);
+  border-radius: 2px;
+  opacity: 0;
+  transform: scaleX(.65);
+  transition: opacity var(--motion-fast) var(--ease-standard), transform var(--motion-base) var(--ease-standard);
+}
+.inspector-tabs button.active::after { opacity: 1; transform: scaleX(1); }
+
+.chat-scroll,
+.inspector-scroll,
+.conversation-list,
+.settings-scroll,
+.preview-content,
+.suggestion-dialog-body {
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.chat-scroll { scroll-behavior: smooth; }
+.timeline-item,
+.artifact-card,
+.suggestion-card { content-visibility: auto; contain-intrinsic-size: auto 52px; }
+.assistant-row { overflow-anchor: none; }
+.chat-content > div:last-child { overflow-anchor: auto; }
+
+.connection.starting > span,
+.status-dot.starting { animation: status-breathe 1.8s var(--ease-standard) infinite; }
+@keyframes status-breathe { 50% { opacity: .62; box-shadow: 0 0 0 4px rgb(167 138 248 / 8%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .inspector.open > .inspector-header,
+  .inspector.open > .inspector-tabs,
+  .inspector.open > .inspector-scroll,
+  .inspector.closed > .inspector-header,
+  .inspector.closed > .inspector-tabs,
+  .inspector.closed > .inspector-scroll,
+  .tab-panel,
+  .plan-panel,
+  .suggestions-view,
+  .artifact-list,
+  .inspector-scroll > .inspector-empty { animation: none; }
+}

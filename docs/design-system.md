@@ -277,6 +277,92 @@ Counters use a contained surface and border so they remain distinguishable from 
 
 All standard transitions use `--ease-standard`, a restrained ease-out curve. Pressed controls move down by no more than 1 px. Home cards may lift by 1 px on hover. Dialog entrance uses 3 px translation and less than one percent scale change. Reduced-motion preferences collapse these durations globally.
 
+## Motion Design
+
+Motion in Nocturne Codex exists to preserve spatial continuity, confirm input, and reduce perceived latency. It must never compete with source code, agent output, or a pending decision.
+
+### Durations and easing
+
+- **Fast — 120 ms:** hover, pressed, icon, border, color, and badge feedback.
+- **Normal — 160 ms:** focus, tab content, attachments, dialog content, and state transitions.
+- **Slow — 240 ms:** sidebars, panel geometry, progress, and larger contextual surfaces.
+- **Standard easing:** `cubic-bezier(.2, .8, .2, 1)` for entrances, exits, and direct manipulation feedback.
+
+Do not create component-specific easings without documenting a physical reason. Components of the same class must use the same duration even when placed in different panels.
+
+### Principles
+
+1. **Continuity over spectacle.** Movement explains where a surface came from and where it went.
+2. **Immediate response.** Color, border, or pressed feedback begins within the fast duration.
+3. **Small distance.** Content movement is normally 1–10 px; larger travel feels detached from desktop work.
+4. **Stable layout.** Animate shell geometry deliberately and avoid incidental content reflow.
+5. **Opacity supports position.** Sliding surfaces fade slightly so clipped edges never flicker.
+6. **Interruptible interaction.** CSS transitions must reverse naturally when the user changes direction.
+7. **Respect preference.** `prefers-reduced-motion` removes nonessential transforms, breathing, and entrances.
+
+### Sidebars
+
+- The left sidebar transitions width, flex basis, padding, opacity, and border together over 160 ms.
+- The agent inspector transitions width, flex basis, clip, opacity, and border over 240 ms.
+- Inspector content uses a synchronized 8–10 px horizontal movement with opacity.
+- Closed panels remain mounted for the duration and become `inert`, preventing invisible keyboard targets.
+- Panel state must reverse cleanly if the toggle is pressed before the transition finishes.
+
+### Panels and tabs
+
+- Activity, Plan, Suggestions, Artifacts, and empty states enter with 3 px vertical movement and fade over 160 ms.
+- The active tab underline scales horizontally rather than appearing abruptly.
+- Count badges transition surface and border in 120 ms; they do not bounce or pulse.
+- Long timeline, artifact, and suggestion lists use `content-visibility: auto` so offscreen cards do not consume unnecessary paint.
+
+### Dialogs
+
+- Backdrops fade over 160 ms.
+- Dialog surfaces enter with 3 px vertical movement and a scale change from `.996` to `1`.
+- Dialog shadows do not animate independently because large blurred paints are expensive.
+- Dismissal should feel immediate; when a future shared presence primitive is introduced, it should mirror the entrance without extending interaction latency.
+
+### Composer and input
+
+- The composer is a single visual surface; the writing area and toolbar have no visible dividing line.
+- Hover adjusts only border contrast. Focus adjusts surface, border, and focus shadow over 160 ms.
+- The caret uses the accent color and native blink behavior.
+- Attachments fade and move vertically by 3 px when added.
+- Send icon movement is limited to 1 px; stop feedback uses a subtle scale reduction.
+- Placeholder changes rely on color transition, never movement.
+
+### Buttons, cards, and lists
+
+- Buttons respond in 120 ms and move down 1 px while pressed.
+- Home cards may lift 1 px on hover; ordinary list rows remain positionally stable.
+- Icons may scale to at most `1.025` when their parent row is hovered.
+- Disabled controls do not animate and keep a recognizable shape at reduced opacity.
+- Focus remains more visible than hover and is never delayed by animation.
+
+### Status and loading
+
+- Starting state uses a restrained 1.8-second opacity/border breath only on the status indicator.
+- Running work uses the existing slow rotation on its local activity marker.
+- Streaming uses the caret without animating the entire response surface.
+- Success, warning, error, waiting, and disconnected transitions change semantic foreground, background, and border together.
+- Loading animation must remain local to the component doing work; avoid full-window indeterminate motion.
+
+### Scroll behavior
+
+- Chat, inspector, conversations, settings, previews, and suggestion details contain overscroll.
+- Scrollbar gutters remain stable to avoid horizontal layout shift.
+- Message scroll uses smooth behavior; nested technical areas remain independently controllable.
+- The message end is the scroll anchor, while individual assistant rows do not compete for anchoring.
+- Never animate scroll-linked shadows or large blurred backgrounds.
+
+### Paint and reflow guidance
+
+- Animate `opacity`, `transform`, `clip-path`, and deliberate panel dimensions only.
+- Do not animate large shadows, backdrop filters, gradients, or code block dimensions.
+- Use `content-visibility` for long repeated lists after verifying intrinsic size.
+- Avoid permanent `will-change`; it consumes compositor memory during long sessions.
+- Memoize expensive rendered content only when profiling identifies repeated work.
+
 ## Desktop guidelines
 
 - Optimize for repeated use, not a first-impression animation.
@@ -323,3 +409,34 @@ This review evaluates the current interface as a first-time user. It documents o
 - Validate the palette with automated contrast tooling as part of CI.
 
 The interface now gives the developer's work the strongest visual weight. Navigation and agent context remain available, but their motion, elevation, and saturation stay deliberately restrained.
+
+## UX review — Phase 5.3
+
+The motion review followed the questions “does this feel instant?”, “does this feel smooth?”, and “does this feel natural?” across the existing interface.
+
+### Friction removed
+
+- The right inspector no longer teleports in or out; both directions preserve spatial continuity.
+- Tab content no longer appears as a hard visual cut.
+- Composer writing area and toolbar now read as one integrated control.
+- Status changes transition as one semantic unit instead of independent color changes.
+- Hover and pressed timing is consistent across navigation, cards, buttons, and list rows.
+- Stable scrollbar gutters reduce horizontal flicker as content begins to overflow.
+- Offscreen repeated cards avoid unnecessary paint in long activity and suggestion sessions.
+- Completed Markdown messages are memoized, preventing expensive repeat rendering when unrelated shell state changes.
+
+### Profiling observations
+
+- The largest renderer cost remains Markdown parsing/rendering for long responses. Persisted messages now skip unrelated re-renders; the actively streaming message still updates by design and retains existing throttling.
+- Activity is capped at 300 entries and detail text at 64,000 characters. `content-visibility` reduces paint for offscreen entries without changing those safety limits.
+- Panel width transitions cause deliberate shell layout work for 240 ms. This is bounded, infrequent, and preferable to transform-based panel composition, which would interfere with fixed preview dialogs nested inside the inspector.
+- Large shadows and backdrop blur remain static during motion to avoid expensive repaints.
+
+### Remaining polish opportunities — not implemented
+
+- A shared presence primitive could provide true exit animation for every conditionally mounted dialog.
+- A controlled textarea height transition could be considered after measuring typing latency on lower-end hardware.
+- React Profiler traces from packaged builds could establish budgets for extremely long Markdown conversations.
+- Native tooltips could eventually be replaced by a lightweight shared tooltip primitive.
+
+These items were intentionally left for a future approved phase because they require shared behavioral primitives or broader profiling infrastructure.
