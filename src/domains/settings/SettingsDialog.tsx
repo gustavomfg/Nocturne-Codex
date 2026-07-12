@@ -16,20 +16,24 @@ const settingsPages: Array<{ id: SettingsPage; label: string; description: strin
 export function SettingsDialog({ value, status, workspaces, onClose, onSave, onOnboarding }: { value: CodexSettings; status: string; workspaces: Workspace[]; onClose(): void; onSave(value: CodexSettings): void; onOnboarding(): void }) {
   const [form, setForm] = useState(value)
   const [page, setPage] = useState<SettingsPage>('codex')
-  const [diagnostic, setDiagnostic] = useState('Carregando diagnóstico…')
+  const [diagnostic, setDiagnostic] = useState('Abra esta seção para carregar o diagnóstico.')
   const dialogRef = useDialogA11y<HTMLDivElement>(onClose)
-  useEffect(() => { void window.nocturne.codex.diagnostics().then((item) => setDiagnostic(`PID: ${item.pid ?? '—'} · ${item.executable}\nÚltima falha: ${item.lastFailure || 'nenhuma'}`)).catch((error) => setDiagnostic(errorMessage(error))) }, [])
+  useEffect(() => {
+    if (page !== 'diagnostics') return
+    setDiagnostic('Carregando diagnóstico…')
+    void window.nocturne.codex.diagnostics().then((item) => setDiagnostic(`PID: ${item.pid ?? '—'} · ${item.executable}\nÚltima falha: ${item.lastFailure || 'nenhuma'}`)).catch((error) => setDiagnostic(errorMessage(error)))
+  }, [page])
   const copyDiagnostic = async () => { const content = await window.nocturne.diagnostics.copy(); await navigator.clipboard.writeText(content) }
   const currentPage = settingsPages.find((item) => item.id === page) ?? settingsPages[0]
 
-  return <div className="modal-backdrop" onMouseDown={onClose}>
+  return <div className="modal-backdrop settings-backdrop" onMouseDown={onClose}>
     <div ref={dialogRef} className="settings-dialog beta-settings" role="dialog" aria-modal="true" aria-labelledby="settings-title" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
       <header className="settings-header"><div className="settings-heading"><span><Settings size={17}/></span><div><strong id="settings-title">Configurações</strong><small>Personalize sua experiência no Nocturne</small></div></div><button className="settings-close" aria-label="Fechar configurações" title="Fechar" onClick={onClose}><X size={17}/></button></header>
       <div className="settings-layout">
         <nav className="settings-navigation" aria-label="Seções das configurações">
           {settingsPages.map((item) => { const Icon = item.icon; return <button key={item.id} className={page === item.id ? 'active' : ''} aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}><Icon size={17}/><span><strong>{item.label}</strong><small>{item.description}</small></span></button> })}
         </nav>
-        <main className="settings-content" key={page}>
+        <main className="settings-content">
           <div className="settings-page-title"><span><currentPage.icon size={19}/></span><div><h2>{currentPage.label}</h2><p>{currentPage.description}</p></div></div>
           {page === 'codex' && <SettingsSection title="Conexão"><div className="codex-info"><span className={`status-dot ${status}`}/><div><strong>{statusText(status)}</strong><small>{value.codexVersion || 'Versão indisponível'} · {value.authenticated ? 'Autenticado' : 'Login necessário'}</small></div></div><label>Executável<input value={form.codexPath || ''} onChange={(event) => setForm({ ...form, codexPath: event.target.value })} placeholder="codex ou caminho absoluto"/></label><label>Modelo<input value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} placeholder="Padrão do Codex"/></label><div className="settings-columns"><label>Sandbox<select value={form.sandbox} onChange={(event) => setForm({ ...form, sandbox: event.target.value as CodexSettings['sandbox'] })}><option value="read-only">Somente leitura</option><option value="workspace-write">Escrita no workspace</option></select></label><label>Aprovações<select value={form.approvalPolicy} onChange={(event) => setForm({ ...form, approvalPolicy: event.target.value as CodexSettings['approvalPolicy'] })}><option value="untrusted">Não confiáveis</option><option value="on-request">Quando solicitado</option><option value="never">Sempre proteger riscos</option></select></label></div></SettingsSection>}
           {page === 'workspace' && <SettingsSection title="Projetos recentes"><div className="settings-workspaces">{workspaces.slice(0, 6).map((workspace) => <div key={workspace.path}><span className="workspace-setting-icon"><Folder size={15}/></span><span><strong>{workspace.name}</strong><small>{workspace.path}</small></span>{workspace.favorite && <Star className="workspace-setting-star" size={13} fill="currentColor"/>}</div>)}{!workspaces.length && <p className="settings-empty">Nenhum workspace recente.</p>}</div></SettingsSection>}

@@ -13,7 +13,8 @@ import './styles/components.css'
 const now = () => new Date().toISOString()
 const fakeId = () => crypto.randomUUID()
 const AgentPanel = lazy(() => import('./domains/agent/AgentPanel').then((module) => ({ default: module.AgentPanel })))
-const SettingsDialog = lazy(() => import('./domains/settings/SettingsDialog').then((module) => ({ default: module.SettingsDialog })))
+const loadSettingsDialog = () => import('./domains/settings/SettingsDialog').then((module) => ({ default: module.SettingsDialog }))
+const SettingsDialog = lazy(loadSettingsDialog)
 const MemoryDialog = lazy(() => import('./domains/settings/Dialogs').then((module) => ({ default: module.MemoryDialog })))
 const OnboardingDialog = lazy(() => import('./domains/settings/Dialogs').then((module) => ({ default: module.OnboardingDialog })))
 const PreviewDialog = lazy(() => import('./domains/settings/Dialogs').then((module) => ({ default: module.PreviewDialog })))
@@ -72,6 +73,12 @@ function App() {
     if (nearBottom) endRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
   }, [store.messages, store.streaming])
   useEffect(() => { document.documentElement.dataset.theme = settings.theme || 'dark' }, [settings.theme])
+  useEffect(() => {
+    const preload = () => { void loadSettingsDialog() }
+    const idle = window.requestIdleCallback?.(preload, { timeout: 1_500 })
+    if (idle === undefined) { const timer = window.setTimeout(preload, 500); return () => window.clearTimeout(timer) }
+    return () => window.cancelIdleCallback?.(idle)
+  }, [])
   useEffect(() => {
     const shortcuts = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey)) { if (event.key === 'Escape' && isBusy(useAppStore.getState().status) && !document.querySelector('[aria-modal="true"]')) void cancelRun(); return }

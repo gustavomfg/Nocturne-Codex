@@ -638,6 +638,16 @@ button { border:0; background:none; cursor:pointer; }
 .git-file-status { min-width: 20px; color: var(--color-warning); font-family: var(--font-mono); font-size: var(--font-caption); }
 .git-clean { margin: 0; padding: var(--spacing-md); color: var(--color-text-muted); font-size: var(--font-small); }
 
+/* Settings performance: keep opening on compositor-only properties. */
+.settings-backdrop { background: rgb(3 3 5 / 78%); backdrop-filter: none; contain: strict; isolation: isolate; }
+.settings-backdrop.beta-settings { contain: none; }
+.settings-backdrop .beta-settings { contain: layout paint style; transform: translateZ(0); backface-visibility: hidden; box-shadow: 0 24px 64px rgb(0 0 0 / 52%); animation: settings-dialog-enter 140ms var(--ease-standard); }
+.settings-backdrop { animation: settings-backdrop-enter 110ms linear; }
+.settings-content { animation: none; contain: layout paint style; }
+.settings-layout, .settings-navigation, .settings-header, .settings-footer { transform: translateZ(0); }
+@keyframes settings-backdrop-enter { from { opacity: 0; } }
+@keyframes settings-dialog-enter { from { opacity: 0; transform: translate3d(0, 5px, 0) scale(.995); } }
+
 @media (max-width: 980px) {
   .panel-backdrop { position: fixed; inset: 0; z-index: 9; display: block; background: rgb(0 0 0 / 46%); backdrop-filter: blur(2px); animation: nocturne-fade-in var(--motion-fade) var(--ease-standard); }
   .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 10; display: flex; width: min(310px, 88vw); max-width: 88vw; height: 100%; box-shadow: 24px 0 70px rgb(0 0 0 / 58%); }
