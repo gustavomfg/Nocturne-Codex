@@ -15,8 +15,8 @@ const electron = vi.hoisted(() => {
     save: [] as Array<{ canceled: boolean; filePath?: string }>,
   }
   let exposed: NocturneApi | null = null
-  const mainFrame = { routingId: 1 }
-  const mainWebContents: { send(channel: string, payload: unknown): void; mainFrame: typeof mainFrame } = { send: () => undefined, mainFrame }
+  const mainFrame = { routingId: 1, url: 'file:///nocturne/index.html' }
+  const mainWebContents: { send(channel: string, payload: unknown): void; mainFrame: typeof mainFrame; getURL(): string } = { send: () => undefined, mainFrame, getURL: () => mainFrame.url }
   return {
     handlers,
     rendererListeners,
@@ -34,7 +34,7 @@ vi.mock('electron', () => ({
   dialog: {
     showOpenDialog: vi.fn(async () => electron.dialogs.open.shift() ?? { canceled: true, filePaths: [] }),
     showSaveDialog: vi.fn(async () => electron.dialogs.save.shift() ?? { canceled: true }),
-    showMessageBox: vi.fn(async () => ({ response: 0 })),
+    showMessageBox: vi.fn(async () => ({ response: 1 })),
   },
   ipcMain: { handle: (channel: string, handler: IpcHandler) => electron.handlers.set(channel, handler) },
   ipcRenderer: {

@@ -22,6 +22,12 @@ describe('persistência SQLite', () => {
     const source = create(); const conversation = source.createConversation('/tmp/project'); source.addMessage(conversation.id, 'assistant', 'Resposta simulada'); source.setSettings({ theme: 'dark', model: 'modelo-teste' }); const data = source.exportData(); source.close()
     const target = create(); target.importData(data); expect(target.listConversations()).toHaveLength(1); expect(target.listMessages(conversation.id)[0].content).toBe('Resposta simulada'); expect(target.getSettings().model).toBe('modelo-teste'); target.close()
   })
+  it('substitui dados locais ao restaurar em vez de mesclar históricos', () => {
+    const source = create(); const restored = source.createConversation('/tmp/restored'); const data = source.exportData(); source.close()
+    const target = create(); target.createConversation('/tmp/old'); target.importData(data)
+    expect(target.listConversations().map((item) => item.id)).toEqual([restored.id])
+    target.close()
+  })
   it('ignora colunas desconhecidas em backups sem executar SQL arbitrário', () => {
     const db = create(); const conversation = db.createConversation('/tmp/project'); const data = db.exportData()
     data.conversations[0] = { ...(data.conversations[0] as object), 'invalid_column': 'ignorada' }

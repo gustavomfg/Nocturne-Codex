@@ -16,9 +16,7 @@ export function registerGitIpc(win: BrowserWindow, database: LocalDatabase) {
     const data = gitCommitSchema.parse(value)
     const workspace = getWorkspace(database, data.conversationId)
     const current = await gitStatus(workspace)
-    const selected = new Set(data.files)
-    const expanded = current.files.filter((file) => selected.has(file.path)).flatMap((file) => [file.path, ...(file.originalPath ? [file.originalPath] : [])])
-    const files = [...new Set(expanded)].map((file) => {
+    const files = resolveSelectedGitFiles(current.files, data.files).map((file) => {
       resolveInsideWorkspace(path.resolve(workspace, file), workspace)
       return file
     })
@@ -28,6 +26,18 @@ export function registerGitIpc(win: BrowserWindow, database: LocalDatabase) {
     const { stdout } = await run('git', ['commit', '-m', data.message], { cwd: workspace })
     return { output: stdout.trim() }
   })
+}
+
+export function resolveSelectedGitFiles(currentFiles: Array<{ path: string; originalPath?: string }>, requestedFiles: string[]) {
+  if (!requestedFiles.length) throw new Error('Selecione ao menos um arquivo para criar o commit.')
+  const currentByPath = new Map(currentFiles.map((file) => [file.path, file]))
+  const missing = requestedFiles.filter((file) => !currentByPath.has(file))
+  if (missing.length) throw new Error(`A seleção do Git ficou desatualizada. Atualize o painel e tente novamente: ${missing.join(', ')}`)
+  const expanded = requestedFiles.flatMap((file) => {
+    const current = currentByPath.get(file)!
+    return [current.path, ...(current.originalPath ? [current.originalPath] : [])]
+  })
+  return [...new Set(expanded)]
 }
 
 function getWorkspace(database: LocalDatabase, id: string) {

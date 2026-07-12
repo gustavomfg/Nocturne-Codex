@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { useDialogA11y } from './useDialogA11y'
 
@@ -7,8 +7,14 @@ interface Confirmation { title: string; description: string; confirmLabel: strin
 
 export function useConfirmDialog() {
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
-  const confirm = (options: Omit<Confirmation, 'resolve'>) => new Promise<boolean>((resolve) => setConfirmation({ ...options, resolve }))
-  const close = (result: boolean) => { confirmation?.resolve(result); setConfirmation(null) }
+  const pendingRef = useRef<Confirmation['resolve'] | null>(null)
+  useEffect(() => () => { pendingRef.current?.(false); pendingRef.current = null }, [])
+  const confirm = (options: Omit<Confirmation, 'resolve'>) => new Promise<boolean>((resolve) => {
+    pendingRef.current?.(false)
+    pendingRef.current = resolve
+    setConfirmation({ ...options, resolve })
+  })
+  const close = (result: boolean) => { pendingRef.current?.(result); pendingRef.current = null; setConfirmation(null) }
   return { confirm, dialog: confirmation ? <ConfirmDialog value={confirmation} onClose={close}/> : null }
 }
 

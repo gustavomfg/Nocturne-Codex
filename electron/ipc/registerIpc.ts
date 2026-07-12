@@ -121,7 +121,16 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
 
   ipcMain.handle('memory:get', (_event, value: unknown) => {
     const workspace = getConversation(database, idSchema.parse(value)).workspace
-    return readWorkspaceContext(workspace)
+    const files = readWorkspaceContext(workspace)
+    const persisted = database.getWorkspaceMemory(workspace)
+    if (persisted.content && Date.parse(persisted.updatedAt) > Date.parse(files.updatedAt)) {
+      const marker = '\n\n# Regras do projeto\n'
+      const markerAt = persisted.content.indexOf(marker)
+      const content = markerAt >= 0 ? persisted.content.slice(0, markerAt) : persisted.content
+      const rules = markerAt >= 0 ? persisted.content.slice(markerAt + marker.length) : files.rules
+      return writeWorkspaceContext(workspace, content, rules)
+    }
+    return files
   })
   ipcMain.handle('memory:set', (_event, value: unknown) => {
     const data = z.object({ conversationId: z.string().uuid(), content: z.string().max(20_000), rules: z.string().max(20_000).default('') }).parse(value)
@@ -241,7 +250,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
 
   ipcMain.handle('settings:get', async () => { const saved = database.getSettings(); return { ...saved, diagnosticMode: saved.diagnosticMode === 'true', ...(await getCodexInfo(codex)) } })
   ipcMain.handle('settings:set', (_event, value: unknown) => {
-    const data = z.object({ model: z.string().max(100), sandbox: z.enum(['read-only', 'workspace-write']), approvalPolicy: z.enum(['untrusted', 'on-request', 'never']), codexPath: z.string().trim().max(1_000).optional(), diagnosticMode: z.boolean().optional(), theme: z.enum(['dark', 'system']).default('dark'), defaultAgentMode: z.enum(agentModes).default('review') }).parse(value)
+    const data = z.object({ model: z.string().max(100), sandbox: z.enum(['read-only', 'workspace-write']), approvalPolicy: z.enum(['untrusted', 'on-request']), codexPath: z.string().trim().max(1_000).optional(), diagnosticMode: z.boolean().optional(), theme: z.literal('dark').default('dark'), defaultAgentMode: z.enum(agentModes).default('review') }).parse(value)
     if (data.codexPath && !path.isAbsolute(data.codexPath) && data.codexPath !== 'codex') throw new Error('Use um caminho absoluto para o executável do Codex.')
     if (data.codexPath && path.isAbsolute(data.codexPath) && (!fs.existsSync(data.codexPath) || !fs.statSync(data.codexPath).isFile())) throw new Error('Executável do Codex não encontrado.')
     logger.setDiagnostic(Boolean(data.diagnosticMode))
@@ -359,9 +368,12 @@ function pipeCommand(command: string, args: string[], input: string, cwd: string
   return new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, { cwd, stdio: ['pipe', 'ignore', 'pipe'] })
     let error = ''
-    child.stderr.on('data', (chunk) => { error += chunk.toString() })
-    child.on('error', reject)
-    child.on('exit', (code) => code === 0 ? resolve() : reject(new Error(error || `Pandoc encerrou com código ${code}.`)))
+    let settled = false
+    const finish = (failure?: Error) => { if (settled) return; settled = true; clearTimeout(timer); failure ? reject(failure) : resolve() }
+    const timer = setTimeout(() => { child.kill(); finish(new Error('A exportação excedeu o limite de 60 segundos.')) }, 60_000)
+    child.stderr.on('data', (chunk) => { error = `${error}${chunk.toString()}`.slice(-64_000) })
+    child.on('error', (failure) => finish(failure))
+    child.on('exit', (code) => code === 0 ? finish() : finish(new Error(error || `Pandoc encerrou com código ${code}.`)))
     child.stdin.end(input)
   })
 }

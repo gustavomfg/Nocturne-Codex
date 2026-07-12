@@ -7,7 +7,8 @@ export function safeIpcMain(win: BrowserWindow) {
     handle(channel: string, handler: Handler) {
       ipcMain.handle(channel, (event, ...args) => {
         const trustedContents = win.webContents
-        if (event.sender !== trustedContents || event.senderFrame !== trustedContents.mainFrame) {
+        const expectedUrl = trustedContents.getURL()
+        if (event.sender !== trustedContents || event.senderFrame !== trustedContents.mainFrame || !expectedUrl || event.senderFrame.url !== expectedUrl) {
           throw new Error(`Origem IPC não autorizada para ${channel}.`)
         }
         return handler(event, ...args)

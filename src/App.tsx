@@ -1,4 +1,4 @@
-import { FormEvent, lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { FormEvent, Fragment, lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Brain, ChevronRight, Code2, Folder, GitBranch, Menu, PanelRight, Settings, Terminal, X } from 'lucide-react'
 import { useAppStore } from './store'
 import type { Activity, AgentMode, Artifact, Attachment, ChangedFile, CodexEvent, CodexSettings, FilePreview, GitInfo, PlanStep, Suggestion, SuggestionStatus, Workspace, WorkspaceMemory } from './types'
@@ -7,12 +7,21 @@ import { Composer } from './domains/chat/Composer'
 import { AssistantMessage, MessageBubble, Welcome } from './domains/chat/ChatContent'
 import { describeChanges, errorMessage, humanizeCommand, isBusy, normalizePlanStatus, parseChanges, statusText } from './shared/format'
 import { UI_TIMING } from '../shared/constants'
-import { useTurnLifecycle } from './domains/agent/useTurnLifecycle'
+import { useTurnLifecycle, type ActiveTurnContext } from './domains/agent/useTurnLifecycle'
 import { useConfirmDialog } from './shared/ConfirmDialog'
 import './styles/components.css'
 
 const now = () => new Date().toISOString()
 const fakeId = () => crypto.randomUUID()
+const dayKey = (value: string) => new Date(value).toLocaleDateString('pt-BR')
+const dayLabel = (value: string) => {
+  const date = new Date(value)
+  const today = new Date()
+  const yesterday = new Date(); yesterday.setDate(today.getDate() - 1)
+  if (date.toDateString() === today.toDateString()) return 'Hoje'
+  if (date.toDateString() === yesterday.toDateString()) return 'Ontem'
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'long', year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric' }).format(date)
+}
 const AgentPanel = lazy(() => import('./domains/agent/AgentPanel').then((module) => ({ default: module.AgentPanel })))
 const loadSettingsDialog = () => import('./domains/settings/SettingsDialog').then((module) => ({ default: module.SettingsDialog }))
 const SettingsDialog = lazy(loadSettingsDialog)
@@ -45,23 +54,25 @@ function App() {
   const streamTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const activityBuffersRef = useRef(new Map<string, { type: Activity['type']; label: string; detail: string }>())
   const activityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const activeTurnModeRef = useRef<AgentMode>('review')
+  const activeTurnRef = useRef<ActiveTurnContext | null>(null)
   const applyingSuggestionRef = useRef<string | null>(null)
+  const conversationRequestRef = useRef(0)
   const active = store.conversations.find((item) => item.id === store.activeId)
   const documentContent = store.streaming || [...store.messages].reverse().find((item) => item.role === 'assistant')?.content || ''
   const filtered = store.conversations.filter((item) => item.title.toLowerCase().includes(search.toLowerCase()) && (!workspace || item.workspace === workspace))
-  const finishTurn = useTurnLifecycle({ flushStream, activeTurnModeRef, applyingSuggestionRef, refreshGit })
+  const finishTurn = useTurnLifecycle({ flushStream, activeTurnRef, refreshGit })
+  const interactionLocked = () => { const state = useAppStore.getState(); return isBusy(state.status) || state.finalizing }
 
   const refresh = async () => store.setConversations(await window.nocturne.conversations.list())
 
   useEffect(() => {
     void Promise.all([window.nocturne.conversations.list(), window.nocturne.workspace.list(), window.nocturne.settings.get()]).then(async ([conversations, savedWorkspaces, savedSettings]) => {
-      const normalized = { ...savedSettings, model: savedSettings.model || '', sandbox: savedSettings.sandbox || 'workspace-write', approvalPolicy: savedSettings.approvalPolicy || 'on-request', theme: savedSettings.theme || 'dark', defaultAgentMode: savedSettings.defaultAgentMode || 'review' } as CodexSettings
+      const normalized = { ...savedSettings, model: savedSettings.model || '', sandbox: savedSettings.sandbox || 'workspace-write', approvalPolicy: savedSettings.approvalPolicy === 'untrusted' ? 'untrusted' : 'on-request', theme: 'dark', defaultAgentMode: savedSettings.defaultAgentMode || 'review' } as CodexSettings
       store.setConversations(conversations); store.setStatus(normalized.serverStatus || 'disconnected'); setWorkspaces(savedWorkspaces); setSettings(normalized); setAgentMode(normalized.defaultAgentMode || 'review')
       await window.nocturne.codex.start()
       if (conversations[0]) await openConversation(conversations[0].id, conversations)
     }).catch((error) => store.setError(error.message))
-    const offStatus = window.nocturne.codex.onStatus(({ status, error }) => { store.setStatus(status); if (error) store.setError(error) })
+    const offStatus = window.nocturne.codex.onStatus(({ status, error }) => { store.setStatus(status); if (status === 'completed' && activeTurnRef.current) store.setFinalizing(true); if (error) store.setError(error) })
     const offEvent = window.nocturne.codex.onEvent(handleCodexEvent)
     return () => { offStatus(); offEvent(); if (streamTimerRef.current) clearTimeout(streamTimerRef.current); if (activityTimerRef.current) clearTimeout(activityTimerRef.current) }
     // A ponte IPC deve ser registrada uma única vez; os handlers consultam o estado atual do Zustand.
@@ -85,6 +96,7 @@ function App() {
     const shortcuts = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey)) { if (event.key === 'Escape' && isBusy(useAppStore.getState().status) && !document.querySelector('[aria-modal="true"]')) void cancelRun(); return }
       if (document.querySelector('[aria-modal="true"]')) return
+      if (interactionLocked()) return
       if (event.key.toLowerCase() === 'n') { event.preventDefault(); void createConversation() }
       if (event.key.toLowerCase() === 'o') { event.preventDefault(); void selectWorkspace() }
       if (event.key.toLowerCase() === 'k') { event.preventDefault(); searchRef.current?.focus() }
@@ -100,11 +112,13 @@ function App() {
   }, [store.status])
 
   async function selectWorkspace() {
+    if (interactionLocked()) { store.setError('Aguarde a resposta ser concluída antes de trocar de workspace.'); return }
     const selected = await window.nocturne.workspace.select()
     if (selected) { setWorkspace(selected); setWorkspaces(await window.nocturne.workspace.list()) }
   }
 
   async function createConversation() {
+    if (interactionLocked()) { store.setError('Aguarde a resposta ser concluída antes de criar outra conversa.'); return }
     let selected = workspace || active?.workspace
     if (!selected) selected = await window.nocturne.workspace.select() ?? ''
     if (!selected) return
@@ -113,6 +127,7 @@ function App() {
   }
 
   async function chooseSavedWorkspace(selected: string) {
+    if (interactionLocked()) { store.setError('Aguarde a resposta ser concluída antes de trocar de workspace.'); return }
     setWorkspace(selected)
     const conversation = store.conversations.find((item) => item.workspace === selected)
     if (conversation) await openConversation(conversation.id)
@@ -120,15 +135,18 @@ function App() {
   }
 
   async function openConversation(id: string, conversations = store.conversations) {
-    if (isBusy(store.status) && id !== store.activeId) { store.setError('Cancele ou aguarde a execução atual antes de trocar de conversa.'); return }
+    if (interactionLocked() && id !== useAppStore.getState().activeId) { store.setError('Cancele ou aguarde a execução atual antes de trocar de conversa.'); return }
+    const requestId = ++conversationRequestRef.current
     store.setActive(id); store.clearRun()
     const messages = await window.nocturne.conversations.messages(id)
+    if (requestId !== conversationRequestRef.current || useAppStore.getState().activeId !== id) return
     store.setMessages(messages)
     const lastMetadata = [...messages].reverse().find((message) => message.metadata)?.metadata
     if (lastMetadata) restoreMetadata(lastMetadata)
     const conversation = conversations.find((item) => item.id === id)
     if (conversation) setWorkspace(conversation.workspace)
     const [artifacts, savedMemory, suggestions] = await Promise.all([window.nocturne.artifacts.list(id), window.nocturne.memory.get(id), window.nocturne.suggestions.list(id)])
+    if (requestId !== conversationRequestRef.current || useAppStore.getState().activeId !== id) return
     store.setArtifacts(artifacts); store.setSuggestions(suggestions); setMemory(savedMemory); setPreview(null)
     try { await window.nocturne.codex.resume(id) } catch (error) { store.setError(`Não foi possível restaurar a thread: ${errorMessage(error)}`) }
     void refreshGit(id)
@@ -141,7 +159,7 @@ function App() {
 
   async function submitPrompt(rawPrompt: string, mode: AgentMode = agentMode) {
     const content = rawPrompt.trim()
-    if (!content || isBusy(store.status)) return
+    if (!content || interactionLocked()) return
     let conversationId = store.activeId
     if (!conversationId) {
       await createConversation()
@@ -150,11 +168,12 @@ function App() {
     if (!conversationId) return
     store.clearRun(); setPrompt('')
     const selectedAttachments = attachments
-    activeTurnModeRef.current = mode
+    activeTurnRef.current = { conversationId, mode, suggestionId: applyingSuggestionRef.current }
+    applyingSuggestionRef.current = null
     setAttachments([])
     store.addMessage({ id: fakeId(), conversationId, role: 'user', content, metadata: JSON.stringify({ attachments: selectedAttachments.map((item) => item.path) }), createdAt: now() })
     try { const result = await window.nocturne.codex.send(conversationId, content, selectedAttachments.map((item) => item.path), mode); if (result.recreated) store.setError('A thread anterior não pôde ser restaurada. Uma nova thread foi criada para esta conversa.'); await refresh() }
-    catch (error) { applyingSuggestionRef.current = null; store.setStatus('failed'); store.setError(error instanceof Error ? error.message : String(error)) }
+    catch (error) { activeTurnRef.current = null; applyingSuggestionRef.current = null; store.setFinalizing(false); store.setStatus('failed'); store.setError(error instanceof Error ? error.message : String(error)) }
   }
 
   async function attachFiles() {
@@ -260,7 +279,7 @@ function App() {
   }
 
   async function applySuggestion(suggestion: Suggestion) {
-    if (!store.activeId || isBusy(store.status)) return
+    if (!store.activeId || interactionLocked()) return
     const steps: PlanStep[] = [
       { step: `Confirmar escopo em ${suggestion.affectedFiles.length || 1} arquivo(s)`, status: 'pending' },
       { step: 'Aplicar somente a proposta aprovada', status: 'pending' },
@@ -276,6 +295,7 @@ function App() {
   }
 
   async function removeConversation(id: string) {
+    if (interactionLocked()) { store.setError('Aguarde a resposta ser concluída antes de excluir conversas.'); return }
     const conversation = store.conversations.find((item) => item.id === id)
     if (!await confirmation.confirm({ title: 'Excluir conversa?', description: `“${conversation?.title || 'Esta conversa'}” e seu histórico local serão removidos. Esta ação não pode ser desfeita.`, confirmLabel: 'Excluir conversa', danger: true })) return
     await window.nocturne.conversations.delete(id)
@@ -354,15 +374,14 @@ function App() {
 
       <section className="chat-scroll">
         {!store.activeId && !store.messages.length ? <Welcome onNew={createConversation} onWorkspace={selectWorkspace} onPrompt={submitPrompt}/> : <div className="chat-content">
-          <div className="date-divider"><span>Hoje</span></div>
-          {store.messages.map((message) => <MessageBubble key={message.id} message={message}/>) }
+          {store.messages.map((message, index) => <Fragment key={message.id}>{(index === 0 || dayKey(store.messages[index - 1].createdAt) !== dayKey(message.createdAt)) && <div className="date-divider"><span>{dayLabel(message.createdAt)}</span></div>}<MessageBubble message={message}/></Fragment>) }
           {store.streaming && <AssistantMessage content={store.streaming} streaming/>}
           {store.error && <div className="error-card"><X size={16}/><span>{store.error}</span><button onClick={() => store.setError(null)}>Fechar</button></div>}
           <div ref={endRef}/>
         </div>}
       </section>
 
-      <Composer agentMode={agentMode} attachments={attachments} prompt={prompt} status={store.status} settings={settings} active={Boolean(store.activeId)} pendingApprovals={store.approvals.filter((item) => item.status === 'pending').length} composerRef={composerRef} onMode={setAgentMode} onPrompt={setPrompt} onRemoveAttachment={(path) => setAttachments((current) => current.filter((file) => file.path !== path))} onAttach={attachFiles} onCancel={cancelRun} onSubmit={send} onQuick={submitPrompt}/>
+      <Composer agentMode={agentMode} attachments={attachments} prompt={prompt} status={store.status} finalizing={store.finalizing} settings={settings} active={Boolean(store.activeId)} pendingApprovals={store.approvals.filter((item) => item.status === 'pending').length} composerRef={composerRef} onMode={setAgentMode} onPrompt={setPrompt} onRemoveAttachment={(path) => setAttachments((current) => current.filter((file) => file.path !== path))} onAttach={attachFiles} onCancel={cancelRun} onSubmit={send} onQuick={submitPrompt}/>
     </main>
     {rightOpen && <button className="panel-backdrop inspector-backdrop" aria-label="Fechar painel do agente" onClick={() => setRightOpen(false)}/>}
 

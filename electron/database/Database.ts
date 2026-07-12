@@ -147,7 +147,10 @@ export class LocalDatabase {
 
   getSettings(): Record<string, string> {
     const rows = this.db.prepare('SELECT key,value FROM settings').all() as Array<{ key: string; value: string }>
-    return Object.fromEntries(rows.map((row) => [row.key, row.value]))
+    const settings = Object.fromEntries(rows.map((row) => [row.key, row.value]))
+    if (settings.approvalPolicy !== 'untrusted') settings.approvalPolicy = 'on-request'
+    settings.theme = 'dark'
+    return settings
   }
 
   setSettings(values: Record<string, string>) {
@@ -229,6 +232,7 @@ export class LocalDatabase {
       }
     }
     this.db.transaction(() => {
+      this.db.exec('DELETE FROM suggestion_decisions; DELETE FROM suggestions; DELETE FROM artifacts; DELETE FROM messages; DELETE FROM conversations; DELETE FROM workspaces; DELETE FROM workspace_memory; DELETE FROM settings;')
       insert('workspaces', data.workspaces); insert('conversations', data.conversations); insert('messages', data.messages); insert('artifacts', data.artifacts); insert('workspace_memory', data.memories); insert('suggestions', data.suggestions ?? []); insert('suggestion_decisions', data.suggestionDecisions ?? [])
       if (data.settings) this.setSettings(data.settings)
       this.cleanupOrphans()

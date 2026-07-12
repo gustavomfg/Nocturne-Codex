@@ -26,8 +26,9 @@ process.on('uncaughtException', (error) => { logger?.error('app', 'uncaughtExcep
 process.on('unhandledRejection', (reason) => { logger?.error('app', 'unhandledRejection no processo principal', reason); console.error(reason) })
 
 function createWindow() {
+  const rendererUrl = VITE_DEV_SERVER_URL || new URL(`file://${path.join(RENDERER_DIST, 'index.html')}`).toString()
   win = new BrowserWindow({
-    width: 1440, height: 920, minWidth: 980, minHeight: 680,
+    width: 1440, height: 920, minWidth: 720, minHeight: 600,
     title: APP_NAME, icon: APP_ICON, backgroundColor: '#0b0b0e',
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
@@ -46,7 +47,7 @@ function createWindow() {
     return { action: 'deny' }
   })
   win.webContents.on('will-navigate', (event, url) => {
-    const allowed = VITE_DEV_SERVER_URL ? url.startsWith(VITE_DEV_SERVER_URL) : url.startsWith('file:')
+    const allowed = url === rendererUrl
     if (!allowed) event.preventDefault()
   })
 
@@ -78,7 +79,7 @@ function createWindow() {
     logger?.info('app', 'Uso de memória durante execução', { main: process.memoryUsage(), renderer: renderer?.memory, codex: codex.getDiagnostics() })
   }, 10_000)
   win.on('closed', () => clearInterval(memoryTimer))
-  if (VITE_DEV_SERVER_URL) void win.loadURL(VITE_DEV_SERVER_URL)
+  if (VITE_DEV_SERVER_URL) void win.loadURL(rendererUrl)
   else void win.loadFile(path.join(RENDERER_DIST, 'index.html'))
 }
 
