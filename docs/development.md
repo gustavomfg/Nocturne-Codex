@@ -1,5 +1,9 @@
 # Desenvolvimento
 
+## Compatibilidade do Codex CLI
+
+O desenvolvimento e os testes de contrato usam Codex CLI `0.144.1`; a versão mínima suportada é `0.144.0`. Ao atualizar o CLI, execute o smoke do pacote e registre a nova versão verificada em `shared/constants.ts` e `docs/codex-integration.md`.
+
 Use Node.js 22 LTS.
 
 ```bash

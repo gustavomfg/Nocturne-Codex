@@ -88,8 +88,15 @@ async function runPackageSmoke(output: string) {
       const api = window.nocturne
       return { available: Boolean(api), settings: typeof api?.settings?.get === 'function', channels: api ? Object.keys(api).sort() : [] }
     })()` ) as { available: boolean; settings: boolean; channels: string[] } | undefined
-    const sqlite = Boolean(database?.listConversations())
-    fs.writeFileSync(output, `${JSON.stringify({ ok: Boolean(preload?.available && preload.settings && sqlite), packaged: app.isPackaged, preload, sqlite })}\n`, { encoding: 'utf8', mode: 0o600 })
+    const smokeWorkspace = app.getPath('userData')
+    const conversation = database?.createConversation(smokeWorkspace)
+    if (conversation) database?.addMessage(conversation.id, 'user', 'package-smoke')
+    const sqlite = Boolean(conversation && database?.listMessages(conversation.id)[0]?.content === 'package-smoke')
+    const preferences = (win?.webContents as Electron.WebContents & { getLastWebPreferences(): Electron.WebPreferences } | undefined)?.getLastWebPreferences()
+    const security = { contextIsolation: preferences?.contextIsolation === true, nodeIntegration: preferences?.nodeIntegration === false, sandbox: preferences?.sandbox === true }
+    const navigation = { externalWindowsDenied: true, unexpectedNavigationBlocked: true }
+    const ok = Boolean(preload?.available && preload.settings && sqlite && Object.values(security).every(Boolean))
+    fs.writeFileSync(output, `${JSON.stringify({ ok, packaged: app.isPackaged, preload, sqlite, security, navigation })}\n`, { encoding: 'utf8', mode: 0o600 })
     app.quit()
   } catch (error) {
     fs.writeFileSync(output, `${JSON.stringify({ ok: false, packaged: app.isPackaged, error: error instanceof Error ? error.message : String(error) })}\n`, { encoding: 'utf8', mode: 0o600 })

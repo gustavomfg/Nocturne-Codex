@@ -16,8 +16,9 @@ export interface FilePreview { kind: 'text' | 'markdown' | 'image'; name: string
 export interface ProjectContext { name: string; stack: string[]; primaryLanguage: string; commands: Record<string, string> }
 export interface WorkspaceMemory { content: string; rules: string; project?: ProjectContext; updatedAt: string }
 export interface PlanStep { step: string; status: 'pending' | 'inProgress' | 'completed' }
-export interface GitInfo { branch: string; status: string; diff: string }
-export interface CodexSettings { model: string; sandbox: 'read-only' | 'workspace-write'; approvalPolicy: 'untrusted' | 'on-request' | 'never'; codexPath?: string; codexVersion?: string; pandocVersion?: string; serverStatus?: CodexStatus; diagnosticMode?: boolean; authStatus?: string; authenticated?: boolean; theme?: 'dark' | 'system'; defaultAgentMode?: AgentMode }
+export interface GitChangedFile { path: string; status: string }
+export interface GitInfo { branch: string; status: string; diff: string; files: GitChangedFile[] }
+export interface CodexSettings { model: string; sandbox: 'read-only' | 'workspace-write'; approvalPolicy: 'untrusted' | 'on-request' | 'never'; codexPath?: string; codexVersion?: string; codexCompatible?: boolean; codexCompatibilityMessage?: string; pandocVersion?: string; serverStatus?: CodexStatus; diagnosticMode?: boolean; authStatus?: string; authenticated?: boolean; theme?: 'dark' | 'system'; defaultAgentMode?: AgentMode }
 export interface CodexDiagnostics { executable: string; version?: string; pid: number | null; state: CodexStatus; lastFailure: string | null; logsPath: string }
 export interface CodexEvent { method: string; params: Record<string, unknown> }
 export type CodexStatus = AgentState

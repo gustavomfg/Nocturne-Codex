@@ -1,13 +1,15 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC_CHANNELS as channels } from '../shared/ipc/channels'
+import type { CodexEvent, CodexStatus } from '../shared/types'
+import type { NocturneApi } from '../shared/ipc/contracts'
 
-const on = (channel: string, listener: (payload: unknown) => void) => {
-  const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => listener(payload)
+const on = <T>(channel: string, listener: (payload: T) => void) => {
+  const handler = (_event: Electron.IpcRendererEvent, payload: T) => listener(payload)
   ipcRenderer.on(channel, handler)
   return () => ipcRenderer.removeListener(channel, handler)
 }
 
-export const nocturneApi = {
+export const nocturneApi: NocturneApi = {
   workspace: {
     select: () => ipcRenderer.invoke(channels.workspace.select),
     validate: (workspace: string) => ipcRenderer.invoke(channels.workspace.validate, workspace),
@@ -31,8 +33,8 @@ export const nocturneApi = {
     interrupt: (conversationId: string) => ipcRenderer.invoke(channels.codex.interrupt, conversationId),
     saveAssistant: (conversationId: string, content: string, metadata?: unknown) => ipcRenderer.invoke(channels.codex.saveAssistant, { conversationId, content, metadata }),
     approve: (key: string, accepted: boolean, forSession = false) => ipcRenderer.invoke(channels.codex.approve, { key, accepted, forSession }),
-    onEvent: (listener: (payload: unknown) => void) => on(channels.codex.event, listener),
-    onStatus: (listener: (payload: unknown) => void) => on(channels.codex.status, listener),
+    onEvent: (listener: (payload: CodexEvent) => void) => on(channels.codex.event, listener),
+    onStatus: (listener: (payload: { status: CodexStatus; error?: string }) => void) => on(channels.codex.status, listener),
   },
   files: {
     attach: (conversationId: string) => ipcRenderer.invoke(channels.files.attach, conversationId),
@@ -45,7 +47,7 @@ export const nocturneApi = {
   data: { export: () => ipcRenderer.invoke(channels.data.export), import: () => ipcRenderer.invoke(channels.data.import) },
   diagnostics: { openLogs: () => ipcRenderer.invoke(channels.diagnostics.openLogs), copy: () => ipcRenderer.invoke(channels.diagnostics.copy), rendererError: (value: unknown) => ipcRenderer.invoke(channels.diagnostics.rendererError, value), rendererStats: (value: unknown) => ipcRenderer.invoke(channels.diagnostics.rendererStats, value) },
   settings: { get: () => ipcRenderer.invoke(channels.settings.get), set: (settings: unknown) => ipcRenderer.invoke(channels.settings.set, settings) },
-  git: { status: (conversationId: string) => ipcRenderer.invoke(channels.git.status, conversationId), commit: (conversationId: string, message: string) => ipcRenderer.invoke(channels.git.commit, { conversationId, message }) },
+  git: { status: (conversationId: string) => ipcRenderer.invoke(channels.git.status, conversationId), commit: (conversationId: string, message: string, files: string[]) => ipcRenderer.invoke(channels.git.commit, { conversationId, message, files }) },
   documents: {
     saveMarkdown: (conversationId: string, content: string, name?: string) => ipcRenderer.invoke(channels.documents.saveMarkdown, { conversationId, content, name }),
     export: (conversationId: string, content: string, format: 'docx' | 'pdf' | 'html') => ipcRenderer.invoke(channels.documents.export, { conversationId, content, format }),

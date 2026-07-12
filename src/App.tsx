@@ -7,6 +7,7 @@ import { Composer } from './domains/chat/Composer'
 import { AssistantMessage, MessageBubble, Welcome } from './domains/chat/ChatContent'
 import { describeChanges, errorMessage, humanizeCommand, isBusy, normalizePlanStatus, parseChanges, statusText } from './shared/format'
 import { UI_TIMING } from '../shared/constants'
+import { useTurnLifecycle } from './domains/agent/useTurnLifecycle'
 import './styles/components.css'
 
 const now = () => new Date().toISOString()
@@ -22,8 +23,8 @@ function App() {
   const [workspace, setWorkspace] = useState('')
   const [prompt, setPrompt] = useState('')
   const [search, setSearch] = useState('')
-  const [rightOpen, setRightOpen] = useState(true)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [rightOpen, setRightOpen] = useState(() => window.innerWidth > 980)
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 980)
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -41,12 +42,12 @@ function App() {
   const streamTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const activityBuffersRef = useRef(new Map<string, { type: Activity['type']; label: string; detail: string }>())
   const activityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const completedTurnsRef = useRef(new Set<string>())
   const activeTurnModeRef = useRef<AgentMode>('review')
   const applyingSuggestionRef = useRef<string | null>(null)
   const active = store.conversations.find((item) => item.id === store.activeId)
   const documentContent = store.streaming || [...store.messages].reverse().find((item) => item.role === 'assistant')?.content || ''
   const filtered = store.conversations.filter((item) => item.title.toLowerCase().includes(search.toLowerCase()) && (!workspace || item.workspace === workspace))
+  const finishTurn = useTurnLifecycle({ flushStream, activeTurnModeRef, applyingSuggestionRef, refreshGit })
 
   const refresh = async () => store.setConversations(await window.nocturne.conversations.list())
 
@@ -64,11 +65,17 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [store.messages])
+  useEffect(() => {
+    const scroller = endRef.current?.closest('.chat-scroll')
+    if (!scroller) return
+    const nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 220
+    if (nearBottom) endRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+  }, [store.messages, store.streaming])
   useEffect(() => { document.documentElement.dataset.theme = settings.theme || 'dark' }, [settings.theme])
   useEffect(() => {
     const shortcuts = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey)) { if (event.key === 'Escape' && isBusy(useAppStore.getState().status)) void cancelRun(); return }
+      if (!(event.ctrlKey || event.metaKey)) { if (event.key === 'Escape' && isBusy(useAppStore.getState().status) && !document.querySelector('[aria-modal="true"]')) void cancelRun(); return }
+      if (document.querySelector('[aria-modal="true"]')) return
       if (event.key.toLowerCase() === 'n') { event.preventDefault(); void createConversation() }
       if (event.key.toLowerCase() === 'o') { event.preventDefault(); void selectWorkspace() }
       if (event.key.toLowerCase() === 'k') { event.preventDefault(); searchRef.current?.focus() }
@@ -232,41 +239,6 @@ function App() {
     if (type === 'mcpToolCall' || type === 'dynamicToolCall') store.upsertActivity({ id: String(item.id), type: 'read', label: `Ferramenta concluída: ${String(item.tool ?? type)}`, detail: item.error ? JSON.stringify(item.error) : undefined, status: item.error ? 'failed' : 'completed' })
   }
 
-  async function finishTurn(params: Record<string, unknown>) {
-    flushStream()
-    const state = useAppStore.getState()
-    const turn = params.turn as Record<string, unknown> | undefined
-    const completionKey = String(turn?.id ?? `${params.threadId ?? 'thread'}:${state.streaming.length}`)
-    if (completedTurnsRef.current.has(completionKey)) return
-    completedTurnsRef.current.add(completionKey)
-    if (completedTurnsRef.current.size > 100) completedTurnsRef.current.delete(completedTurnsRef.current.values().next().value as string)
-    const error = turn?.error as Record<string, unknown> | undefined
-    if (error) store.setError(String(error.message ?? 'A execução não foi concluída.'))
-    store.upsertActivity({ id: `completion-${String(turn?.id ?? Date.now())}`, type: 'completion', label: error ? 'Execução encerrada com erro' : 'Execução concluída', status: error ? 'failed' : 'completed' })
-    if (state.streaming && state.activeId) {
-      const current = useAppStore.getState()
-      let assistantContent = state.streaming
-      if (activeTurnModeRef.current === 'review') {
-        const extracted = await window.nocturne.suggestions.create(state.activeId, assistantContent)
-        assistantContent = extracted.content || assistantContent
-        store.setSuggestions(await window.nocturne.suggestions.list(state.activeId))
-      }
-      const activitySnapshot = current.activities.slice(-100).map((activity) => ({ ...activity, detail: activity.detail?.slice(-4_000) }))
-      const saved = await window.nocturne.codex.saveAssistant(state.activeId, assistantContent, { diff: current.diff.slice(-500_000), activities: activitySnapshot, files: current.files.slice(-300), plan: current.plan.slice(-100), planExplanation: current.planExplanation.slice(-20_000) })
-      store.addMessage(saved)
-      useAppStore.setState({ streaming: '' })
-      store.setArtifacts(await window.nocturne.artifacts.list(state.activeId))
-    }
-    if (applyingSuggestionRef.current && state.activeId) {
-      const suggestionId = applyingSuggestionRef.current
-      const changed = useAppStore.getState().files.length > 0 || Boolean(useAppStore.getState().diff)
-      if (!error && changed) await window.nocturne.suggestions.status(state.activeId, suggestionId, 'applied', 'Alteração executada; consulte a resposta do agente para resultados de validação.')
-      applyingSuggestionRef.current = null
-      store.setSuggestions(await window.nocturne.suggestions.list(state.activeId))
-    }
-    if (state.activeId) void refreshGit(state.activeId)
-  }
-
   async function decide(key: string, accepted: boolean) {
     try { await window.nocturne.codex.approve(key, accepted); store.resolveApproval(key, accepted ? 'accepted' : 'declined') }
     catch (error) { store.setError(errorMessage(error)) }
@@ -358,6 +330,7 @@ function App() {
   const pathLabel = active?.workspace ?? workspace
 
   return <div className="app-shell">
+    {sidebarOpen && <button className="panel-backdrop sidebar-backdrop" aria-label="Fechar barra lateral" onClick={() => setSidebarOpen(false)}/>}
     <Sidebar open={sidebarOpen} conversations={filtered} activeId={store.activeId} search={search} searchRef={searchRef} workspace={workspace} workspaces={workspaces} settings={settings} status={store.status} onClose={() => setSidebarOpen(false)} onNew={createConversation} onSearch={setSearch} onConversation={openConversation} onDelete={(id) => void removeConversation(id)} onWorkspace={selectWorkspace} onSavedWorkspace={chooseSavedWorkspace} onFavorite={(item) => void window.nocturne.workspace.favorite(item.path, !item.favorite).then(() => window.nocturne.workspace.list()).then(setWorkspaces)} onSettings={() => setSettingsOpen(true)}/>
 
     <main className="main-panel">
@@ -377,8 +350,9 @@ function App() {
         </div>}
       </section>
 
-      <Composer agentMode={agentMode} attachments={attachments} prompt={prompt} status={store.status} settings={settings} active={Boolean(store.activeId)} composerRef={composerRef} onMode={setAgentMode} onPrompt={setPrompt} onRemoveAttachment={(path) => setAttachments((current) => current.filter((file) => file.path !== path))} onAttach={attachFiles} onCancel={cancelRun} onSubmit={send} onQuick={submitPrompt}/>
+      <Composer agentMode={agentMode} attachments={attachments} prompt={prompt} status={store.status} settings={settings} active={Boolean(store.activeId)} pendingApprovals={store.approvals.filter((item) => item.status === 'pending').length} composerRef={composerRef} onMode={setAgentMode} onPrompt={setPrompt} onRemoveAttachment={(path) => setAttachments((current) => current.filter((file) => file.path !== path))} onAttach={attachFiles} onCancel={cancelRun} onSubmit={send} onQuick={submitPrompt}/>
     </main>
+    {rightOpen && <button className="panel-backdrop inspector-backdrop" aria-label="Fechar painel do agente" onClick={() => setRightOpen(false)}/>}
 
     <Suspense fallback={null}><AgentPanel open={rightOpen} activities={store.activities} approvals={store.approvals} diff={store.diff} files={store.files} artifacts={store.artifacts} suggestions={store.suggestions} plan={store.plan} planExplanation={store.planExplanation} activeId={store.activeId} gitInfo={gitInfo} documentContent={documentContent} onDecide={decide} onError={store.setError} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onSuggestionStatus={updateSuggestion} onSuggestionApply={applySuggestion} onPlanChange={(plan) => store.setPlan(plan, store.planExplanation)} onPlanExecute={(plan) => submitPrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`, 'build')}/></Suspense>
     <Suspense fallback={null}>{settingsOpen && <SettingsDialog

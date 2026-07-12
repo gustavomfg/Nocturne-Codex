@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Activity, Bot, Folder, Monitor, Settings, Star, X, type LucideIcon } from 'lucide-react'
 import type { AgentMode, CodexSettings, Workspace } from '../../types'
 import { errorMessage, statusText } from '../../shared/format'
+import { useDialogA11y } from '../../shared/useDialogA11y'
 
 type SettingsPage = 'codex' | 'workspace' | 'application' | 'diagnostics'
 
@@ -16,12 +17,13 @@ export function SettingsDialog({ value, status, workspaces, onClose, onSave, onO
   const [form, setForm] = useState(value)
   const [page, setPage] = useState<SettingsPage>('codex')
   const [diagnostic, setDiagnostic] = useState('Carregando diagnóstico…')
+  const dialogRef = useDialogA11y<HTMLDivElement>(onClose)
   useEffect(() => { void window.nocturne.codex.diagnostics().then((item) => setDiagnostic(`PID: ${item.pid ?? '—'} · ${item.executable}\nÚltima falha: ${item.lastFailure || 'nenhuma'}`)).catch((error) => setDiagnostic(errorMessage(error))) }, [])
   const copyDiagnostic = async () => { const content = await window.nocturne.diagnostics.copy(); await navigator.clipboard.writeText(content) }
   const currentPage = settingsPages.find((item) => item.id === page) ?? settingsPages[0]
 
   return <div className="modal-backdrop" onMouseDown={onClose}>
-    <div className="settings-dialog beta-settings" role="dialog" aria-modal="true" aria-labelledby="settings-title" onMouseDown={(event) => event.stopPropagation()}>
+    <div ref={dialogRef} className="settings-dialog beta-settings" role="dialog" aria-modal="true" aria-labelledby="settings-title" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
       <header className="settings-header"><div className="settings-heading"><span><Settings size={17}/></span><div><strong id="settings-title">Configurações</strong><small>Personalize sua experiência no Nocturne</small></div></div><button className="settings-close" aria-label="Fechar configurações" title="Fechar" onClick={onClose}><X size={17}/></button></header>
       <div className="settings-layout">
         <nav className="settings-navigation" aria-label="Seções das configurações">

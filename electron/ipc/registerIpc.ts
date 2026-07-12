@@ -10,10 +10,15 @@ import { Logger } from '../logging/Logger'
 import { assessCommand, resolveInsideWorkspace } from '../security/ExecutionPolicy'
 import { agentModes, extractSuggestions } from '../../shared/suggestions'
 import { approvalSchema, codexSendSchema, fileActionSchema, filePreviewSchema, idSchema, suggestionStatusSchema, workspaceFavoriteSchema, workspaceToolSchema } from '../../shared/ipc/schemas'
+import { CODEX_COMPATIBILITY } from '../../shared/constants'
+import { registerDataIpc } from './registerDataIpc'
+import { registerGitIpc } from './registerGitIpc'
 
 const execFileAsync = promisify(execFile)
 
 export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: CodexClient, logger: Logger) {
+  registerDataIpc(win, database, logger)
+  registerGitIpc(win, database)
   const approvalDetails = new Map<string, { command?: string; risk?: string }>()
   const push = (channel: string, payload: unknown) => {
     if (!win.isDestroyed()) win.webContents.send(channel, payload)
@@ -130,25 +135,6 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     if (!database.listArtifacts(data.conversationId).some((artifact) => artifact.id === data.artifactId)) throw new Error('Artefato não encontrado.')
     database.deleteArtifact(data.artifactId)
   })
-  ipcMain.handle('data:export', async () => {
-    const result = await dialog.showSaveDialog(win, { title: 'Exportar dados do Nocturne', defaultPath: 'nocturne-backup.json', filters: [{ name: 'JSON', extensions: ['json'] }] })
-    if (result.canceled || !result.filePath) return null
-    fs.writeFileSync(result.filePath, `${JSON.stringify(database.exportData(), null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
-    logger.info('persistence', 'Dados exportados')
-    return result.filePath
-  })
-  ipcMain.handle('data:import', async () => {
-    const result = await dialog.showOpenDialog(win, { title: 'Importar dados do Nocturne', properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] })
-    if (result.canceled || !result.filePaths[0]) return false
-    const importPath = result.filePaths[0]
-    if (fs.statSync(importPath).size > 100_000_000) throw new Error('O backup excede o limite de 100 MB.')
-    const importedSettings = z.object({ model: z.string().max(100).optional(), sandbox: z.enum(['read-only', 'workspace-write']).optional(), approvalPolicy: z.enum(['untrusted', 'on-request', 'never']).optional(), diagnosticMode: z.enum(['true', 'false']).optional(), theme: z.enum(['dark', 'system']).optional(), defaultAgentMode: z.enum(agentModes).optional() })
-    const schema = z.object({ schemaVersion: z.number().int().min(1).max(5), conversations: z.array(z.record(z.string(), z.unknown())).max(100_000), workspaces: z.array(z.record(z.string(), z.unknown())).max(10_000), messages: z.array(z.record(z.string(), z.unknown())).max(1_000_000), artifacts: z.array(z.record(z.string(), z.unknown())).max(1_000_000), memories: z.array(z.record(z.string(), z.unknown())).max(10_000), suggestions: z.array(z.record(z.string(), z.unknown())).max(100_000).optional(), suggestionDecisions: z.array(z.record(z.string(), z.unknown())).max(1_000_000).optional(), settings: importedSettings.optional() })
-    database.importData(schema.parse(JSON.parse(fs.readFileSync(importPath, 'utf8'))))
-    logger.info('persistence', 'Dados importados')
-    return true
-  })
-
   ipcMain.handle('codex:start', async () => {
     await codex.start(database.getSettings().codexPath || 'codex')
     return { status: codex.status }
@@ -261,17 +247,6 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     return { ...database.getSettings(), diagnosticMode: Boolean(data.diagnosticMode) }
   })
 
-  ipcMain.handle('git:status', async (_event, value: unknown) => gitStatus(getConversation(database, idSchema.parse(value)).workspace))
-  ipcMain.handle('git:commit', async (_event, value: unknown) => {
-    const data = z.object({ conversationId: z.string().uuid(), message: z.string().trim().min(1).max(200) }).parse(value)
-    const conversation = getConversation(database, data.conversationId)
-    const confirmation = await dialog.showMessageBox(win, { type: 'warning', buttons: ['Cancelar', 'Preparar e criar commit'], defaultId: 0, cancelId: 0, title: 'Confirmar commit', message: `Criar commit no workspace ${path.basename(conversation.workspace)}?`, detail: `Todas as alterações atuais serão preparadas com git add -A.\n\n${data.message}` })
-    if (confirmation.response !== 1) throw new Error('Commit cancelado pelo usuário.')
-    await run('git', ['add', '-A'], conversation.workspace)
-    const { stdout } = await run('git', ['commit', '-m', data.message], conversation.workspace)
-    return { output: stdout.trim() }
-  })
-
   ipcMain.handle('documents:saveMarkdown', async (_event, value: unknown) => {
     const data = z.object({ conversationId: z.string().uuid(), content: z.string(), name: z.string().default('documento.md') }).parse(value)
     const conversation = getConversation(database, data.conversationId)
@@ -346,22 +321,18 @@ async function run(command: string, args: string[], cwd: string) {
   catch (error) { throw new Error(error instanceof Error ? error.message : String(error)) }
 }
 
-async function gitStatus(workspace: string) {
-  const [branch, status, diff, staged] = await Promise.all([
-    run('git', ['branch', '--show-current'], workspace), run('git', ['status', '--short'], workspace),
-    run('git', ['diff', '--no-ext-diff'], workspace), run('git', ['diff', '--cached', '--no-ext-diff'], workspace),
-  ])
-  return { branch: branch.stdout.trim() || '(detached)', status: status.stdout, diff: [diff.stdout, staged.stdout].filter(Boolean).join('\n') }
-}
-
 async function getCodexInfo(codex: CodexClient) {
   const executable = findExecutable('codex')
   const version = await commandVersion(executable || 'codex')
   let config: unknown = null
   try { config = await codex.readConfig() } catch { /* status remains truthful through the Codex status event */ }
   const authStatus = executable ? await commandOutput(executable, ['login', 'status']) : null
-  return { codexPath: executable || 'codex', codexVersion: version || 'indisponível', pandocVersion: await commandVersion('pandoc') || 'indisponível', serverStatus: codex.status, authStatus: authStatus || 'Não foi possível verificar a autenticação.', authenticated: Boolean(authStatus && /logged in|autenticado/i.test(authStatus)), rawConfig: config }
+  const parsedVersion = version?.match(/(\d+\.\d+\.\d+)/)?.[1]
+  const compatible = Boolean(parsedVersion && compareVersions(parsedVersion, CODEX_COMPATIBILITY.minimum) >= 0)
+  return { codexPath: executable || 'codex', codexVersion: version || 'indisponível', codexCompatible: compatible, codexCompatibilityMessage: parsedVersion ? compatible ? `Compatível (mínimo ${CODEX_COMPATIBILITY.minimum})` : `Versão incompatível; instale ${CODEX_COMPATIBILITY.minimum} ou superior.` : 'Não foi possível identificar a versão do Codex CLI.', pandocVersion: await commandVersion('pandoc') || 'indisponível', serverStatus: codex.status, authStatus: authStatus || 'Não foi possível verificar a autenticação.', authenticated: Boolean(authStatus && /logged in|autenticado/i.test(authStatus)), rawConfig: config }
 }
+
+function compareVersions(left: string, right: string) { const a = left.split('.').map(Number); const b = right.split('.').map(Number); for (let index = 0; index < 3; index += 1) { if ((a[index] || 0) !== (b[index] || 0)) return (a[index] || 0) - (b[index] || 0) } return 0 }
 
 function findExecutable(name: string) {
   for (const directory of (process.env.PATH || '').split(path.delimiter)) {

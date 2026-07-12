@@ -9,4 +9,4 @@ export const workspaceToolSchema = z.object({ workspace: z.string().min(1), tool
 export const fileActionSchema = z.object({ conversationId: idSchema, filePath: z.string().min(1), action: z.enum(['file', 'folder', 'editor']) })
 export const filePreviewSchema = z.object({ conversationId: idSchema, filePath: z.string().min(1) })
 export const suggestionStatusSchema = z.object({ conversationId: idSchema, suggestionId: idSchema, status: z.enum(suggestionStatuses), result: z.string().max(20_000).optional() })
-
+export const gitCommitSchema = z.object({ conversationId: idSchema, message: z.string().trim().min(1).max(200), files: z.array(z.string().min(1).max(4_000)).min(1).max(1_000) })

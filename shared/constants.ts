@@ -1,4 +1,5 @@
 export const APP_VERSION = '0.6.0-beta'
+export const CODEX_COMPATIBILITY = { minimum: '0.144.0', verified: ['0.144.1'] } as const
 
 export const RENDERER_LIMITS = {
   activities: 300,
