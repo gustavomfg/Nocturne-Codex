@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { LocalDatabase } from '../electron/database/Database'
+import Sqlite from 'better-sqlite3'
 
 const directories: string[] = []
 const create = () => { const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-test-')); directories.push(directory); return new LocalDatabase(directory) }
@@ -27,5 +28,20 @@ describe('persistência SQLite', () => {
     expect(() => db.importData(data)).not.toThrow()
     expect(db.listConversations().some((item) => item.id === conversation.id)).toBe(true)
     db.close()
+  })
+  it('migra um schema antigo atomicamente e atualiza a versão somente ao final', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-test-')); directories.push(directory)
+    const file = path.join(directory, 'nocturne.db')
+    const legacy = new Sqlite(file)
+    legacy.exec('CREATE TABLE conversations (id TEXT PRIMARY KEY, title TEXT NOT NULL, workspace TEXT NOT NULL, codex_thread_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL); PRAGMA user_version = 1;')
+    legacy.close()
+    const db = new LocalDatabase(directory)
+    db.close()
+    const migrated = new Sqlite(file, { readonly: true })
+    expect(migrated.pragma('user_version', { simple: true })).toBe(5)
+    const tables = migrated.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>
+    expect(tables.map((item) => item.name)).toContain('suggestions')
+    expect(tables.map((item) => item.name)).toContain('workspace_memory')
+    migrated.close()
   })
 })

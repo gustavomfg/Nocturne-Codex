@@ -50,7 +50,8 @@ export class LocalDatabase {
     if (schemaVersion < 5 && fs.existsSync(this.databasePath)) {
       fs.copyFileSync(this.databasePath, `${this.databasePath}.backup-${Date.now()}`)
     }
-    this.db.exec(`
+    const migrateToVersion5 = this.db.transaction(() => {
+      this.db.exec(`
       CREATE TABLE IF NOT EXISTS conversations (
         id TEXT PRIMARY KEY, title TEXT NOT NULL, workspace TEXT NOT NULL,
         codex_thread_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
@@ -102,7 +103,10 @@ export class LocalDatabase {
     if (!suggestionColumns.some((column) => column.name === 'expected_benefits')) this.db.exec("ALTER TABLE suggestions ADD COLUMN expected_benefits TEXT NOT NULL DEFAULT '[]'")
     if (!suggestionColumns.some((column) => column.name === 'complexity')) this.db.exec("ALTER TABLE suggestions ADD COLUMN complexity TEXT NOT NULL DEFAULT 'medium'")
     if (!suggestionColumns.some((column) => column.name === 'risk')) this.db.exec("ALTER TABLE suggestions ADD COLUMN risk TEXT NOT NULL DEFAULT 'medium'")
-    this.db.pragma('user_version = 5')
+      this.db.pragma('user_version = 5')
+    })
+    const migrations = [{ version: 5, up: migrateToVersion5 }]
+    for (const migration of migrations) if (migration.version > schemaVersion) migration.up()
     this.cleanupOrphans()
   }
 

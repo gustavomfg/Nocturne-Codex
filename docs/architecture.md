@@ -1,5 +1,9 @@
 # Arquitetura
 
+## Migrações do banco
+
+O SQLite usa uma lista ordenada de migrações versionadas. Cada `up` é executado em uma transação exclusiva e atualiza `user_version` somente no fim da transação. Antes de migrar bancos existentes, o arquivo atual é preservado como backup. Uma falha reverte integralmente a versão em andamento.
+
 ## Visão geral
 
 O processo principal Electron é a fronteira de confiança. Ele gerencia SQLite, filesystem, Git, Pandoc e o processo filho `codex app-server --stdio`. O preload expõe somente operações nomeadas; o renderer React não possui acesso direto ao Node.js.

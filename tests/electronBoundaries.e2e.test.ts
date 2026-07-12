@@ -15,12 +15,16 @@ const electron = vi.hoisted(() => {
     save: [] as Array<{ canceled: boolean; filePath?: string }>,
   }
   let exposed: NocturneApi | null = null
+  const mainFrame = { routingId: 1 }
+  const mainWebContents: { send(channel: string, payload: unknown): void; mainFrame: typeof mainFrame } = { send: () => undefined, mainFrame }
   return {
     handlers,
     rendererListeners,
     dialogs,
     get exposed() { return exposed },
     setExposed(api: NocturneApi) { exposed = api },
+    mainFrame,
+    mainWebContents,
   }
 })
 
@@ -37,7 +41,7 @@ vi.mock('electron', () => ({
     invoke: async (channel: string, ...args: unknown[]) => {
       const handler = electron.handlers.get(channel)
       if (!handler) throw new Error(`Handler IPC ausente: ${channel}`)
-      return handler({}, ...args)
+      return handler({ sender: electron.mainWebContents, senderFrame: electron.mainFrame }, ...args)
     },
     on: (channel: string, listener: (event: unknown, payload: unknown) => void) => {
       const listeners = electron.rendererListeners.get(channel) ?? new Set()
@@ -101,7 +105,8 @@ describe.sequential('fronteiras Electron E2E', () => {
     const sent = (channel: string, payload: unknown) => {
       for (const listener of electron.rendererListeners.get(channel) ?? []) listener({}, payload)
     }
-    const win = { isDestroyed: () => false, webContents: { send: sent } }
+    electron.mainWebContents.send = sent
+    const win = { isDestroyed: () => false, webContents: electron.mainWebContents }
     const logger = new Logger(path.join(root, 'test-output'))
     registerIpc(win as never, database, codex as never, logger)
     await import('../electron/preload')
@@ -131,6 +136,13 @@ describe.sequential('fronteiras Electron E2E', () => {
     expect(codex.turns.map((turn) => turn.prompt)).toEqual(['Primeiro turno', 'Retomar thread'])
     expect(codex.interruptions).toEqual(['thread-1'])
     expect((await api.conversations.messages(conversation.id)).map((message) => message.content)).toEqual(['Primeiro turno', 'Retomar thread'])
+  })
+
+  it('rejeita chamadas IPC de outro WebContents ou frame', async () => {
+    const handler = electron.handlers.get('conversations:list')
+    expect(handler).toBeDefined()
+    await expect(Promise.resolve().then(() => handler?.({ sender: {}, senderFrame: electron.mainFrame }))).rejects.toThrow(/Origem IPC não autorizada/)
+    await expect(Promise.resolve().then(() => handler?.({ sender: electron.mainWebContents, senderFrame: {} }))).rejects.toThrow(/Origem IPC não autorizada/)
   })
 
   it('encaminha queda, restart, aprovação e recusa entre processo principal e preload', async () => {

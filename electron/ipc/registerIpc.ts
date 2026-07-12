@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { BrowserWindow, dialog, shell } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { execFile, spawn } from 'node:child_process'
@@ -13,10 +13,12 @@ import { approvalSchema, codexSendSchema, fileActionSchema, filePreviewSchema, i
 import { CODEX_COMPATIBILITY } from '../../shared/constants'
 import { registerDataIpc } from './registerDataIpc'
 import { registerGitIpc } from './registerGitIpc'
+import { safeIpcMain } from './safeIpc'
 
 const execFileAsync = promisify(execFile)
 
 export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: CodexClient, logger: Logger) {
+  const ipcMain = safeIpcMain(win)
   registerDataIpc(win, database, logger)
   registerGitIpc(win, database)
   const approvalDetails = new Map<string, { command?: string; risk?: string }>()
