@@ -8,6 +8,7 @@ import { AssistantMessage, MessageBubble, Welcome } from './domains/chat/ChatCon
 import { describeChanges, errorMessage, humanizeCommand, isBusy, normalizePlanStatus, parseChanges, statusText } from './shared/format'
 import { UI_TIMING } from '../shared/constants'
 import { useTurnLifecycle } from './domains/agent/useTurnLifecycle'
+import { useConfirmDialog } from './shared/ConfirmDialog'
 import './styles/components.css'
 
 const now = () => new Date().toISOString()
@@ -21,6 +22,7 @@ const PreviewDialog = lazy(() => import('./domains/settings/Dialogs').then((modu
 
 function App() {
   const store = useAppStore()
+  const confirmation = useConfirmDialog()
   const [workspace, setWorkspace] = useState('')
   const [prompt, setPrompt] = useState('')
   const [search, setSearch] = useState('')
@@ -266,7 +268,7 @@ function App() {
       { step: 'Relatar alterações e validações', status: 'pending' },
     ]
     const files = suggestion.affectedFiles.length ? suggestion.affectedFiles.join('\n• ') : 'arquivos a confirmar pelo agente'
-    if (!window.confirm(`Aplicar esta sugestão?\n\n${suggestion.title}\n\nArquivos:\n• ${files}\n\nO agente poderá modificar somente o escopo confirmado e executará validações.`)) return
+    if (!await confirmation.confirm({ title: 'Aplicar esta sugestão?', description: `${suggestion.title}\n\nArquivos:\n• ${files}\n\nO agente poderá modificar somente o escopo confirmado e executará validações.`, confirmLabel: 'Preparar aplicação' })) return
     await updateSuggestion(suggestion, 'accepted')
     store.setPlan(steps, `Aplicação da sugestão: ${suggestion.title}`)
     applyingSuggestionRef.current = suggestion.id
@@ -274,6 +276,8 @@ function App() {
   }
 
   async function removeConversation(id: string) {
+    const conversation = store.conversations.find((item) => item.id === id)
+    if (!await confirmation.confirm({ title: 'Excluir conversa?', description: `“${conversation?.title || 'Esta conversa'}” e seu histórico local serão removidos. Esta ação não pode ser desfeita.`, confirmLabel: 'Excluir conversa', danger: true })) return
     await window.nocturne.conversations.delete(id)
     if (store.activeId === id) { store.setActive(null); store.setMessages([]) }
     await refresh()
@@ -316,6 +320,7 @@ function App() {
 
   async function deleteArtifact(artifactId: string) {
     if (!store.activeId) return
+    if (!await confirmation.confirm({ title: 'Remover artefato?', description: 'O item será removido do painel. Arquivos existentes no workspace não serão apagados.', confirmLabel: 'Remover', danger: true })) return
     try { await window.nocturne.artifacts.delete(store.activeId, artifactId); store.setArtifacts(await window.nocturne.artifacts.list(store.activeId)); if (preview) setPreview(null) }
     catch (error) { store.setError(errorMessage(error)) }
   }
@@ -370,7 +375,7 @@ function App() {
       onSave={saveSettings}
       onOnboarding={() => { setSettingsOpen(false); setOnboardingOpen(true) }}
     />}</Suspense>
-    <Suspense fallback={null}>
+    {confirmation.dialog}<Suspense fallback={null}>
     {memoryOpen && <MemoryDialog value={memory} onClose={() => setMemoryOpen(false)} onSave={saveMemory}/>}
     {preview && <PreviewDialog preview={preview} activeId={store.activeId} onClose={() => setPreview(null)} onError={store.setError}/>}
     {onboardingOpen && <OnboardingDialog settings={settings} status={store.status} hasWorkspace={Boolean(workspace)} onWorkspace={selectWorkspace} onClose={() => { localStorage.setItem('nocturne.onboarding.completed', 'true'); setOnboardingOpen(false); composerRef.current?.focus() }}/>}
