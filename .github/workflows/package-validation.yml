@@ -39,7 +39,9 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
-      - run: npm run package
+      # Validation jobs build artifacts only. GitHub Releases are published explicitly
+      # after every platform has passed, so tag builds must not auto-publish here.
+      - run: npm run package -- --publish never
       - name: Smoke test packaged application (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run -a npm run smoke:package
