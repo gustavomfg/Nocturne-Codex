@@ -4,7 +4,7 @@
 
 Nocturne Codex is a local desktop engineering workspace for working with the Codex CLI and App Server. It brings project context, persistent conversations, agent activity, review, planning, approvals, artifacts, and Git awareness into one place—without moving engineering decisions away from the developer.
 
-The project is currently in **Beta** and under active development.
+The project is currently available as **v0.6.0-beta** for Linux x64 and remains under active development.
 
 > Nocturne Codex is an independent open source project. It is not an official OpenAI product and is not affiliated with OpenAI.
 
@@ -111,7 +111,7 @@ Responses, reports, diffs, files, images, Markdown, configuration, and exported 
 
 ### Git integration
 
-Nocturne Codex shows the current branch, modified files, working and staged diffs, and confirmed commits. It does not push automatically. Commit creation requires user confirmation and currently stages the workspace with `git add -A`.
+Nocturne Codex shows the current branch, modified files, working and staged diffs, and confirmed commits. Commit creation requires explicit confirmation and supports selective staging, including Unicode paths and renames. It never pushes automatically.
 
 ### Diagnostics and recovery
 
@@ -119,23 +119,7 @@ Structured, rotating logs record application, renderer, App Server, IPC, workspa
 
 ### Secure Electron architecture
 
-The renderer runs with `contextIsolation: true`, `nodeIntegration: false`, and Electron sandboxing. Node.js, SQLite, filesystem, Git, Pandoc, and process management stay in the main process. The preload exposes a small named API, IPC inputs are validated with Zod, external navigation is restricted, and workspace paths are normalized before access.
-
----
-
-## Screenshots
-
-### Project analysis and agent activity
-
-![Project analysis with agent activity](docs/images/analysis-and-activity.png)
-
-### Review Mode
-
-![Review Mode with suggestions and proposed changes](docs/images/review-mode.png)
-
-### Suggestion details
-
-![Structured suggestion with impact, reasoning, affected files, and proposed solution](docs/images/suggestion-detail.png)
+The renderer runs with `contextIsolation: true`, `nodeIntegration: false`, and Electron sandboxing. Node.js, SQLite, filesystem, Git, Pandoc, and process management stay in the main process. The preload exposes a small typed API, IPC payloads and origins are validated, external navigation is restricted, and workspace paths are normalized before access.
 
 ---
 
@@ -214,7 +198,7 @@ Review [docs/security.md](docs/security.md) and [SECURITY.md](SECURITY.md) befor
 
 - Linux x64 for the currently packaged Beta builds;
 - Codex CLI installed and authenticated;
-- Codex CLI 0.144.0 ou superior com `app-server --stdio` (versão verificada: 0.144.1);
+- Codex CLI 0.144.0 or newer with `app-server --stdio` (verified version: 0.144.1);
 - Git for repository status, diff, and commit workflows;
 - Pandoc only if HTML, DOCX, or PDF export is required.
 
@@ -235,7 +219,7 @@ Nocturne Codex starts and supervises the App Server automatically. It does not b
 
 ### Linux AppImage
 
-Download the AppImage from the GitHub Releases page, then:
+Download the AppImage from the [v0.6.0-beta release](https://github.com/guhdev-java/Nocturne-Codex/releases/tag/v0.6.0-beta), then:
 
 ```bash
 chmod +x "Nocturne Codex-Linux-0.6.0-beta.AppImage"
@@ -286,15 +270,17 @@ The following items are plans, not current capabilities.
 ### Short term
 
 - [ ] End-to-end Electron tests for onboarding, review, approval, and recovery
-- [ ] Signed release artifacts and published checksums
-- [ ] Final screenshot set and accessibility pass
+- [ ] Signed release artifacts
+- [x] Published SHA-256 checksums
+- [x] Accessibility, keyboard navigation, responsive layout, and reduced-motion pass
 - [ ] Better diff navigation and per-file validation results
-- [ ] Explicit App Server compatibility matrix
+- [x] Explicit App Server compatibility matrix
 
 ### Medium term
 
 - [ ] Plugin system with a reviewed capability model
-- [ ] More precise Git staging and application by hunk
+- [x] Selective Git staging by file
+- [ ] Git staging and application by hunk
 - [ ] Reusable review profiles and workspace policies
 - [ ] Better collaboration through exportable reviews and decision history
 - [ ] Additional packaged platforms after repeatable release validation
@@ -318,7 +304,7 @@ The core local workflow is implemented and packaged for Linux x64, but the proje
 
 Project Health is an explained estimate derived from open suggestions, not a formal security or quality audit. AI suggestions can be incomplete or wrong and must be reviewed like any other proposed engineering change.
 
-Known issues and release changes are tracked in [CHANGELOG.md](CHANGELOG.md).
+Known issues and release changes are tracked in [CHANGELOG.md](CHANGELOG.md). The complete notes for this build are available in [docs/releases/v0.6.0-beta.md](docs/releases/v0.6.0-beta.md).
 
 ---
 
@@ -334,7 +320,7 @@ Before opening a pull request:
 4. use strict TypeScript types and follow the existing naming style;
 5. add tests for state, persistence, security policy, or protocol behavior where relevant;
 6. run typecheck, lint, tests, and build;
-7. document manual validation and include screenshots for UI changes.
+7. document manual validation for UI changes.
 
 ```bash
 npm run typecheck

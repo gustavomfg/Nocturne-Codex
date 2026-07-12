@@ -2,6 +2,24 @@
 
 ## 0.6.0-beta — 2026-07-11
 
+### Produto e experiência
+
+- interface desktop lapidada com hierarquia, densidade, responsividade e movimentos consistentes;
+- sidebar e painel do agente convertidos em drawers funcionais em janelas compactas;
+- configurações otimizadas para abertura fluida, sem blur de tela inteira ou diagnóstico concorrente;
+- confirmações destrutivas integradas à linguagem visual do Nocturne, com foco controlado e retorno ao elemento de origem;
+- feedback explícito para cópia, salvamento, reinício do Codex, aprovações pendentes e operações assíncronas;
+- navegação por teclado, diálogos acessíveis, redução de movimento e contraste elevado revisados;
+- composer e modos Build, Review e Docs refinados com consequências e estados mais claros.
+
+### Fluxos de engenharia
+
+- sugestões estruturadas persistentes, Saúde do Projeto, planos editáveis, artefatos e memória por workspace;
+- commits seletivos por arquivo, com suporte seguro a espaços, Unicode, aspas, quebras de linha e renomeações;
+- ciclo de finalização dos turns extraído e protegido contra processamento duplicado;
+- matriz de compatibilidade do Codex CLI documentada e validada no onboarding;
+- exportação Markdown, HTML, DOCX e PDF integrada ao fluxo de artefatos.
+
 ### Estabilidade e segurança
 
 - validação mais estrita de mensagens JSON-RPC, com limite de tamanho e recusa explícita de requests desconhecidos;
@@ -11,10 +29,14 @@
 - criação de conversas e abertura de ferramentas restritas a workspaces previamente selecionados;
 - Content Security Policy explícita no renderer e remoção do polyfill Electron desnecessário;
 - acesso IPC residual removido do renderer.
+- origem de chamadas IPC privilegiadas validada contra o WebContents e frame principal autorizados;
+- contratos compartilhados aplicados ao preload e handlers IPC separados por domínio;
+- commits restritos aos caminhos selecionados e validados dentro do workspace;
+- migrações SQLite versionadas, transacionais e acompanhadas de backup preventivo.
 
 ### Persistência
 
-- importação limitada a 100 MB, com colunas e configurações permitidas por lista explícita;
+- importação limitada a 25 MB e 200 mil registros, com parsing em worker, schemas por tabela e validação de referências;
 - configurações passam a ser restauradas corretamente pelo backup, sem importar caminhos de executáveis;
 - limpeza de órfãos incluída na transação de importação;
 - retorno booleano de logs detalhados corrigido ao salvar configurações.
@@ -25,6 +47,8 @@
 - indicador de foco da busca corrigido para usar somente o contorno externo;
 - dependências não utilizadas removidas;
 - regressões de protocolo, backup e links simbólicos adicionadas à suíte de testes.
+- suíte ampliada para 34 testes automatizados e smoke test no Electron empacotado real;
+- README, documentação de arquitetura, integração, desenvolvimento e release sincronizados com o produto.
 
 ### Known Issues
 

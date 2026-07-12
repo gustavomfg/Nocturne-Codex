@@ -8,6 +8,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+.npm
 dist
 dist-ssr
 dist-electron
@@ -19,6 +20,8 @@ coverage
 *.deb
 *.tar.gz
 *.local
+*.bak
+*.backup-*
 
 # Local configuration and credentials
 .env
@@ -40,17 +43,21 @@ core.*
 .cache
 .tmp
 tmp
+*.pid
+*.sock
 
 # Test and tooling output
 .nyc_output
 test-results
 playwright-report
+blob-report
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj

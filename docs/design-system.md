@@ -501,8 +501,7 @@ The final v0.5 review evaluated professional confidence, comfort, affordance, an
 ### Remaining considerations for v0.6 — not implemented
 
 - Introduce shared Button, Badge, Tooltip, and Dialog primitives only as an approved architectural task.
-- Capture new README screenshots with the canonical logo and synchronized sidebars.
-- Add automated screenshot and contrast regression checks.
+- Add automated visual and contrast regression checks before the stable release.
 - Validate packaged builds with keyboard-only navigation on multiple Linux desktop environments.
 
 No new behavior or product capability was introduced during this final polish review.

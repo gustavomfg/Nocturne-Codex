@@ -26,4 +26,4 @@ O smoke test é ativado somente em um aplicativo empacotado que receba `NOCTURNE
 4. Publique os pacotes junto ao `SHA256SUMS` correspondente.
 5. Para uma versão estável, configure identidades de assinatura e notarização nos segredos do provedor de CI e remova `CSC_IDENTITY_AUTO_DISCOVERY=false` do job de release. Não publique uma versão estável sem assinatura válida em cada plataforma anunciada.
 
-O pacote não contém Codex CLI, login, tokens ou dados do usuário. Releases públicas devem trocar o placeholder de screenshot e fornecer ícones próprios em tamanhos adequados.
+O pacote não contém Codex CLI, login, tokens ou dados do usuário. Releases públicas devem usar os ícones canônicos em tamanhos adequados e não devem incluir capturas locais da interface.
