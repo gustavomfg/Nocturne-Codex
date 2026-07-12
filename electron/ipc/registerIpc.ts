@@ -7,12 +7,13 @@ import { z } from 'zod'
 import { CodexClient } from '../codex/CodexClient'
 import { LocalDatabase, type ConversationRow } from '../database/Database'
 import { Logger } from '../logging/Logger'
-import { assessCommand, resolveInsideWorkspace } from '../security/ExecutionPolicy'
+import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
 import { agentModes, extractSuggestions } from '../../shared/suggestions'
 import { approvalSchema, codexSendSchema, fileActionSchema, filePreviewSchema, idSchema, suggestionStatusSchema, workspaceFavoriteSchema, workspaceToolSchema } from '../../shared/ipc/schemas'
 import { CODEX_COMPATIBILITY } from '../../shared/constants'
 import { registerDataIpc } from './registerDataIpc'
 import { registerGitIpc } from './registerGitIpc'
+import { registerCodexBridge } from './registerCodexBridge'
 import { safeIpcMain } from './safeIpc'
 
 const execFileAsync = promisify(execFile)
@@ -22,19 +23,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   registerDataIpc(win, database, logger)
   registerGitIpc(win, database)
   const approvalDetails = new Map<string, { command?: string; risk?: string }>()
-  const push = (channel: string, payload: unknown) => {
-    if (!win.isDestroyed()) win.webContents.send(channel, payload)
-  }
-  codex.on('event', (event: { method: string; params: Record<string, unknown> }) => {
-    const command = event.params.command
-    const assessment = typeof command === 'string' || Array.isArray(command) ? assessCommand(command as string | string[]) : undefined
-    const approvalKey = typeof event.params.approvalKey === 'string' ? event.params.approvalKey : undefined
-    if (approvalKey) approvalDetails.set(approvalKey, { command: Array.isArray(command) ? command.join(' ') : typeof command === 'string' ? command : undefined, risk: assessment?.risk })
-    push('codex:event', assessment ? { ...event, params: { ...event.params, commandAssessment: assessment } } : event)
-  })
-  codex.on('status', (status) => push('codex:status', status))
-  codex.on('log', (entry) => logger.debug('codex', 'Saída do App Server', entry))
-  codex.on('diagnostic', (entry) => logger.warn('codex', 'Diagnóstico do agente', entry))
+  registerCodexBridge(win, codex, logger, approvalDetails)
 
   ipcMain.handle('workspace:select', async () => {
     const result = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], title: 'Selecionar workspace' })

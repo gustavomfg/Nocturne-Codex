@@ -4,12 +4,16 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { LocalDatabase } from '../electron/database/Database'
 import Sqlite from 'better-sqlite3'
+import { migrations } from '../electron/database/migrations'
 
 const directories: string[] = []
 const create = () => { const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-test-')); directories.push(directory); return new LocalDatabase(directory) }
 afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }) })
 
 describe('persistência SQLite', () => {
+  it('mantém migrações incrementais, ordenadas e sem lacunas', () => {
+    expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5])
+  })
   it('persiste conversa, thread, mensagens, memória e artefatos', () => {
     const db = create(); const workspace = '/tmp/workspace'; const conversation = db.createConversation(workspace)
     db.setThread(conversation.id, 'thread-1'); db.addMessage(conversation.id, 'user', 'Olá'); db.setWorkspaceMemory(workspace, 'decisão'); db.addArtifact(conversation.id, workspace, 'markdown', 'Resposta', null, '# ok')
@@ -49,5 +53,14 @@ describe('persistência SQLite', () => {
     expect(tables.map((item) => item.name)).toContain('suggestions')
     expect(tables.map((item) => item.name)).toContain('workspace_memory')
     migrated.close()
+  })
+  it('atualiza um snapshot v4 adicionando somente as colunas da v5', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-test-')); directories.push(directory)
+    const file = path.join(directory, 'nocturne.db'); const legacy = new Sqlite(file)
+    legacy.exec(`CREATE TABLE suggestions (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, conversation_id TEXT NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL, reasoning TEXT NOT NULL, category TEXT NOT NULL, severity TEXT NOT NULL, affected_files TEXT NOT NULL, proposed_changes TEXT NOT NULL, status TEXT NOT NULL, result TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL); PRAGMA user_version = 4;`)
+    migrations.find((migration) => migration.version === 5)!.up(legacy); legacy.pragma('user_version = 5'); legacy.close()
+    const migrated = new Sqlite(file, { readonly: true }); const columns = migrated.prepare('PRAGMA table_info(suggestions)').all() as Array<{ name: string }>
+    expect(columns.map((item) => item.name)).toEqual(expect.arrayContaining(['expected_benefits', 'complexity', 'risk']))
+    expect(migrated.pragma('user_version', { simple: true })).toBe(5); migrated.close()
   })
 })

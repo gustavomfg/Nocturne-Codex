@@ -1,6 +1,6 @@
 import { dialog, type BrowserWindow } from 'electron'
 import path from 'node:path'
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { LocalDatabase } from '../database/Database'
 import { gitCommitSchema, idSchema } from '../../shared/ipc/schemas'
@@ -8,6 +8,7 @@ import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
 import { safeIpcMain } from './safeIpc'
 
 const run = promisify(execFile)
+const MAX_DIFF_CHARACTERS = 1_500_000
 
 export function registerGitIpc(win: BrowserWindow, database: LocalDatabase) {
   const ipcMain = safeIpcMain(win)
@@ -49,10 +50,30 @@ function getWorkspace(database: LocalDatabase, id: string) {
 async function gitStatus(workspace: string) {
   const [branch, status, diff, staged] = await Promise.all([
     run('git', ['branch', '--show-current'], { cwd: workspace }), run('git', ['status', '--porcelain=v1', '-z', '--untracked-files=all'], { cwd: workspace }),
-    run('git', ['diff', '--no-ext-diff'], { cwd: workspace }), run('git', ['diff', '--cached', '--no-ext-diff'], { cwd: workspace }),
+    readDiff(workspace, ['diff', '--no-ext-diff']), readDiff(workspace, ['diff', '--cached', '--no-ext-diff']),
   ])
   const files = parsePorcelainZ(status.stdout)
-  return { branch: branch.stdout.trim() || '(detached)', status: files.map((file) => `${file.status.padEnd(2)} ${file.originalPath ? `${file.originalPath} → ` : ''}${file.path}`).join('\n'), diff: [diff.stdout, staged.stdout].filter(Boolean).join('\n'), files }
+  const fullDiff = [diff.stdout, staged.stdout].filter(Boolean).join('\n')
+  const diffTruncated = diff.truncated || staged.truncated || fullDiff.length > MAX_DIFF_CHARACTERS
+  const visibleDiff = diffTruncated ? `${fullDiff.slice(0, MAX_DIFF_CHARACTERS)}\n\n[Diff truncado pelo Nocturne para preservar a estabilidade. Abra o Git ou editor para inspecionar o restante.]` : fullDiff
+  return { branch: branch.stdout.trim() || '(detached)', status: files.map((file) => `${file.status.padEnd(2)} ${file.originalPath ? `${file.originalPath} → ` : ''}${file.path}`).join('\n'), diff: visibleDiff, diffTruncated, files }
+}
+
+function readDiff(workspace: string, args: string[]) {
+  return new Promise<{ stdout: string; truncated: boolean }>((resolve, reject) => {
+    const child = spawn('git', args, { cwd: workspace, stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''; let stderr = ''; let truncated = false
+    child.stdout.on('data', (chunk: Buffer) => {
+      if (stdout.length >= MAX_DIFF_CHARACTERS) { truncated = true; return }
+      const remaining = MAX_DIFF_CHARACTERS - stdout.length
+      const text = chunk.toString()
+      stdout += text.slice(0, remaining)
+      if (text.length > remaining) truncated = true
+    })
+    child.stderr.on('data', (chunk: Buffer) => { stderr = `${stderr}${chunk.toString()}`.slice(-64_000) })
+    child.on('error', reject)
+    child.on('close', (code) => code === 0 ? resolve({ stdout, truncated }) : reject(new Error(stderr || `git diff encerrou com código ${code}.`)))
+  })
 }
 
 export function parsePorcelainZ(output: string) {

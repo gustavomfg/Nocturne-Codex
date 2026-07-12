@@ -16,6 +16,7 @@ export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 const APP_NAME = 'Nocturne Codex'
 const APP_ICON = path.join(process.env.APP_ROOT, 'build', 'icon.png')
 app.setName(APP_NAME)
+const hasSingleInstanceLock = app.requestSingleInstanceLock()
 
 let win: BrowserWindow | null = null
 let database: LocalDatabase | null = null
@@ -107,6 +108,13 @@ async function runPackageSmoke(output: string) {
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
+app.on('second-instance', () => {
+  if (!win || win.isDestroyed()) return
+  if (win.isMinimized()) win.restore()
+  win.show()
+  win.focus()
+})
 app.on('before-quit', () => { logger?.info('app', 'Encerrando aplicação'); codex.stop(); database?.close() })
 app.on('child-process-gone', (_event, details) => logger?.error('app', 'Processo filho do Electron encerrado', details))
-void app.whenReady().then(createWindow)
+if (!hasSingleInstanceLock) app.quit()
+else void app.whenReady().then(createWindow)

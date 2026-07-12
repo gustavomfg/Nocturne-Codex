@@ -3,6 +3,7 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import type { Suggestion, SuggestionStatus } from '../../shared/suggestions'
+import { migrateDatabase } from './migrations'
 
 export interface ConversationRow {
   id: string
@@ -50,63 +51,7 @@ export class LocalDatabase {
     if (schemaVersion < 5 && fs.existsSync(this.databasePath)) {
       fs.copyFileSync(this.databasePath, `${this.databasePath}.backup-${Date.now()}`)
     }
-    const migrateToVersion5 = this.db.transaction(() => {
-      this.db.exec(`
-      CREATE TABLE IF NOT EXISTS conversations (
-        id TEXT PRIMARY KEY, title TEXT NOT NULL, workspace TEXT NOT NULL,
-        codex_thread_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS messages (
-        id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL, role TEXT NOT NULL,
-        content TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL,
-        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
-      );
-      CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, created_at);
-      CREATE TABLE IF NOT EXISTS workspaces (
-        path TEXT PRIMARY KEY, name TEXT NOT NULL, favorite INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, last_opened_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS workspace_memory (
-        workspace TEXT PRIMARY KEY, content TEXT NOT NULL, updated_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS artifacts (
-        id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL, workspace TEXT NOT NULL,
-        type TEXT NOT NULL, title TEXT NOT NULL, file_path TEXT, content TEXT, metadata TEXT,
-        created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
-        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
-      );
-      CREATE INDEX IF NOT EXISTS idx_artifacts_conversation ON artifacts(conversation_id, updated_at);
-      CREATE TABLE IF NOT EXISTS approval_audit (
-        id TEXT PRIMARY KEY, approval_key TEXT NOT NULL, decision TEXT NOT NULL,
-        command TEXT, risk TEXT, created_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS suggestions (
-        id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, conversation_id TEXT NOT NULL,
-        title TEXT NOT NULL, description TEXT NOT NULL, reasoning TEXT NOT NULL,
-        category TEXT NOT NULL, severity TEXT NOT NULL, affected_files TEXT NOT NULL,
-        proposed_changes TEXT NOT NULL, expected_benefits TEXT NOT NULL DEFAULT '[]', complexity TEXT NOT NULL DEFAULT 'medium', risk TEXT NOT NULL DEFAULT 'medium', status TEXT NOT NULL, result TEXT,
-        created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
-        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
-      );
-      CREATE INDEX IF NOT EXISTS idx_suggestions_conversation ON suggestions(conversation_id, updated_at);
-      CREATE TABLE IF NOT EXISTS suggestion_decisions (
-        id TEXT PRIMARY KEY, suggestion_id TEXT NOT NULL, status TEXT NOT NULL,
-        result TEXT, created_at TEXT NOT NULL,
-        FOREIGN KEY (suggestion_id) REFERENCES suggestions(id) ON DELETE CASCADE
-      );
-      INSERT OR IGNORE INTO workspaces(path,name,created_at,last_opened_at)
-        SELECT workspace, workspace, MIN(created_at), MAX(updated_at) FROM conversations GROUP BY workspace;
-    `)
-    const columns = this.db.prepare('PRAGMA table_info(workspaces)').all() as Array<{ name: string }>
-    if (!columns.some((column) => column.name === 'favorite')) this.db.exec('ALTER TABLE workspaces ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0')
-    const suggestionColumns = this.db.prepare('PRAGMA table_info(suggestions)').all() as Array<{ name: string }>
-    if (!suggestionColumns.some((column) => column.name === 'expected_benefits')) this.db.exec("ALTER TABLE suggestions ADD COLUMN expected_benefits TEXT NOT NULL DEFAULT '[]'")
-    if (!suggestionColumns.some((column) => column.name === 'complexity')) this.db.exec("ALTER TABLE suggestions ADD COLUMN complexity TEXT NOT NULL DEFAULT 'medium'")
-    if (!suggestionColumns.some((column) => column.name === 'risk')) this.db.exec("ALTER TABLE suggestions ADD COLUMN risk TEXT NOT NULL DEFAULT 'medium'")
-      this.db.pragma('user_version = 5')
-    })
-    const migrations = [{ version: 5, up: migrateToVersion5 }]
-    for (const migration of migrations) if (migration.version > schemaVersion) migration.up()
+    migrateDatabase(this.db, schemaVersion)
     this.cleanupOrphans()
   }
 

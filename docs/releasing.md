@@ -26,4 +26,12 @@ O smoke test é ativado somente em um aplicativo empacotado que receba `NOCTURNE
 4. Publique os pacotes junto ao `SHA256SUMS` correspondente.
 5. Para uma versão estável, configure identidades de assinatura e notarização nos segredos do provedor de CI e remova `CSC_IDENTITY_AUTO_DISCOVERY=false` do job de release. Não publique uma versão estável sem assinatura válida em cada plataforma anunciada.
 
+## Assinatura e proteção das chaves
+
+- macOS: forneça o certificado Developer ID por `CSC_LINK`/`CSC_KEY_PASSWORD` e as credenciais de notarização aceitas pelo Electron Builder (`APPLE_API_KEY`, `APPLE_API_KEY_ID` e `APPLE_API_ISSUER`).
+- Windows: forneça um certificado Authenticode por `WIN_CSC_LINK`/`WIN_CSC_KEY_PASSWORD`, preferencialmente armazenado em cofre ou serviço de assinatura da organização.
+- Linux: publique `SHA256SUMS` e, quando houver uma identidade oficial do projeto, assine também o arquivo de checksums com uma chave dedicada à release.
+
+Segredos de assinatura não devem ser disponibilizados em workflows de pull request, logs ou artefatos. Use ambientes protegidos, aprovação manual para releases estáveis e permissões mínimas. Registre data de emissão, expiração e responsável por cada identidade; em uma rotação, revogue a identidade anterior quando aplicável, substitua os segredos e valide um pacote de cada plataforma antes da publicação.
+
 O pacote não contém Codex CLI, login, tokens ou dados do usuário. Releases públicas devem usar os ícones canônicos em tamanhos adequados e não devem incluir capturas locais da interface.

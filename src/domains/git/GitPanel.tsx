@@ -22,6 +22,7 @@ export function GitPanel({ activeId, gitInfo, onRefresh, onError }: { activeId: 
     finally { setCommitting(false) }
   }
   return <div className="git-panel"><div className="diff-title"><GitBranch size={14}/>Git · {gitInfo.branch}<span>{selected.length}/{gitInfo.files.length}</span></div>
+    {gitInfo.diffTruncated && <p className="git-diff-warning" role="status">Diff muito grande: exibindo somente os primeiros 1,5 milhão de caracteres.</p>}
     <div className="git-file-list">{gitInfo.files.map((file) => <label key={file.path}><input type="checkbox" checked={selected.includes(file.path)} onChange={() => toggle(file.path)}/><span className="git-file-status">{file.status}</span><span title={file.path}>{file.path}</span></label>)}</div>
     {!gitInfo.files.length && <p className="git-clean">Workspace limpo</p>}
     <div className="commit-row"><label className="sr-only" htmlFor="commit-message">Mensagem do commit</label><input id="commit-message" value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} placeholder="Mensagem do commit" disabled={committing}/><button aria-label={committing ? 'Criando commit' : 'Criar commit com arquivos selecionados'} title={committing ? 'Criando commit…' : 'Criar commit'} disabled={committing || !commitMessage.trim() || !selected.length} onClick={commit}><Check size={13}/></button></div>
