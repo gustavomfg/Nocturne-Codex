@@ -4,11 +4,11 @@ import type { CodexSettings, Conversation, Workspace } from '../../types'
 import { relativeTime } from '../../shared/format'
 
 interface SidebarProps {
-  open: boolean; conversations: Conversation[]; activeId: string | null; search: string; searchRef: RefObject<HTMLInputElement>; workspace: string; workspaces: Workspace[]; settings: CodexSettings; status: string;
+  open: boolean; conversations: Conversation[]; hasConversations: boolean; activeId: string | null; search: string; searchRef: RefObject<HTMLInputElement>; workspace: string; workspaces: Workspace[]; settings: CodexSettings; status: string;
   onClose(): void; onNew(): void; onSearch(value: string): void; onConversation(id: string): void; onDelete(id: string): void; onWorkspace(): void; onSavedWorkspace(path: string): void; onFavorite(item: Workspace): void; onSettings(): void
 }
 
-export function Sidebar({ open, conversations, activeId, search, searchRef, workspace, workspaces, settings, status, onClose, onNew, onSearch, onConversation, onDelete, onWorkspace, onSavedWorkspace, onFavorite, onSettings }: SidebarProps) {
+export function Sidebar({ open, conversations, hasConversations, activeId, search, searchRef, workspace, workspaces, settings, status, onClose, onNew, onSearch, onConversation, onDelete, onWorkspace, onSavedWorkspace, onFavorite, onSettings }: SidebarProps) {
   const sidebarRef = useRef<HTMLElement>(null)
   const newShortcut = navigator.platform.toLowerCase().includes('mac') ? '⌘ N' : 'Ctrl N'
   useEffect(() => { if (sidebarRef.current) sidebarRef.current.inert = !open }, [open])
@@ -22,7 +22,7 @@ export function Sidebar({ open, conversations, activeId, search, searchRef, work
         <button className="conversation-open" onClick={() => onConversation(conversation.id)} aria-current={conversation.id === activeId ? 'page' : undefined}><span className="conversation-icon"><Code2 size={15}/></span><span className="conversation-copy"><strong>{conversation.title}</strong><small>{relativeTime(conversation.updatedAt)}</small></span></button>
         <button className="delete-button" aria-label={`Excluir conversa ${conversation.title}`} title="Excluir conversa" onClick={() => onDelete(conversation.id)}><Trash2 size={13}/></button>
       </div>)}
-      {!conversations.length && <p className="empty-list">Nenhuma conversa ainda.</p>}
+      {!conversations.length && <div className="empty-list" role="status"><strong>{hasConversations ? 'Nenhum resultado encontrado' : 'Nenhuma conversa ainda'}</strong><small>{hasConversations ? 'Ajuste a busca ou selecione outro workspace.' : 'Crie uma conversa para começar a trabalhar.'}</small>{search && <button type="button" onClick={() => onSearch('')}>Limpar busca</button>}</div>}
     </nav>
     <div className="sidebar-footer">
       {workspaces.slice(0, 4).map((item) => <div key={item.path} className={`workspace-mini ${workspace === item.path ? 'active' : ''}`}><button className="workspace-open" onClick={() => onSavedWorkspace(item.path)}><Folder size={13}/><span>{item.name}</span></button><button className="workspace-favorite" aria-label={item.favorite ? `Remover ${item.name} dos favoritos` : `Favoritar ${item.name}`} aria-pressed={item.favorite} title={item.favorite ? 'Remover dos favoritos' : 'Favoritar'} onClick={() => onFavorite(item)}><Star size={12} fill={item.favorite ? 'currentColor' : 'none'}/></button></div>)}

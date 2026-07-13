@@ -10,7 +10,13 @@
 - confirmações destrutivas integradas à linguagem visual do Nocturne, com foco controlado e retorno ao elemento de origem;
 - feedback explícito para cópia, salvamento, reinício do Codex, aprovações pendentes e operações assíncronas;
 - navegação por teclado, diálogos acessíveis, redução de movimento e contraste elevado revisados;
-- composer e modos Build, Review e Docs refinados com consequências e estados mais claros.
+- composer e modos Build, Review e Docs refinados com consequências e estados mais claros;
+- continuidade de leitura preservada durante respostas longas, com acompanhamento inteligente do streaming e retorno voluntário ao conteúdo mais recente;
+- ações rápidas passam a preparar o pedido no composer para revisão do usuário antes do envio;
+- estados vazios distinguem ausência de conteúdo de filtros sem resultado, e configurações não salvas recebem proteção contra descarte acidental;
+- onboarding orientado por prontidão real do Codex, autenticação, App Server e workspace, sem marcar etapas incompletas como concluídas;
+- painel de Atividade prioriza operação atual e aprovações, mantendo detalhes técnicos progressivamente revelados;
+- topbar responsiva, alvos de interação, tipografia mínima, abas por teclado e explicações de Saúde do Projeto reforçados.
 
 ### Fluxos de engenharia
 
@@ -48,6 +54,7 @@
 
 - configurações reorganizadas para navegação mais fluida e consistente com o aplicativo;
 - indicador de foco da busca corrigido para usar somente o contorno externo;
+- cascata visual consolidada, com remoção de declarações redundantes e seletores responsivos sem dependência da posição no DOM;
 - dependências não utilizadas removidas;
 - regressões de protocolo, backup e links simbólicos adicionadas à suíte de testes;
 - suíte ampliada para 62 testes automatizados e smoke test no Electron empacotado real;

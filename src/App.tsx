@@ -1,5 +1,5 @@
 import { FormEvent, Fragment, lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { Brain, ChevronRight, Code2, Folder, GitBranch, Menu, PanelRight, Settings, Terminal, X } from 'lucide-react'
+import { ArrowDown, Brain, ChevronRight, Code2, Folder, GitBranch, Menu, PanelRight, Settings, Terminal, X } from 'lucide-react'
 import { useAppStore } from './store'
 import type { Activity, AgentMode, Artifact, Attachment, ChangedFile, CodexEvent, CodexSettings, FilePreview, GitInfo, PlanStep, Suggestion, SuggestionStatus, Workspace, WorkspaceMemory } from './types'
 import { Sidebar } from './domains/workspaces/Sidebar'
@@ -49,7 +49,12 @@ function App() {
   const [memoryOpen, setMemoryOpen] = useState(false)
   const [onboardingOpen, setOnboardingOpen] = useState(() => localStorage.getItem('nocturne.onboarding.completed') !== 'true')
   const [agentMode, setAgentMode] = useState<AgentMode>('review')
+  const [newContent, setNewContent] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
+  const chatScrollRef = useRef<HTMLElement>(null)
+  const stickToBottomRef = useRef(true)
+  const noticeTimerRef = useRef<number | null>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const { queueStreamDelta, flushStream, appendActivityDetail, addItemActivity, completeItem } = useBufferedCodexEvents()
@@ -79,11 +84,14 @@ function App() {
   }, [])
 
   useEffect(() => {
-    const scroller = endRef.current?.closest('.chat-scroll')
+    const scroller = chatScrollRef.current
     if (!scroller) return
-    const nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 220
-    if (nearBottom) scroller.scrollTo({ top: scroller.scrollHeight, behavior: store.streaming || window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+    if (stickToBottomRef.current) {
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: store.streaming || window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+      setNewContent(false)
+    } else if (store.streaming) setNewContent(true)
   }, [store.messages, store.streaming])
+  useEffect(() => () => { if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current) }, [])
   useEffect(() => { document.documentElement.dataset.theme = settings.theme || 'dark' }, [settings.theme])
   useEffect(() => {
     const preload = () => { void loadSettingsDialog() }
@@ -136,6 +144,7 @@ function App() {
   async function openConversation(id: string, conversations = store.conversations) {
     if (interactionLocked() && id !== useAppStore.getState().activeId) { store.setError('Cancele ou aguarde a execução atual antes de trocar de conversa.'); return }
     const requestId = ++conversationRequestRef.current
+    stickToBottomRef.current = true; setNewContent(false)
     store.setActive(id); store.clearRun()
     const messages = await window.nocturne.conversations.messages(id)
     if (requestId !== conversationRequestRef.current || useAppStore.getState().activeId !== id) return
@@ -173,6 +182,33 @@ function App() {
     store.addMessage({ id: fakeId(), conversationId, role: 'user', content, metadata: JSON.stringify({ attachments: selectedAttachments.map((item) => item.path) }), createdAt: now() })
     try { const result = await window.nocturne.codex.send(conversationId, content, selectedAttachments.map((item) => item.path), mode); if (result.recreated) store.setError('A thread anterior não pôde ser restaurada. Uma nova thread foi criada para esta conversa.'); await refresh() }
     catch (error) { activeTurnRef.current = null; applyingSuggestionRef.current = null; store.setFinalizing(false); store.setStatus('failed'); store.setError(error instanceof Error ? error.message : String(error)) }
+  }
+
+  function preparePrompt(value: string, mode: AgentMode = agentMode) {
+    if (interactionLocked()) { store.setError('Aguarde a execução atual antes de preparar outro pedido.'); return }
+    setPrompt(value); setAgentMode(mode)
+    window.requestAnimationFrame(() => { composerRef.current?.focus(); composerRef.current?.setSelectionRange(value.length, value.length) })
+  }
+
+  function notify(message: string) {
+    setNotice(message)
+    if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current)
+    noticeTimerRef.current = window.setTimeout(() => setNotice(null), 3_200)
+  }
+
+  function handleChatScroll() {
+    const scroller = chatScrollRef.current
+    if (!scroller) return
+    const atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 96
+    stickToBottomRef.current = atBottom
+    if (atBottom) setNewContent(false)
+  }
+
+  function jumpToLatest() {
+    const scroller = chatScrollRef.current
+    if (!scroller) return
+    stickToBottomRef.current = true; setNewContent(false)
+    scroller.scrollTo({ top: scroller.scrollHeight, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
   }
 
   async function attachFiles() {
@@ -253,7 +289,7 @@ function App() {
   }
 
   async function saveSettings(next: CodexSettings) {
-    try { const saved = await window.nocturne.settings.set(next); setSettings({ ...next, ...saved }); setAgentMode(next.defaultAgentMode || 'review'); setSettingsOpen(false) }
+    try { const saved = await window.nocturne.settings.set(next); setSettings({ ...next, ...saved }); setAgentMode(next.defaultAgentMode || 'review'); setSettingsOpen(false); notify('Configurações salvas.') }
     catch (error) { store.setError(errorMessage(error)) }
   }
 
@@ -296,7 +332,28 @@ function App() {
   }
 
   async function reconnect() {
-    try { store.setError(null); await window.nocturne.codex.start(); if (store.activeId) await window.nocturne.codex.resume(store.activeId) }
+    try { store.setError(null); await window.nocturne.codex.start(); if (store.activeId) await window.nocturne.codex.resume(store.activeId); notify('Conexão com o Codex restabelecida.') }
+    catch (error) { store.setError(errorMessage(error)) }
+  }
+
+  async function recheckReadiness() {
+    try {
+      await window.nocturne.codex.start()
+      const refreshed = await window.nocturne.settings.get()
+      const normalized = { ...refreshed, model: refreshed.model || '', sandbox: refreshed.sandbox || 'workspace-write', approvalPolicy: refreshed.approvalPolicy === 'untrusted' ? 'untrusted' : 'on-request', theme: 'dark', defaultAgentMode: refreshed.defaultAgentMode || 'review' } as CodexSettings
+      setSettings(normalized); store.setStatus(normalized.serverStatus || useAppStore.getState().status)
+      notify('Verificações de prontidão atualizadas.')
+    } catch (error) { store.setError(errorMessage(error)) }
+  }
+
+  async function openWorkspaceTool(tool: 'editor' | 'terminal') {
+    if (!pathLabel) return
+    try { await window.nocturne.workspace.openTool(pathLabel, tool); notify(tool === 'editor' ? 'Workspace aberto no editor.' : 'Terminal aberto no workspace.') }
+    catch (error) { store.setError(errorMessage(error)) }
+  }
+
+  async function favoriteWorkspace(item: Workspace) {
+    try { await window.nocturne.workspace.favorite(item.path, !item.favorite); setWorkspaces(await window.nocturne.workspace.list()); notify(item.favorite ? 'Workspace removido dos favoritos.' : 'Workspace adicionado aos favoritos.') }
     catch (error) { store.setError(errorMessage(error)) }
   }
 
@@ -305,42 +362,44 @@ function App() {
 
   return <div className="app-shell">
     {sidebarOpen && <button className="panel-backdrop sidebar-backdrop" aria-label="Fechar barra lateral" onClick={() => setSidebarOpen(false)}/>}
-    <Sidebar open={sidebarOpen} conversations={filtered} activeId={store.activeId} search={search} searchRef={searchRef} workspace={workspace} workspaces={workspaces} settings={settings} status={store.status} onClose={() => setSidebarOpen(false)} onNew={createConversation} onSearch={setSearch} onConversation={openConversation} onDelete={(id) => void removeConversation(id)} onWorkspace={selectWorkspace} onSavedWorkspace={chooseSavedWorkspace} onFavorite={(item) => void window.nocturne.workspace.favorite(item.path, !item.favorite).then(() => window.nocturne.workspace.list()).then(setWorkspaces)} onSettings={() => setSettingsOpen(true)}/>
+    <Sidebar open={sidebarOpen} conversations={filtered} hasConversations={store.conversations.length > 0} activeId={store.activeId} search={search} searchRef={searchRef} workspace={workspace} workspaces={workspaces} settings={settings} status={store.status} onClose={() => setSidebarOpen(false)} onNew={createConversation} onSearch={setSearch} onConversation={openConversation} onDelete={(id) => void removeConversation(id)} onWorkspace={selectWorkspace} onSavedWorkspace={chooseSavedWorkspace} onFavorite={(item) => void favoriteWorkspace(item)} onSettings={() => setSettingsOpen(true)}/>
 
     <main className="main-panel">
       <header className="topbar">
         {!sidebarOpen && <button className="icon-button" aria-label="Abrir barra lateral" title="Abrir barra lateral" onClick={() => setSidebarOpen(true)}><Menu size={18}/></button>}
         <div className="title-block"><h1>{title}</h1>{pathLabel && <button className="path-pill" onClick={selectWorkspace}><Folder size={13}/>{pathLabel.split(/[/\\]/).pop()}<ChevronRight size={12}/></button>}</div>
-        <div className="top-actions">{gitInfo && <span className="branch-pill"><GitBranch size={12}/>{gitInfo.branch}</span>}{pathLabel && <><button className="icon-button" aria-label="Abrir no VS Code" title="Abrir no VS Code" onClick={() => window.nocturne.workspace.openTool(pathLabel, 'editor').catch((error) => store.setError(errorMessage(error)))}><Code2 size={16}/></button><button className="icon-button" aria-label="Abrir terminal" title="Abrir terminal" onClick={() => window.nocturne.workspace.openTool(pathLabel, 'terminal').catch((error) => store.setError(errorMessage(error)))}><Terminal size={16}/></button></>}<button className={`connection ${store.status}`} onClick={reconnect} title="Reconectar ao App Server"><span/>{statusText(store.status)}</button><button className={`icon-button ${memory.content ? 'has-memory' : ''}`} aria-label="Memória do workspace" onClick={() => store.activeId ? setMemoryOpen(true) : store.setError('Abra uma conversa para configurar a memória do workspace.')} title="Memória do workspace"><Brain size={17}/></button><button className="icon-button" aria-label="Abrir configurações" title="Abrir configurações" onClick={() => setSettingsOpen(true)}><Settings size={17}/></button><button className={`icon-button ${rightOpen ? 'selected' : ''}`} aria-label={rightOpen ? 'Ocultar painel do agente' : 'Mostrar painel do agente'} title={rightOpen ? 'Ocultar painel do agente' : 'Mostrar painel do agente'} onClick={() => setRightOpen(!rightOpen)}><PanelRight size={18}/></button></div>
+        <div className="top-actions">{gitInfo && <span className="branch-pill top-action-branch"><GitBranch size={12}/>{gitInfo.branch}</span>}{pathLabel && <><button className="icon-button top-action-workspace" aria-label="Abrir no VS Code" title="Abrir no VS Code" onClick={() => void openWorkspaceTool('editor')}><Code2 size={16}/></button><button className="icon-button top-action-workspace" aria-label="Abrir terminal" title="Abrir terminal" onClick={() => void openWorkspaceTool('terminal')}><Terminal size={16}/></button></>}<button className={`connection top-action-essential ${store.status}`} onClick={reconnect} aria-label={`Codex: ${statusText(store.status)}. Reconectar`} title="Reconectar ao App Server"><span/>{statusText(store.status)}</button><button className={`icon-button top-action-essential ${memory.content ? 'has-memory' : ''}`} aria-label="Memória do workspace" onClick={() => store.activeId ? setMemoryOpen(true) : store.setError('Abra uma conversa para configurar a memória do workspace.')} title="Memória do workspace"><Brain size={17}/></button><button className="icon-button top-action-secondary" aria-label="Abrir configurações" title="Abrir configurações" onClick={() => setSettingsOpen(true)}><Settings size={17}/></button><button className={`icon-button top-action-essential ${rightOpen ? 'selected' : ''}`} aria-label={rightOpen ? 'Ocultar painel do agente' : 'Mostrar painel do agente'} title={rightOpen ? 'Ocultar painel do agente' : 'Mostrar painel do agente'} onClick={() => setRightOpen(!rightOpen)}><PanelRight size={18}/></button></div>
       </header>
 
-      <section className="chat-scroll">
-        {!store.activeId && !store.messages.length ? <div className="chat-content welcome-content"><Welcome onNew={createConversation} onWorkspace={selectWorkspace} onPrompt={submitPrompt}/>{store.error && <div className="error-card"><X size={16}/><span>{store.error}</span><button onClick={() => store.setError(null)}>Fechar</button></div>}</div> : <div className="chat-content">
+      <section ref={chatScrollRef} className="chat-scroll" onScroll={handleChatScroll}>
+        {!store.activeId && !store.messages.length ? <div className="chat-content welcome-content"><Welcome onNew={createConversation} onWorkspace={selectWorkspace} onPrompt={preparePrompt}/>{store.error && <div className="error-card"><X size={16}/><span>{store.error}</span><button onClick={() => store.setError(null)}>Fechar</button></div>}</div> : <div className="chat-content">
           {store.messages.map((message, index) => <Fragment key={message.id}>{(index === 0 || dayKey(store.messages[index - 1].createdAt) !== dayKey(message.createdAt)) && <div className="date-divider"><span>{dayLabel(message.createdAt)}</span></div>}<MessageBubble message={message}/></Fragment>) }
           {store.streaming && <AssistantMessage content={store.streaming} streaming/>}
           {store.error && <div className="error-card"><X size={16}/><span>{store.error}</span><button onClick={() => store.setError(null)}>Fechar</button></div>}
           <div ref={endRef}/>
         </div>}
       </section>
+      {newContent && <button className="jump-latest" onClick={jumpToLatest}><ArrowDown size={15}/><span>Nova resposta disponível</span></button>}
 
-      <Composer agentMode={agentMode} attachments={attachments} prompt={prompt} status={store.status} finalizing={store.finalizing} settings={settings} active={Boolean(store.activeId)} pendingApprovals={store.approvals.filter((item) => item.status === 'pending').length} composerRef={composerRef} onMode={setAgentMode} onPrompt={setPrompt} onRemoveAttachment={(path) => setAttachments((current) => current.filter((file) => file.path !== path))} onAttach={attachFiles} onCancel={cancelRun} onSubmit={send} onQuick={submitPrompt}/>
+      <Composer agentMode={agentMode} attachments={attachments} prompt={prompt} status={store.status} finalizing={store.finalizing} settings={settings} active={Boolean(store.activeId)} pendingApprovals={store.approvals.filter((item) => item.status === 'pending').length} composerRef={composerRef} onMode={setAgentMode} onPrompt={setPrompt} onRemoveAttachment={(path) => setAttachments((current) => current.filter((file) => file.path !== path))} onAttach={attachFiles} onCancel={cancelRun} onSubmit={send} onQuick={preparePrompt}/>
     </main>
     {rightOpen && <button className="panel-backdrop inspector-backdrop" aria-label="Fechar painel do agente" onClick={() => setRightOpen(false)}/>}
 
-    <Suspense fallback={null}><AgentPanel open={rightOpen} activities={store.activities} approvals={store.approvals} diff={store.diff} files={store.files} artifacts={store.artifacts} suggestions={store.suggestions} plan={store.plan} planExplanation={store.planExplanation} activeId={store.activeId} gitInfo={gitInfo} documentContent={documentContent} onDecide={decide} onError={store.setError} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onSuggestionStatus={updateSuggestion} onSuggestionApply={applySuggestion} onPlanChange={(plan) => store.setPlan(plan, store.planExplanation)} onPlanExecute={(plan) => submitPrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`, 'build')}/></Suspense>
+    <Suspense fallback={null}><AgentPanel open={rightOpen} activities={store.activities} approvals={store.approvals} diff={store.diff} files={store.files} artifacts={store.artifacts} suggestions={store.suggestions} plan={store.plan} planExplanation={store.planExplanation} activeId={store.activeId} gitInfo={gitInfo} documentContent={documentContent} onDecide={decide} onError={store.setError} onNotify={notify} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onSuggestionStatus={updateSuggestion} onSuggestionApply={applySuggestion} onPlanChange={(plan) => store.setPlan(plan, store.planExplanation)} onPlanExecute={(plan) => preparePrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`, 'build')}/></Suspense>
     <Suspense fallback={null}>{settingsOpen && <SettingsDialog
       value={settings}
       status={store.status}
       workspaces={workspaces}
       onClose={() => setSettingsOpen(false)}
       onSave={saveSettings}
+      onNotify={notify}
       onOnboarding={() => { setSettingsOpen(false); setOnboardingOpen(true) }}
     />}</Suspense>
     {confirmation.dialog}<Suspense fallback={null}>
     {memoryOpen && <MemoryDialog value={memory} onClose={() => setMemoryOpen(false)} onSave={saveMemory}/>}
-    {preview && <PreviewDialog preview={preview} activeId={store.activeId} onClose={() => setPreview(null)} onError={store.setError}/>}
-    {onboardingOpen && <OnboardingDialog settings={settings} status={store.status} hasWorkspace={Boolean(workspace)} onWorkspace={selectWorkspace} onClose={() => { localStorage.setItem('nocturne.onboarding.completed', 'true'); setOnboardingOpen(false); composerRef.current?.focus() }}/>}
-    </Suspense>
+    {preview && <PreviewDialog preview={preview} activeId={store.activeId} onClose={() => setPreview(null)} onError={store.setError} onNotify={notify}/>}
+    {onboardingOpen && <OnboardingDialog settings={settings} status={store.status} hasWorkspace={Boolean(workspace)} onWorkspace={selectWorkspace} onSettings={() => { setOnboardingOpen(false); setSettingsOpen(true) }} onRecheck={recheckReadiness} onDismiss={() => { setOnboardingOpen(false); composerRef.current?.focus() }} onComplete={() => { localStorage.setItem('nocturne.onboarding.completed', 'true'); setOnboardingOpen(false); notify('Nocturne pronto para trabalhar.'); composerRef.current?.focus() }}/>}
+    </Suspense>{notice && <div className="product-toast" role="status" aria-live="polite"><span>{notice}</span><button aria-label="Fechar notificação" onClick={() => setNotice(null)}><X size={14}/></button></div>}
   </div>
 }
 

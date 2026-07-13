@@ -1,4 +1,4 @@
-import type { FormEvent, RefObject } from 'react'
+import type { FormEvent, KeyboardEvent, RefObject } from 'react'
 import { Code2, FileCode2, GitBranch, Paperclip, Send, ShieldCheck, Square, X } from 'lucide-react'
 import type { AgentMode, Attachment, CodexSettings } from '../../types'
 import { isBusy } from '../../shared/format'
@@ -16,10 +16,17 @@ const modes: Array<{ id: AgentMode; label: string; description: string }> = [
 
 export function Composer({ agentMode, attachments, prompt, status, finalizing, settings, active, pendingApprovals, composerRef, onMode, onPrompt, onRemoveAttachment, onAttach, onCancel, onSubmit, onQuick }: ComposerProps) {
   const busy = isBusy(status) || finalizing
+  const moveModeFocus = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+    event.preventDefault()
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? modes.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + modes.length) % modes.length
+    onMode(modes[next].id)
+    event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus()
+  }
   return <div className={`composer-wrap mode-${agentMode}`}>
     {pendingApprovals > 0 && <div className="approval-notice" role="status"><ShieldCheck size={15}/><span><strong>Aguardando sua aprovação</strong><small>Abra o painel do agente para revisar a solicitação.</small></span></div>}
-    <div className="agent-mode-switch" role="radiogroup" aria-label="Modo do agente">{modes.map((mode) => <button key={mode.id} type="button" role="radio" aria-checked={agentMode === mode.id} className={agentMode === mode.id ? 'active' : ''} onClick={() => onMode(mode.id)}><span/>{mode.label} <small>{mode.description}</small></button>)}</div>
-    <div className="quick-actions" aria-label="Ações rápidas"><button type="button" onClick={() => onQuick('Analise este projeto e resuma arquitetura, dependências, riscos e próximos passos.')}><Code2 size={13}/>Analisar</button><button type="button" onClick={() => onQuick('Crie documentação completa em Markdown para este projeto e salve em DOCUMENTACAO.md.', 'docs')}><FileCode2 size={13}/>Documentar</button><button type="button" onClick={() => onQuick('Revise as alterações Git atuais, buscando bugs, riscos e testes ausentes. Não modifique arquivos sem pedir.', 'review')}><GitBranch size={13}/>Revisar diff</button></div>
+    <div className="agent-mode-switch" role="radiogroup" aria-label="Modo do agente">{modes.map((mode, index) => <button key={mode.id} type="button" role="radio" aria-checked={agentMode === mode.id} tabIndex={agentMode === mode.id ? 0 : -1} className={agentMode === mode.id ? 'active' : ''} onKeyDown={(event) => moveModeFocus(event, index)} onClick={() => onMode(mode.id)}><span/>{mode.label} <small>{mode.description}</small></button>)}</div>
+    <div className="quick-actions" aria-label="Preencher um modelo de pedido"><button type="button" onClick={() => onQuick('Analise este projeto e resuma arquitetura, dependências, riscos e próximos passos.')}><Code2 size={13}/>Preparar análise</button><button type="button" onClick={() => onQuick('Crie documentação completa em Markdown para este projeto e salve em DOCUMENTACAO.md.', 'docs')}><FileCode2 size={13}/>Preparar documentação</button><button type="button" onClick={() => onQuick('Revise as alterações Git atuais, buscando bugs, riscos e testes ausentes. Não modifique arquivos sem pedir.', 'review')}><GitBranch size={13}/>Preparar revisão</button></div>
     <form className="composer" onSubmit={onSubmit}>
       {!!attachments.length && <div className="attachment-list">{attachments.map((item) => <span key={item.path}><Paperclip size={13}/>{item.name}<button type="button" aria-label={`Remover anexo ${item.name}`} title="Remover anexo" onClick={() => onRemoveAttachment(item.path)}><X size={13}/></button></span>)}</div>}
       <label className="sr-only" htmlFor="prompt-composer">Mensagem para o Codex</label><textarea id="prompt-composer" ref={composerRef} value={prompt} onChange={(event) => onPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} placeholder={active ? 'Peça ao Codex para criar, analisar ou modificar…' : 'Selecione um workspace e descreva o que deseja criar…'} rows={1}/>
