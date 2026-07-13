@@ -15,6 +15,7 @@ const electron = vi.hoisted(() => {
     save: [] as Array<{ canceled: boolean; filePath?: string }>,
   }
   let exposed: NocturneApi | null = null
+  let clipboardText = ''
   const mainFrame = { routingId: 1, url: 'file:///nocturne/index.html' }
   const mainWebContents: { send(channel: string, payload: unknown): void; mainFrame: typeof mainFrame; getURL(): string } = { send: () => undefined, mainFrame, getURL: () => mainFrame.url }
   return {
@@ -23,6 +24,8 @@ const electron = vi.hoisted(() => {
     dialogs,
     get exposed() { return exposed },
     setExposed(api: NocturneApi) { exposed = api },
+    get clipboardText() { return clipboardText },
+    set clipboardText(value: string) { clipboardText = value },
     mainFrame,
     mainWebContents,
   }
@@ -31,6 +34,7 @@ const electron = vi.hoisted(() => {
 vi.mock('electron', () => ({
   BrowserWindow: class {},
   contextBridge: { exposeInMainWorld: (_name: string, api: NocturneApi) => electron.setExposed(api) },
+  clipboard: { readText: vi.fn(() => electron.clipboardText), writeText: vi.fn((value: string) => { electron.clipboardText = value }) },
   dialog: {
     showOpenDialog: vi.fn(async () => electron.dialogs.open.shift() ?? { canceled: true, filePaths: [] }),
     showSaveDialog: vi.fn(async () => electron.dialogs.save.shift() ?? { canceled: true }),
@@ -120,7 +124,9 @@ describe.sequential('fronteiras Electron E2E', () => {
   })
 
   it('expõe somente a API nomeada e cruza preload, IPC e SQLite', async () => {
-    expect(Object.keys(api).sort()).toEqual(['artifacts', 'codex', 'conversations', 'data', 'diagnostics', 'documents', 'files', 'git', 'memory', 'settings', 'suggestions', 'workspace'])
+    expect(Object.keys(api).sort()).toEqual(['artifacts', 'clipboard', 'codex', 'conversations', 'data', 'diagnostics', 'documents', 'files', 'git', 'memory', 'settings', 'suggestions', 'workspace'])
+    await api.clipboard.writeText('commit sugerido')
+    await expect(api.clipboard.readText()).resolves.toBe('commit sugerido')
     electron.dialogs.open.push({ canceled: false, filePaths: [workspace] })
     await expect(api.workspace.select()).resolves.toBe(workspace)
     expect(fs.existsSync(path.join(workspace, '.nocturne', 'project.json'))).toBe(true)

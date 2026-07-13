@@ -52,6 +52,7 @@ export const nocturneApi: NocturneApi = {
     saveMarkdown: (conversationId: string, content: string, name?: string) => ipcRenderer.invoke(channels.documents.saveMarkdown, { conversationId, content, name }),
     export: (conversationId: string, content: string, format: 'docx' | 'pdf' | 'html') => ipcRenderer.invoke(channels.documents.export, { conversationId, content, format }),
   },
+  clipboard: { readText: () => ipcRenderer.invoke(channels.clipboard.readText), writeText: (value: string) => ipcRenderer.invoke(channels.clipboard.writeText, value) },
 }
 
 contextBridge.exposeInMainWorld('nocturne', nocturneApi)

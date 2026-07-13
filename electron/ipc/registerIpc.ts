@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, shell } from 'electron'
+import { BrowserWindow, clipboard, dialog, shell } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { execFile, spawn } from 'node:child_process'
@@ -26,6 +26,8 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   registerGitIpc(win, database)
   registerWorkspaceIpc(win, database, { ensureWorkspace: ensureNocturneWorkspace, assertKnownWorkspace: (value) => assertKnownWorkspace(database, value), run })
   registerKnowledgeIpc(win, database, logger, { workspace: (id) => getConversation(database, id).workspace, read: readWorkspaceContext, write: writeWorkspaceContext, recordDecision: recordSuggestionDecision })
+  ipcMain.handle('clipboard:readText', () => clipboard.readText().slice(0, 2_000_000))
+  ipcMain.handle('clipboard:writeText', (_event, value: unknown) => { clipboard.writeText(z.string().max(2_000_000).parse(value)) })
   const approvalDetails = new Map<string, { command?: string; risk?: string }>()
   registerCodexBridge(win, codex, logger, approvalDetails)
 

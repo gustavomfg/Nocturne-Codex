@@ -46,6 +46,10 @@ button { border:0; background:none; cursor:pointer; }
 }
 
 .app-shell { font-size: var(--font-body); }
+.app-shell { min-height: 0; overflow: hidden; }
+.main-panel, .sidebar, .inspector { min-height: 0; height: 100%; }
+.chat-scroll, .inspector-scroll, .conversation-list { min-height: 0; overscroll-behavior: contain; }
+.topbar, .composer-wrap, .inspector-header, .inspector-tabs { flex-shrink: 0; }
 .sidebar { width: 280px; flex-basis: 280px; padding: var(--spacing-md); background: var(--color-panel); transition: width 160ms ease, flex-basis 160ms ease, padding 160ms ease; }
 .brand { height: 46px; gap: var(--spacing-md); padding: 0 var(--spacing-sm); font-size: var(--font-title); font-weight: 550; letter-spacing: -.02em; }
 .brand-mark { width: 32px; height: 32px; border-radius: var(--radius-md); }
@@ -643,16 +647,17 @@ button { border:0; background:none; cursor:pointer; }
 .git-clean { margin: 0; padding: var(--spacing-md); color: var(--color-text-muted); font-size: var(--font-small); }
 
 /* Settings performance: keep opening on compositor-only properties. */
-.settings-backdrop { background: rgb(3 3 5 / 78%); backdrop-filter: none; contain: strict; isolation: isolate; }
+.modal-backdrop, .preview-backdrop { background: rgb(3 3 5 / 78%); backdrop-filter: none; contain: strict; isolation: isolate; will-change: opacity; animation: overlay-enter var(--motion-fade) linear; }
+.modal-backdrop > .settings-dialog, .modal-backdrop > .confirmation-dialog, .preview-backdrop > .preview-dialog, .preview-backdrop > .suggestion-dialog { contain: layout paint style; transform: translate3d(0, 0, 0); backface-visibility: hidden; will-change: transform, opacity; animation: overlay-surface-enter var(--motion-dialog) var(--ease-standard); }
+.settings-backdrop { background: rgb(3 3 5 / 78%); }
 .settings-backdrop.beta-settings { contain: none; }
-.settings-backdrop .beta-settings { contain: layout paint style; transform: translateZ(0); backface-visibility: hidden; box-shadow: 0 24px 64px rgb(0 0 0 / 52%); animation: settings-dialog-enter 140ms var(--ease-standard); }
-.settings-backdrop { animation: settings-backdrop-enter 110ms linear; }
+.settings-backdrop .beta-settings { box-shadow: 0 24px 64px rgb(0 0 0 / 52%); }
 .settings-content { animation: none; contain: layout paint style; }
 .settings-layout, .settings-navigation, .settings-header, .settings-footer { transform: translateZ(0); }
-@keyframes settings-backdrop-enter { from { opacity: 0; } }
-@keyframes settings-dialog-enter { from { opacity: 0; transform: translate3d(0, 5px, 0) scale(.995); } }
+@keyframes overlay-enter { from { opacity: 0; } }
+@keyframes overlay-surface-enter { from { opacity: 0; transform: translate3d(0, 5px, 0); } }
 .confirmation-backdrop { background: rgb(3 3 5 / 76%); backdrop-filter: none; }
-.confirmation-dialog { width: min(440px, calc(100vw - 32px)); display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: var(--spacing-md); padding: var(--spacing-xl); background: var(--color-surface); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); animation: settings-dialog-enter 140ms var(--ease-standard); }
+.confirmation-dialog { width: min(440px, calc(100vw - 32px)); display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: var(--spacing-md); padding: var(--spacing-xl); background: var(--color-surface); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); }
 .confirmation-icon { width: 42px; height: 42px; display: grid; place-items: center; color: var(--color-warning); background: rgb(217 170 104 / 10%); border: 1px solid rgb(217 170 104 / 24%); border-radius: var(--radius-md); }
 .confirmation-icon.danger { color: var(--color-danger); background: rgb(238 127 137 / 10%); border-color: rgb(238 127 137 / 24%); }
 .confirmation-dialog h2 { margin: 1px 0 var(--spacing-xs); font-size: var(--font-title); }
@@ -663,7 +668,7 @@ button { border:0; background:none; cursor:pointer; }
 .confirmation-dialog footer .danger { color: #fff; background: #a44751; border-color: #bd5964; }
 
 @media (max-width: 980px) {
-  .panel-backdrop { position: fixed; inset: 0; z-index: 9; display: block; background: rgb(0 0 0 / 46%); backdrop-filter: blur(2px); animation: nocturne-fade-in var(--motion-fade) var(--ease-standard); }
+  .panel-backdrop { position: fixed; inset: 0; z-index: 9; display: block; background: rgb(0 0 0 / 52%); backdrop-filter: none; animation: overlay-enter var(--motion-fade) linear; }
   .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 10; display: flex; width: min(310px, 88vw); max-width: 88vw; height: 100%; box-shadow: 24px 0 70px rgb(0 0 0 / 58%); }
   .sidebar.collapsed { width: 0; }
   .inspector { position: fixed; inset: 0 0 0 auto; z-index: 10; display: flex; width: min(390px, 92vw); max-width: 92vw; height: 100%; box-shadow: -24px 0 70px rgb(0 0 0 / 58%); }

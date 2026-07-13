@@ -11,5 +11,5 @@ export const IPC_CHANNELS = {
   settings: { get: 'settings:get', set: 'settings:set' },
   git: { status: 'git:status', commit: 'git:commit' },
   documents: { saveMarkdown: 'documents:saveMarkdown', export: 'documents:export' },
+  clipboard: { readText: 'clipboard:readText', writeText: 'clipboard:writeText' },
 } as const
-

@@ -13,6 +13,7 @@ export interface NocturneApi {
   settings: { get(): Promise<CodexSettings>; set(settings: Pick<CodexSettings, 'model' | 'sandbox' | 'approvalPolicy' | 'codexPath' | 'diagnosticMode' | 'theme' | 'defaultAgentMode'>): Promise<CodexSettings> }
   git: { status(conversationId: string): Promise<GitInfo>; commit(conversationId: string, message: string, files: string[]): Promise<{ output: string }> }
   documents: { saveMarkdown(conversationId: string, content: string, name?: string): Promise<string | null>; export(conversationId: string, content: string, format: 'docx' | 'pdf' | 'html'): Promise<string | null> }
+  clipboard: { readText(): Promise<string>; writeText(value: string): Promise<void> }
 }
 
 declare global { interface Window { nocturne: NocturneApi } }

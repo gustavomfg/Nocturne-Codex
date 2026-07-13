@@ -82,7 +82,7 @@ function App() {
     const scroller = endRef.current?.closest('.chat-scroll')
     if (!scroller) return
     const nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 220
-    if (nearBottom) endRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+    if (nearBottom) scroller.scrollTo({ top: scroller.scrollHeight, behavior: store.streaming || window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
   }, [store.messages, store.streaming])
   useEffect(() => { document.documentElement.dataset.theme = settings.theme || 'dark' }, [settings.theme])
   useEffect(() => {
