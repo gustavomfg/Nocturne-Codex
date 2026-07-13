@@ -20,8 +20,23 @@ permissions:
   contents: read
 
 jobs:
+  verify:
+    name: Verify source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
   package:
     name: Package and smoke (${{ matrix.os }})
+    needs: verify
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -36,9 +51,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm test
       # Validation jobs build artifacts only. GitHub Releases are published explicitly
       # after every platform has passed, so tag builds must not auto-publish here.
       - run: npm run package -- --publish never

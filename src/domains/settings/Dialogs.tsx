@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import ReactMarkdown from 'react-markdown'
 import { Brain, Check, Copy, ExternalLink, Eye, FolderOpen, MoonStar, X } from 'lucide-react'
 import type { CodexSettings, FilePreview, WorkspaceMemory } from '../../types'
 import { errorMessage, formatBytes, relativeTime, statusText } from '../../shared/format'
 import { useDialogA11y } from '../../shared/useDialogA11y'
+import { SafeMarkdown } from '../../shared/SafeMarkdown'
 
 export function OnboardingDialog({ settings, status, hasWorkspace, onWorkspace, onClose }: { settings: CodexSettings; status: string; hasWorkspace: boolean; onWorkspace(): void; onClose(): void }) {
   const [step, setStep] = useState(0)
@@ -43,6 +43,6 @@ export function PreviewDialog({ preview, activeId, onClose, onError }: { preview
   const copy = async () => { try { await navigator.clipboard.writeText(preview.content) } catch (error) { onError(errorMessage(error)) } }
   return <div className="preview-backdrop" onMouseDown={onClose}><section ref={dialogRef} className="preview-dialog" role="dialog" aria-modal="true" aria-labelledby="preview-title" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
     <header><div><Eye size={16}/><span><strong id="preview-title">{preview.name}</strong><small>{formatBytes(preview.size)}{preview.filePath && ` · ${preview.filePath}`}</small></span></div><div>{preview.kind !== 'image' && <button onClick={copy} aria-label="Copiar conteúdo" title="Copiar conteúdo"><Copy size={15}/></button>}{preview.filePath && <><button onClick={() => open('folder')} aria-label="Abrir pasta" title="Abrir pasta"><FolderOpen size={15}/></button><button onClick={() => open('editor')} aria-label="Abrir arquivo" title="Abrir arquivo"><ExternalLink size={15}/></button></>}<button onClick={onClose} aria-label="Fechar visualização" title="Fechar"><X size={17}/></button></div></header>
-    <div className={`preview-content ${preview.kind}`}>{preview.kind === 'image' ? <img src={preview.content} alt={preview.name}/> : preview.kind === 'markdown' ? <ReactMarkdown>{preview.content}</ReactMarkdown> : <pre><code>{preview.content}</code></pre>}</div>
+    <div className={`preview-content ${preview.kind}`}>{preview.kind === 'image' ? <img src={preview.content} alt={preview.name}/> : preview.kind === 'markdown' ? <SafeMarkdown>{preview.content}</SafeMarkdown> : <pre><code>{preview.content}</code></pre>}</div>
   </section></div>
 }

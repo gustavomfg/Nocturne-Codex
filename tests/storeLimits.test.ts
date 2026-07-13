@@ -15,7 +15,7 @@ describe('limites de estabilidade do renderer', () => {
     const activities = useAppStore.getState().activities
     expect(activities).toHaveLength(300)
     expect(activities[0].id).toBe('50')
-    expect(activities.at(-1)?.detail).toHaveLength(64_000)
+    expect(activities[activities.length - 1]?.detail).toHaveLength(64_000)
   })
 })
 

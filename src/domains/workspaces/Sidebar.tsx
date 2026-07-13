@@ -13,7 +13,7 @@ export function Sidebar({ open, conversations, activeId, search, searchRef, work
   const newShortcut = navigator.platform.toLowerCase().includes('mac') ? '⌘ N' : 'Ctrl N'
   useEffect(() => { if (sidebarRef.current) sidebarRef.current.inert = !open }, [open])
   return <aside ref={sidebarRef} className={`sidebar ${open ? 'open' : 'collapsed'}`} aria-hidden={!open}>
-    <div className="brand"><div className="brand-mark"><img src="/nocturne.svg" alt=""/></div><span>Nocturne <b>Codex</b></span><button className="icon-button sidebar-toggle" aria-label="Recolher barra lateral" title="Recolher barra lateral" onClick={onClose}><Menu size={17}/></button></div>
+    <div className="brand"><div className="brand-mark"><img src="./nocturne.svg" alt=""/></div><span>Nocturne <b>Codex</b></span><button className="icon-button sidebar-toggle" aria-label="Recolher barra lateral" title="Recolher barra lateral" onClick={onClose}><Menu size={17}/></button></div>
     <button className="new-chat" onClick={onNew}><MessageSquarePlus size={17}/><span>Nova conversa</span><kbd>{newShortcut}</kbd></button>
     <label className="search-box"><Search size={15}/><span className="sr-only">Buscar conversas</span><input ref={searchRef} value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Buscar conversas" aria-label="Buscar conversas"/>{search && <button type="button" aria-label="Limpar busca" title="Limpar busca" onClick={() => onSearch('')}><X size={13}/></button>}</label>
     <div className="section-label"><span>Recentes</span><History size={13}/></div>

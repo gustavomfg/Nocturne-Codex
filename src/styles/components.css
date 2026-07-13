@@ -100,6 +100,7 @@ button { border:0; background:none; cursor:pointer; }
 .assistant-content pre { padding: var(--spacing-lg); background: var(--color-panel); border-color: var(--color-border); border-radius: var(--radius-md); }
 .assistant-content ul, .assistant-content ol { padding-left: var(--spacing-xl); }
 .assistant-content li + li { margin-top: var(--spacing-xs); }
+.blocked-markdown-link { color: var(--color-text-muted); text-decoration: underline dotted; cursor: not-allowed; }
 .error-card { gap: var(--spacing-sm); margin: var(--spacing-md) 0; padding: var(--spacing-md); border-radius: var(--radius-md); font-size: var(--font-small); }
 .error-card button { min-height: 30px; color: #eca0a7; font-size: var(--font-small); }
 
@@ -620,6 +621,8 @@ button { border:0; background:none; cursor:pointer; }
 .workspace-favorite:hover { color: #c8b2ff; background: var(--color-surface-hover); }
 .inspector-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .inspector-tabs button { min-width: 0; }
+.inspector-tabs .tab-count { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; color: var(--color-text-secondary); background: rgb(255 255 255 / 6%); border: 1px solid rgb(255 255 255 / 8%); border-radius: 999px; font: 650 11px/1 var(--font-sans); font-variant-numeric: tabular-nums; letter-spacing: 0; box-sizing: border-box; }
+.inspector-tabs button.active .tab-count { color: #d8cafa; background: rgb(155 124 246 / 14%); border-color: rgb(155 124 246 / 24%); }
 .approval-notice { max-width: var(--content-width); min-height: 46px; display: flex; align-items: center; gap: var(--spacing-md); margin: 0 auto var(--spacing-sm); padding: var(--spacing-sm) var(--spacing-md); color: #e4c28f; background: #211a12; border: 1px solid #594426; border-radius: var(--radius-md); box-shadow: var(--shadow-sm); }
 .approval-notice > span { display: flex; flex-direction: column; line-height: var(--leading-ui); }
 .approval-notice strong { font-size: var(--font-small); }

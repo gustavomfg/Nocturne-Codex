@@ -5,6 +5,14 @@ import { describe, expect, it } from 'vitest'
 import { assessCommand, resolveInsideWorkspace } from '../electron/security/ExecutionPolicy'
 
 describe('políticas de execução', () => {
+  it('mantém permissões web negadas e fuses essenciais no pacote', () => {
+    const main = fs.readFileSync(path.join(process.cwd(), 'electron/main.ts'), 'utf8')
+    const builder = fs.readFileSync(path.join(process.cwd(), 'electron-builder.json5'), 'utf8')
+    expect(main).toContain('setPermissionCheckHandler(() => false)')
+    expect(main).toContain('callback(false)')
+    expect(builder).toMatch(/"runAsNode": false/)
+    expect(builder).toMatch(/"onlyLoadAppFromAsar": true/)
+  })
   it.each(['sudo apt update', 'git reset --hard HEAD', 'git clean -fd', 'rm -rf build', 'npm run rebuild:native', 'npm run package'])('marca comando perigoso: %s', (command) => expect(assessCommand(command)).toMatchObject({ risk: 'dangerous', requiresApproval: true, blockedAutomatic: true }))
   it('não usa substring ingênua para classificar nomes de arquivo', () => expect(assessCommand(['cat', 'sudo-notes.md']).risk).toBe('safe'))
   it('bloqueia traversal e aceita arquivo interno', () => {

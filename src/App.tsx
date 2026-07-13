@@ -5,10 +5,11 @@ import type { Activity, AgentMode, Artifact, Attachment, ChangedFile, CodexEvent
 import { Sidebar } from './domains/workspaces/Sidebar'
 import { Composer } from './domains/chat/Composer'
 import { AssistantMessage, MessageBubble, Welcome } from './domains/chat/ChatContent'
-import { describeChanges, errorMessage, humanizeCommand, isBusy, parseChanges, statusText } from './shared/format'
+import { errorMessage, isBusy, statusText } from './shared/format'
 import { UI_TIMING } from '../shared/constants'
 import { useTurnLifecycle, type ActiveTurnContext } from './domains/agent/useTurnLifecycle'
 import { routeCodexEvent } from './domains/agent/routeCodexEvent'
+import { useBufferedCodexEvents } from './domains/agent/useBufferedCodexEvents'
 import { useConfirmDialog } from './shared/ConfirmDialog'
 import './styles/components.css'
 
@@ -51,10 +52,7 @@ function App() {
   const endRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
-  const streamBufferRef = useRef('')
-  const streamTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const activityBuffersRef = useRef(new Map<string, { type: Activity['type']; label: string; detail: string }>())
-  const activityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { queueStreamDelta, flushStream, appendActivityDetail, addItemActivity, completeItem } = useBufferedCodexEvents()
   const activeTurnRef = useRef<ActiveTurnContext | null>(null)
   const applyingSuggestionRef = useRef<string | null>(null)
   const conversationRequestRef = useRef(0)
@@ -75,7 +73,7 @@ function App() {
     }).catch((error) => store.setError(error.message))
     const offStatus = window.nocturne.codex.onStatus(({ status, error }) => { store.setStatus(status); if (status === 'completed' && activeTurnRef.current) store.setFinalizing(true); if (error) store.setError(error) })
     const offEvent = window.nocturne.codex.onEvent(handleCodexEvent)
-    return () => { offStatus(); offEvent(); if (streamTimerRef.current) clearTimeout(streamTimerRef.current); if (activityTimerRef.current) clearTimeout(activityTimerRef.current) }
+    return () => { offStatus(); offEvent() }
     // A ponte IPC deve ser registrada uma única vez; os handlers consultam o estado atual do Zustand.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -200,57 +198,6 @@ function App() {
 
   function handleCodexEvent(event: CodexEvent) {
     routeCodexEvent(event, { stream: queueStreamDelta, activityDetail: appendActivityDetail, diff: store.setDiff, plan: store.setPlan, hasPlan: () => Boolean(useAppStore.getState().plan.length), itemStarted: addItemActivity, itemCompleted: completeItem, fsChanged: (paths) => { if (paths.length) store.upsertActivity({ id: 'fs-summary', type: 'file', label: `${paths.length} arquivo(s) observado(s)`, detail: paths.slice(-50).join('\n'), status: 'completed' }) }, approval: (value) => store.addApproval({ ...value, status: 'pending' }), turnCompleted: (params) => { void finishTurn(params).catch((error) => { store.setStatus('failed'); store.setError(`Falha ao finalizar a resposta: ${errorMessage(error)}`) }) }, error: (message) => { store.setError(message); store.upsertActivity({ id: `error-${Date.now()}`, type: 'error', label: 'Erro na execução', detail: message, status: 'failed' }) }, warning: (message) => store.upsertActivity({ id: `warning-${Date.now()}`, type: 'error', label: 'Aviso do Codex', detail: message, status: 'failed' }) })
-  }
-
-  function queueStreamDelta(delta: string) {
-    streamBufferRef.current += delta
-    if (streamBufferRef.current.length > 100_000) streamBufferRef.current = streamBufferRef.current.slice(-100_000)
-    if (streamTimerRef.current) return
-    streamTimerRef.current = setTimeout(flushStream, UI_TIMING.streamFlushMs)
-  }
-
-  function flushStream() {
-    if (streamTimerRef.current) clearTimeout(streamTimerRef.current)
-    streamTimerRef.current = null
-    const buffered = streamBufferRef.current
-    streamBufferRef.current = ''
-    if (buffered) store.appendStream(buffered)
-  }
-
-  function addItemActivity(item?: Record<string, unknown>) {
-    if (!item) return
-    const type = String(item.type)
-    if (type === 'commandExecution') store.upsertActivity({ id: String(item.id), type: 'command', label: humanizeCommand(String(item.command ?? '')), detail: String(item.command ?? ''), status: 'running' })
-    if (type === 'fileChange') store.upsertActivity({ id: String(item.id), type: 'file', label: 'Preparando alterações em arquivos', status: 'running' })
-    if (type === 'mcpToolCall' || type === 'dynamicToolCall') store.upsertActivity({ id: String(item.id), type: 'read', label: `Ferramenta: ${String(item.tool ?? type)}`, detail: JSON.stringify(item.arguments ?? ''), status: 'running' })
-  }
-
-  function appendActivityDetail(id: string, type: Activity['type'], label: string, delta: string) {
-    const buffered = activityBuffersRef.current.get(id)
-    activityBuffersRef.current.set(id, { type, label: buffered?.label || label, detail: `${buffered?.detail || ''}${delta}`.slice(-64_000) })
-    if (!activityTimerRef.current) activityTimerRef.current = setTimeout(flushActivityDetails, UI_TIMING.activityFlushMs)
-  }
-
-  function flushActivityDetails() {
-    if (activityTimerRef.current) clearTimeout(activityTimerRef.current)
-    activityTimerRef.current = null
-    for (const [id, buffered] of activityBuffersRef.current) {
-      const current = useAppStore.getState().activities.find((item) => item.id === id)
-      store.upsertActivity({ id, type: buffered.type, label: current?.label || buffered.label, detail: `${current?.detail || ''}${buffered.detail}`.slice(-64_000), status: 'running' })
-    }
-    activityBuffersRef.current.clear()
-  }
-
-  function completeItem(item?: Record<string, unknown>) {
-    if (!item) return
-    flushActivityDetails()
-    const type = String(item.type)
-    if (type === 'commandExecution') store.upsertActivity({ id: String(item.id), type: 'command', label: humanizeCommand(String(item.command ?? '')), detail: [String(item.command ?? ''), String(item.aggregatedOutput ?? '')].filter(Boolean).join('\n\n'), status: item.status === 'failed' ? 'failed' : 'completed' })
-    if (type === 'fileChange') {
-      store.upsertActivity({ id: String(item.id), type: 'file', label: 'Arquivos atualizados', detail: describeChanges(item.changes), status: item.status === 'failed' ? 'failed' : 'completed' })
-      store.addFiles(parseChanges(item.changes))
-    }
-    if (type === 'mcpToolCall' || type === 'dynamicToolCall') store.upsertActivity({ id: String(item.id), type: 'read', label: `Ferramenta concluída: ${String(item.tool ?? type)}`, detail: item.error ? JSON.stringify(item.error) : undefined, status: item.error ? 'failed' : 'completed' })
   }
 
   async function decide(key: string, accepted: boolean) {
