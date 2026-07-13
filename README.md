@@ -107,7 +107,7 @@ Detected stack information, useful commands, architectural decisions, and projec
 
 ### Artifacts
 
-Responses, reports, diffs, files, images, Markdown, configuration, and exported documents can be retained as conversation artifacts. Text, Markdown, code, and supported images have an internal preview; files can also be opened in the system editor or containing folder.
+Responses, reports, diffs, files, images, Markdown, configuration, and exported documents can be retained as conversation artifacts. Text, Markdown, code, and supported images have an internal preview; safe HTTP and HTTPS links open in the system browser, while local and unsafe protocols remain blocked. Files can also be opened in the system editor or containing folder.
 
 ### Git integration
 
@@ -115,11 +115,11 @@ Nocturne Codex shows the current branch, modified files, working and staged diff
 
 ### Diagnostics and recovery
 
-Structured, rotating logs record application, renderer, App Server, IPC, workspace, Git, export, and persistence failures without intentionally logging full file contents. The settings screen exposes process state, executable path, PID, version, last failure, log access, diagnostic copying, and App Server restart.
+Structured, rotating logs record application, renderer, App Server, IPC, workspace, Git, export, and persistence failures without intentionally logging full file contents. The settings screen exposes process state, executable path, PID, version, last failure, log access, diagnostic copying, and App Server restart. Before a backup restoration replaces local data, Nocturne creates a permission-restricted SQLite recovery snapshot and retains a bounded history in the application data directory.
 
 ### Secure Electron architecture
 
-The renderer runs with `contextIsolation: true`, `nodeIntegration: false`, and Electron sandboxing. Node.js, SQLite, filesystem, Git, Pandoc, and process management stay in the main process. The preload exposes a small typed API, IPC payloads and origins are validated, external navigation is restricted, and workspace paths are normalized before access.
+The renderer runs with `contextIsolation: true`, `nodeIntegration: false`, and Electron sandboxing on the actively supported Electron 43 runtime. Node.js, SQLite, filesystem, Git, Pandoc, and process management stay in the main process. The preload exposes a small typed API, IPC payloads and origins are validated, web permissions are denied by default, external navigation is restricted, and workspace paths are normalized before access. Packaged applications disable Node runtime and inspector escape hatches through Electron fuses and enforce ASAR-only application loading with integrity validation.
 
 ---
 
@@ -185,6 +185,8 @@ Nocturne Codex reduces accidental authority; it does not claim to make arbitrary
 - Build operations follow the configured Codex sandbox and approval policy.
 - Sensitive and dangerous commands are classified and surfaced for approval.
 - External navigation is blocked inside the application; allowed HTTPS links open externally.
+- Browser permissions such as geolocation, camera, microphone, MIDI, and USB are denied by default.
+- Production packages disable `ELECTRON_RUN_AS_NODE`, Node options, and CLI inspection through verified Electron fuses.
 - The application reuses the Codex CLI's existing authentication. Credentials are not sent to the renderer.
 - Logs are size-limited and redact fields that resemble tokens, passwords, API keys, or authorization data.
 
@@ -257,6 +259,8 @@ npm run test        # unit and integration tests using Electron's Node runtime
 npm run test:watch  # watch mode with the same native ABI
 npm run build       # renderer, main, and preload production builds
 npm run package     # Linux AppImage and tar.gz
+npm run smoke:package          # packaged runtime, preload, SQLite, sandbox, and permissions
+npm run verify:release-metadata # version and Codex compatibility consistency
 ```
 
 Tests use a simulated App Server transport and do not call the real Codex service. See [docs/development.md](docs/development.md) for native module and release notes.
