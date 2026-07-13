@@ -73,12 +73,13 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     const conversation = getConversation(database, idSchema.parse(value))
     const result = await dialog.showOpenDialog(win, {
       title: 'Anexar arquivos de texto', defaultPath: conversation.workspace, properties: ['openFile', 'multiSelections'],
-      filters: [{ name: 'Arquivos de texto', extensions: ['txt', 'md', 'json', 'js', 'jsx', 'ts', 'tsx', 'css', 'html', 'xml', 'yaml', 'yml', 'toml', 'py', 'rs', 'go', 'java', 'c', 'cpp', 'h', 'sh'] }],
+      filters: [{ name: 'Arquivos do projeto', extensions: ['txt', 'md', 'json', 'js', 'jsx', 'ts', 'tsx', 'css', 'html', 'xml', 'yaml', 'yml', 'toml', 'py', 'rs', 'go', 'java', 'c', 'cpp', 'h', 'sh', 'sql', 'env', 'ini'] }, { name: 'Todos os arquivos', extensions: ['*'] }],
     })
     if (result.canceled) return []
     return result.filePaths.map((filePath) => {
       assertInsideWorkspace(filePath, conversation.workspace)
       const stat = fs.statSync(filePath)
+      if (!stat.isFile()) throw new Error(`${path.basename(filePath)} não é um arquivo válido.`)
       if (stat.size > 1_000_000) throw new Error(`${path.basename(filePath)} excede o limite de 1 MB.`)
       return { path: filePath, name: path.basename(filePath), size: stat.size }
     })

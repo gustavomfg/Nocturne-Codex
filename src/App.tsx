@@ -177,8 +177,17 @@ function App() {
   }
 
   async function attachFiles() {
-    if (!store.activeId) { store.setError('Crie uma conversa antes de anexar arquivos.'); return }
-    try { const selected = await window.nocturne.files.attach(store.activeId); setAttachments((current) => [...current, ...selected]) }
+    if (interactionLocked()) { store.setError('Aguarde a execução atual terminar antes de anexar arquivos.'); return }
+    let conversationId = useAppStore.getState().activeId
+    if (!conversationId) {
+      await createConversation()
+      conversationId = useAppStore.getState().activeId
+    }
+    if (!conversationId) return
+    try {
+      const selected = await window.nocturne.files.attach(conversationId)
+      setAttachments((current) => [...current, ...selected.filter((file) => !current.some((attached) => attached.path === file.path))].slice(0, 10))
+    }
     catch (error) { store.setError(errorMessage(error)) }
   }
 
@@ -373,7 +382,7 @@ function App() {
       </header>
 
       <section className="chat-scroll">
-        {!store.activeId && !store.messages.length ? <Welcome onNew={createConversation} onWorkspace={selectWorkspace} onPrompt={submitPrompt}/> : <div className="chat-content">
+        {!store.activeId && !store.messages.length ? <div className="chat-content welcome-content"><Welcome onNew={createConversation} onWorkspace={selectWorkspace} onPrompt={submitPrompt}/>{store.error && <div className="error-card"><X size={16}/><span>{store.error}</span><button onClick={() => store.setError(null)}>Fechar</button></div>}</div> : <div className="chat-content">
           {store.messages.map((message, index) => <Fragment key={message.id}>{(index === 0 || dayKey(store.messages[index - 1].createdAt) !== dayKey(message.createdAt)) && <div className="date-divider"><span>{dayLabel(message.createdAt)}</span></div>}<MessageBubble message={message}/></Fragment>) }
           {store.streaming && <AssistantMessage content={store.streaming} streaming/>}
           {store.error && <div className="error-card"><X size={16}/><span>{store.error}</span><button onClick={() => store.setError(null)}>Fechar</button></div>}

@@ -179,6 +179,10 @@ describe.sequential('fronteiras Electron E2E', () => {
 
   it('permite preview interno e bloqueia traversal e symlink através do IPC', async () => {
     const conversation = (await api.conversations.list())[0]
+    electron.dialogs.open.push({ canceled: false, filePaths: [path.join(workspace, 'inside.md')] })
+    await expect(api.files.attach(conversation.id)).resolves.toEqual([{ path: path.join(workspace, 'inside.md'), name: 'inside.md', size: 10 }])
+    electron.dialogs.open.push({ canceled: false, filePaths: [path.join(outside, 'secret.md')] })
+    await expect(api.files.attach(conversation.id)).rejects.toThrow(/dentro do workspace/)
     await expect(api.files.preview(conversation.id, path.join(workspace, 'inside.md'))).resolves.toMatchObject({ kind: 'markdown', content: '# interno\n' })
     await expect(api.files.preview(conversation.id, '../outside/secret.md')).rejects.toThrow(/fora do workspace/)
     await expect(api.files.preview(conversation.id, path.join(workspace, 'escape', 'secret.md'))).rejects.toThrow(/fora do workspace/)
