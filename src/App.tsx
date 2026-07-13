@@ -285,7 +285,7 @@ function App() {
     const conversation = store.conversations.find((item) => item.id === id)
     if (!await confirmation.confirm({ title: 'Excluir conversa?', description: `“${conversation?.title || 'Esta conversa'}” e seu histórico local serão removidos. Esta ação não pode ser desfeita.`, confirmLabel: 'Excluir conversa', danger: true })) return
     await window.nocturne.conversations.delete(id)
-    if (store.activeId === id) { store.setActive(null); store.setMessages([]) }
+    if (store.activeId === id) { store.setActive(null); store.setMessages([]); store.setArtifacts([]); setPreview(null) }
     await refresh()
   }
 
