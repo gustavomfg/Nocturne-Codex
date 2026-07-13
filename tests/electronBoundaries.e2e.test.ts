@@ -136,6 +136,9 @@ describe.sequential('fronteiras Electron E2E', () => {
     expect(codex.turns.map((turn) => turn.prompt)).toEqual(['Primeiro turno', 'Retomar thread'])
     expect(codex.interruptions).toEqual(['thread-1'])
     expect((await api.conversations.messages(conversation.id)).map((message) => message.content)).toEqual(['Primeiro turno', 'Retomar thread'])
+    const artifact = database.addArtifact(conversation.id, workspace, 'markdown', 'Temporário', null, '# conteúdo')
+    await expect(api.artifacts.delete(conversation.id, artifact.id)).resolves.toBeDefined()
+    expect(await api.artifacts.list(conversation.id)).toEqual([])
   })
 
   it('rejeita chamadas IPC de outro WebContents ou frame', async () => {

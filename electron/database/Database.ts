@@ -132,7 +132,9 @@ export class LocalDatabase {
     return row
   }
 
-  deleteArtifact(id: string) { this.db.prepare('DELETE FROM artifacts WHERE id=?').run(id) }
+  deleteArtifact(id: string, conversationId: string) {
+    return this.db.prepare('DELETE FROM artifacts WHERE id=? AND conversation_id=?').run(id, conversationId).changes > 0
+  }
   recordApproval(key: string, accepted: boolean, command?: string, risk?: string) { this.db.prepare('INSERT INTO approval_audit(id,approval_key,decision,command,risk,created_at) VALUES(?,?,?,?,?,?)').run(randomUUID(), key, accepted ? 'accepted' : 'declined', command?.slice(0, 4_000) ?? null, risk ?? null, new Date().toISOString()) }
 
   listSuggestions(conversationId: string): Suggestion[] {

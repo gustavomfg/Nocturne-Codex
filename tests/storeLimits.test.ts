@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '../src/store'
+import { PERSISTENCE_LIMITS } from '../shared/constants'
+import { exportDocumentSchema, saveAssistantSchema, saveMarkdownSchema } from '../shared/ipc/schemas'
 
 beforeEach(() => useAppStore.setState({ streaming: '', activities: [] }))
 
@@ -14,5 +16,18 @@ describe('limites de estabilidade do renderer', () => {
     expect(activities).toHaveLength(300)
     expect(activities[0].id).toBe('50')
     expect(activities.at(-1)?.detail).toHaveLength(64_000)
+  })
+})
+
+describe('limites de persistência IPC', () => {
+  const conversationId = '00000000-0000-4000-8000-000000000001'
+  it('aceita conteúdo exatamente no limite', () => {
+    expect(saveAssistantSchema.safeParse({ conversationId, content: 'x'.repeat(PERSISTENCE_LIMITS.assistantCharacters) }).success).toBe(true)
+    expect(saveMarkdownSchema.safeParse({ conversationId, content: 'x'.repeat(PERSISTENCE_LIMITS.documentCharacters), name: 'a'.repeat(PERSISTENCE_LIMITS.documentNameCharacters) }).success).toBe(true)
+  })
+  it('rejeita conteúdo e nome imediatamente acima do limite', () => {
+    expect(saveAssistantSchema.safeParse({ conversationId, content: 'x'.repeat(PERSISTENCE_LIMITS.assistantCharacters + 1) }).success).toBe(false)
+    expect(exportDocumentSchema.safeParse({ conversationId, content: 'x'.repeat(PERSISTENCE_LIMITS.documentCharacters + 1), format: 'pdf' }).success).toBe(false)
+    expect(saveMarkdownSchema.safeParse({ conversationId, content: '', name: 'a'.repeat(PERSISTENCE_LIMITS.documentNameCharacters + 1) }).success).toBe(false)
   })
 })

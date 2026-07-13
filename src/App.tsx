@@ -5,9 +5,10 @@ import type { Activity, AgentMode, Artifact, Attachment, ChangedFile, CodexEvent
 import { Sidebar } from './domains/workspaces/Sidebar'
 import { Composer } from './domains/chat/Composer'
 import { AssistantMessage, MessageBubble, Welcome } from './domains/chat/ChatContent'
-import { describeChanges, errorMessage, humanizeCommand, isBusy, normalizePlanStatus, parseChanges, statusText } from './shared/format'
+import { describeChanges, errorMessage, humanizeCommand, isBusy, parseChanges, statusText } from './shared/format'
 import { UI_TIMING } from '../shared/constants'
 import { useTurnLifecycle, type ActiveTurnContext } from './domains/agent/useTurnLifecycle'
+import { routeCodexEvent } from './domains/agent/routeCodexEvent'
 import { useConfirmDialog } from './shared/ConfirmDialog'
 import './styles/components.css'
 
@@ -198,31 +199,7 @@ function App() {
   }
 
   function handleCodexEvent(event: CodexEvent) {
-    const p = event.params
-    if (event.method === 'item/agentMessage/delta') queueStreamDelta(String(p.delta ?? ''))
-    if (event.method === 'item/reasoning/summaryTextDelta') appendActivityDetail(String(p.itemId), 'reasoning', 'Analisando o projeto', String(p.delta ?? ''))
-    if (event.method === 'item/commandExecution/outputDelta') appendActivityDetail(String(p.itemId), 'command', 'Executando comando', String(p.delta ?? ''))
-    if (event.method === 'item/fileChange/outputDelta') appendActivityDetail(String(p.itemId), 'file', 'Aplicando alterações', String(p.delta ?? ''))
-    if (event.method === 'turn/diff/updated') store.setDiff(String(p.diff ?? ''))
-    if (event.method === 'turn/plan/updated') {
-      const plan = Array.isArray(p.plan) ? p.plan.map((entry) => { const item = entry as Record<string, unknown>; return { step: String(item.step ?? ''), status: normalizePlanStatus(item.status) } }) : []
-      store.setPlan(plan, String(p.explanation ?? ''))
-    }
-    if (event.method === 'item/plan/delta' && !useAppStore.getState().plan.length) store.setPlan([{ step: String(p.delta ?? ''), status: 'inProgress' }])
-    if (event.method === 'item/started') addItemActivity(p.item as Record<string, unknown>)
-    if (event.method === 'item/completed') completeItem(p.item as Record<string, unknown>)
-    if (event.method === 'fs/changed') {
-      const paths = Array.isArray(p.changedPaths) ? p.changedPaths.map(String) : []
-      if (paths.length) store.upsertActivity({ id: 'fs-summary', type: 'file', label: `${paths.length} arquivo(s) observado(s)`, detail: paths.slice(-50).join('\n'), status: 'completed' })
-    }
-    if (event.method === 'item/commandExecution/requestApproval') store.addApproval({ key: String(p.approvalKey), kind: 'command', title: 'Executar comando', detail: String(p.command ?? p.reason ?? ''), status: 'pending' })
-    if (event.method === 'item/fileChange/requestApproval') store.addApproval({ key: String(p.approvalKey), kind: 'file', title: 'Aplicar alterações', detail: 'O Codex solicitou permissão para modificar arquivos.', status: 'pending' })
-    if (event.method === 'turn/completed') void finishTurn(p).catch((error) => { store.setStatus('failed'); store.setError(`Falha ao finalizar a resposta: ${errorMessage(error)}`) })
-    if (event.method === 'error') {
-      const message = String((p.error as Record<string, unknown>)?.message ?? p.message ?? 'Erro no Codex')
-      store.setError(message); store.upsertActivity({ id: `error-${Date.now()}`, type: 'error', label: 'Erro na execução', detail: message, status: 'failed' })
-    }
-    if (event.method === 'warning') store.upsertActivity({ id: `warning-${Date.now()}`, type: 'error', label: 'Aviso do Codex', detail: String(p.message ?? p), status: 'failed' })
+    routeCodexEvent(event, { stream: queueStreamDelta, activityDetail: appendActivityDetail, diff: store.setDiff, plan: store.setPlan, hasPlan: () => Boolean(useAppStore.getState().plan.length), itemStarted: addItemActivity, itemCompleted: completeItem, fsChanged: (paths) => { if (paths.length) store.upsertActivity({ id: 'fs-summary', type: 'file', label: `${paths.length} arquivo(s) observado(s)`, detail: paths.slice(-50).join('\n'), status: 'completed' }) }, approval: (value) => store.addApproval({ ...value, status: 'pending' }), turnCompleted: (params) => { void finishTurn(params).catch((error) => { store.setStatus('failed'); store.setError(`Falha ao finalizar a resposta: ${errorMessage(error)}`) }) }, error: (message) => { store.setError(message); store.upsertActivity({ id: `error-${Date.now()}`, type: 'error', label: 'Erro na execução', detail: message, status: 'failed' }) }, warning: (message) => store.upsertActivity({ id: `warning-${Date.now()}`, type: 'error', label: 'Aviso do Codex', detail: message, status: 'failed' }) })
   }
 
   function queueStreamDelta(delta: string) {
@@ -348,10 +325,19 @@ function App() {
   }
 
   async function deleteArtifact(artifactId: string) {
-    if (!store.activeId) return
+    const conversationId = useAppStore.getState().activeId
+    if (!conversationId) return
     if (!await confirmation.confirm({ title: 'Remover artefato?', description: 'O item será removido do painel. Arquivos existentes no workspace não serão apagados.', confirmLabel: 'Remover', danger: true })) return
-    try { await window.nocturne.artifacts.delete(store.activeId, artifactId); store.setArtifacts(await window.nocturne.artifacts.list(store.activeId)); if (preview) setPreview(null) }
-    catch (error) { store.setError(errorMessage(error)) }
+    const previous = useAppStore.getState().artifacts
+    store.setArtifacts(previous.filter((artifact) => artifact.id !== artifactId))
+    try {
+      await window.nocturne.artifacts.delete(conversationId, artifactId)
+      if (useAppStore.getState().activeId === conversationId) store.setArtifacts(await window.nocturne.artifacts.list(conversationId))
+      if (preview) setPreview(null)
+    } catch (error) {
+      if (useAppStore.getState().activeId === conversationId) store.setArtifacts(previous)
+      store.setError(errorMessage(error))
+    }
   }
 
   async function refreshArtifacts() { if (store.activeId) store.setArtifacts(await window.nocturne.artifacts.list(store.activeId)) }

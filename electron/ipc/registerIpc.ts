@@ -8,12 +8,14 @@ import { CodexClient } from '../codex/CodexClient'
 import { LocalDatabase, type ConversationRow } from '../database/Database'
 import { Logger } from '../logging/Logger'
 import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
-import { agentModes, extractSuggestions } from '../../shared/suggestions'
-import { approvalSchema, codexSendSchema, fileActionSchema, filePreviewSchema, idSchema, suggestionStatusSchema, workspaceFavoriteSchema, workspaceToolSchema } from '../../shared/ipc/schemas'
+import { agentModes } from '../../shared/suggestions'
+import { approvalSchema, codexSendSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, saveAssistantSchema, saveMarkdownSchema } from '../../shared/ipc/schemas'
 import { CODEX_COMPATIBILITY } from '../../shared/constants'
 import { registerDataIpc } from './registerDataIpc'
 import { registerGitIpc } from './registerGitIpc'
 import { registerCodexBridge } from './registerCodexBridge'
+import { registerWorkspaceIpc } from './registerWorkspaceIpc'
+import { registerKnowledgeIpc } from './registerKnowledgeIpc'
 import { safeIpcMain } from './safeIpc'
 
 const execFileAsync = promisify(execFile)
@@ -22,52 +24,10 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   const ipcMain = safeIpcMain(win)
   registerDataIpc(win, database, logger)
   registerGitIpc(win, database)
+  registerWorkspaceIpc(win, database, { ensureWorkspace: ensureNocturneWorkspace, assertKnownWorkspace: (value) => assertKnownWorkspace(database, value), run })
+  registerKnowledgeIpc(win, database, logger, { workspace: (id) => getConversation(database, id).workspace, read: readWorkspaceContext, write: writeWorkspaceContext, recordDecision: recordSuggestionDecision })
   const approvalDetails = new Map<string, { command?: string; risk?: string }>()
   registerCodexBridge(win, codex, logger, approvalDetails)
-
-  ipcMain.handle('workspace:select', async () => {
-    const result = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], title: 'Selecionar workspace' })
-    if (result.canceled || !result.filePaths[0]) return null
-    database.touchWorkspace(result.filePaths[0])
-    ensureNocturneWorkspace(result.filePaths[0])
-    return result.filePaths[0]
-  })
-
-  ipcMain.handle('workspace:validate', (_event, value: unknown) => {
-    const workspace = z.string().min(1).parse(value)
-    const resolved = path.resolve(workspace)
-    return fs.existsSync(resolved) && fs.statSync(resolved).isDirectory() ? resolved : null
-  })
-  ipcMain.handle('workspaces:list', () => database.listWorkspaces())
-  ipcMain.handle('workspaces:remove', (_event, value: unknown) => database.removeWorkspace(z.string().min(1).parse(value)))
-  ipcMain.handle('workspaces:favorite', (_event, value: unknown) => {
-    const data = workspaceFavoriteSchema.parse(value)
-    assertKnownWorkspace(database, data.workspace)
-    database.setWorkspaceFavorite(data.workspace, data.favorite)
-  })
-  ipcMain.handle('workspace:openTool', async (_event, value: unknown) => {
-    const data = workspaceToolSchema.parse(value)
-    const workspace = assertKnownWorkspace(database, data.workspace)
-    if (!fs.existsSync(workspace)) throw new Error('Workspace não encontrado.')
-    if (data.tool === 'editor') {
-      try { await run('code', [workspace], workspace) } catch { throw new Error('Não foi possível abrir o VS Code. Verifique se o comando “code” está no PATH.') }
-      return
-    }
-    const terminal = process.platform === 'win32' ? ['cmd', ['/K', 'cd', '/d', workspace]] as const
-      : process.platform === 'darwin' ? ['open', ['-a', 'Terminal', workspace]] as const
-      : ['x-terminal-emulator', ['--working-directory', workspace]] as const
-    const child = spawn(terminal[0], [...terminal[1]], { cwd: workspace, detached: true, stdio: 'ignore' })
-    child.unref()
-  })
-
-  ipcMain.handle('conversations:list', () => database.listConversations())
-  ipcMain.handle('conversations:create', (_event, value: unknown) => {
-    const workspace = assertKnownWorkspace(database, z.string().min(1).parse(value))
-    ensureNocturneWorkspace(workspace)
-    return database.createConversation(workspace)
-  })
-  ipcMain.handle('conversations:messages', (_event, value: unknown) => database.listMessages(idSchema.parse(value)))
-  ipcMain.handle('conversations:delete', (_event, value: unknown) => database.deleteConversation(idSchema.parse(value)))
 
   ipcMain.handle('files:attach', async (_event, value: unknown) => {
     const conversation = getConversation(database, idSchema.parse(value))
@@ -109,33 +69,6 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     return { kind: extension === '.md' ? 'markdown' : 'text', name: path.basename(filePath), filePath, mime: 'text/plain', content: fs.readFileSync(filePath, 'utf8'), size: stat.size }
   })
 
-  ipcMain.handle('memory:get', (_event, value: unknown) => {
-    const workspace = getConversation(database, idSchema.parse(value)).workspace
-    const files = readWorkspaceContext(workspace)
-    const persisted = database.getWorkspaceMemory(workspace)
-    if (persisted.content && Date.parse(persisted.updatedAt) > Date.parse(files.updatedAt)) {
-      const marker = '\n\n# Regras do projeto\n'
-      const markerAt = persisted.content.indexOf(marker)
-      const content = markerAt >= 0 ? persisted.content.slice(0, markerAt) : persisted.content
-      const rules = markerAt >= 0 ? persisted.content.slice(markerAt + marker.length) : files.rules
-      return writeWorkspaceContext(workspace, content, rules)
-    }
-    return files
-  })
-  ipcMain.handle('memory:set', (_event, value: unknown) => {
-    const data = z.object({ conversationId: z.string().uuid(), content: z.string().max(20_000), rules: z.string().max(20_000).default('') }).parse(value)
-    const workspace = getConversation(database, data.conversationId).workspace
-    const result = writeWorkspaceContext(workspace, data.content, data.rules)
-    database.setWorkspaceMemory(workspace, `${data.content}\n\n# Regras do projeto\n${data.rules}`)
-    return result
-  })
-
-  ipcMain.handle('artifacts:list', (_event, value: unknown) => database.listArtifacts(idSchema.parse(value)))
-  ipcMain.handle('artifacts:delete', (_event, value: unknown) => {
-    const data = z.object({ conversationId: z.string().uuid(), artifactId: z.string().uuid() }).parse(value)
-    if (!database.listArtifacts(data.conversationId).some((artifact) => artifact.id === data.artifactId)) throw new Error('Artefato não encontrado.')
-    database.deleteArtifact(data.artifactId)
-  })
   ipcMain.handle('codex:start', async () => {
     await codex.start(database.getSettings().codexPath || 'codex')
     return { status: codex.status }
@@ -198,7 +131,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   })
 
   ipcMain.handle('codex:save-assistant', (_event, value: unknown) => {
-    const data = z.object({ conversationId: z.string().uuid(), content: z.string(), metadata: z.unknown().optional() }).parse(value)
+    const data = saveAssistantSchema.parse(value)
     const conversation = getConversation(database, data.conversationId)
     const message = database.addMessage(data.conversationId, 'assistant', data.content, data.metadata)
     database.addArtifact(data.conversationId, conversation.workspace, 'markdown', `Resposta · ${new Date().toLocaleString()}`, null, data.content, { origin: 'Codex' })
@@ -209,24 +142,6 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     }
     if (metadata?.diff) database.addArtifact(data.conversationId, conversation.workspace, 'report', 'Alterações do turno', null, metadata.diff, { origin: 'Codex', format: 'diff' })
     return message
-  })
-
-  ipcMain.handle('suggestions:list', (_event, value: unknown) => database.listSuggestions(idSchema.parse(value)))
-  ipcMain.handle('suggestions:create', (_event, value: unknown) => {
-    const data = z.object({ conversationId: z.string().uuid(), content: z.string().max(2_000_000) }).parse(value)
-    const conversation = getConversation(database, data.conversationId)
-    const extracted = extractSuggestions(data.content)
-    const suggestions = extracted.suggestions.map((suggestion) => database.addSuggestion(data.conversationId, conversation.workspace, suggestion))
-    if (suggestions.length) logger.info('artifacts', 'Sugestões de review persistidas', { conversationId: data.conversationId, count: suggestions.length })
-    return { suggestions, content: extracted.content }
-  })
-  ipcMain.handle('suggestions:status', (_event, value: unknown) => {
-    const data = suggestionStatusSchema.parse(value)
-    const suggestion = database.listSuggestions(data.conversationId).find((item) => item.id === data.suggestionId)
-    if (!suggestion) throw new Error('Sugestão não pertence a esta conversa.')
-    const updated = database.setSuggestionStatus(data.suggestionId, data.status, data.result)
-    recordSuggestionDecision(suggestion.workspaceId, updated)
-    return updated
   })
 
   ipcMain.handle('codex:approve', (_event, value: unknown) => {
@@ -249,7 +164,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   })
 
   ipcMain.handle('documents:saveMarkdown', async (_event, value: unknown) => {
-    const data = z.object({ conversationId: z.string().uuid(), content: z.string(), name: z.string().default('documento.md') }).parse(value)
+    const data = saveMarkdownSchema.parse(value)
     const conversation = getConversation(database, data.conversationId)
     const result = await dialog.showSaveDialog(win, { title: 'Salvar documento Markdown', defaultPath: path.join(conversation.workspace, safeName(data.name, '.md')), filters: [{ name: 'Markdown', extensions: ['md'] }] })
     if (result.canceled || !result.filePath) return null
@@ -260,7 +175,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   })
 
   ipcMain.handle('documents:export', async (_event, value: unknown) => {
-    const data = z.object({ conversationId: z.string().uuid(), content: z.string(), format: z.enum(['docx', 'pdf', 'html']) }).parse(value)
+    const data = exportDocumentSchema.parse(value)
     const conversation = getConversation(database, data.conversationId)
     const available = await commandVersion('pandoc')
     if (!available) throw new Error('Pandoc não foi encontrado no PATH.')

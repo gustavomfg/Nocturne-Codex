@@ -7,6 +7,12 @@ export const RENDERER_LIMITS = {
   streamCharacters: 2_000_000,
 } as const
 
+export const PERSISTENCE_LIMITS = {
+  assistantCharacters: 2_000_000,
+  documentCharacters: 2_000_000,
+  documentNameCharacters: 200,
+} as const
+
 export const UI_TIMING = {
   streamFlushMs: 80,
   activityFlushMs: 150,
