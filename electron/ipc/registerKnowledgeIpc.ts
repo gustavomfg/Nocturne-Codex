@@ -34,4 +34,5 @@ export function registerKnowledgeIpc(win: BrowserWindow, database: LocalDatabase
     const suggestions = extracted.suggestions.map((suggestion) => database.addSuggestion(data.conversationId, workspace, suggestion)); if (suggestions.length) logger.info('artifacts', 'Sugestões de review persistidas', { conversationId: data.conversationId, count: suggestions.length }); return { suggestions, content: extracted.content }
   })
   ipcMain.handle('suggestions:status', (_event, value: unknown) => { const data = suggestionStatusSchema.parse(value); const suggestion = database.listSuggestions(data.conversationId).find((item) => item.id === data.suggestionId); if (!suggestion) throw new Error('Sugestão não pertence a esta conversa.'); const updated = database.setSuggestionStatus(data.suggestionId, data.status, data.result); dependencies.recordDecision(suggestion.workspaceId, updated); return updated })
+  return () => ipcMain.dispose()
 }

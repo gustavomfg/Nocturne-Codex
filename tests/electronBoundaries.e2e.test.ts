@@ -40,7 +40,13 @@ vi.mock('electron', () => ({
     showSaveDialog: vi.fn(async () => electron.dialogs.save.shift() ?? { canceled: true }),
     showMessageBox: vi.fn(async () => ({ response: 1 })),
   },
-  ipcMain: { handle: (channel: string, handler: IpcHandler) => electron.handlers.set(channel, handler) },
+  ipcMain: {
+    handle: (channel: string, handler: IpcHandler) => {
+      if (electron.handlers.has(channel)) throw new Error(`Handler already registered for '${channel}'`)
+      electron.handlers.set(channel, handler)
+    },
+    removeHandler: (channel: string) => electron.handlers.delete(channel),
+  },
   ipcRenderer: {
     invoke: async (channel: string, ...args: unknown[]) => {
       const handler = electron.handlers.get(channel)
@@ -85,6 +91,10 @@ describe.sequential('fronteiras Electron E2E', () => {
   let api: NocturneApi
   let database: import('../electron/database/Database').LocalDatabase
   let codex: SimulatedCodex
+  let disposeIpc: (() => void) | null = null
+  let registerIpc: typeof import('../electron/ipc/registerIpc').registerIpc
+  let logger: import('../electron/logging/Logger').Logger
+  let win: { isDestroyed(): boolean; webContents: typeof electron.mainWebContents }
 
   beforeAll(async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-electron-e2e-'))
@@ -97,7 +107,7 @@ describe.sequential('fronteiras Electron E2E', () => {
     fs.writeFileSync(path.join(outside, 'secret.md'), '# segredo\n')
     fs.symlinkSync(outside, path.join(workspace, 'escape'))
 
-    const [{ LocalDatabase }, { Logger }, { registerIpc }] = await Promise.all([
+    const [{ LocalDatabase }, loggerModule, ipcModule] = await Promise.all([
       import('../electron/database/Database'),
       import('../electron/logging/Logger'),
       import('../electron/ipc/registerIpc'),
@@ -106,19 +116,21 @@ describe.sequential('fronteiras Electron E2E', () => {
     fs.mkdirSync(dataDirectory)
     database = new LocalDatabase(dataDirectory)
     codex = new SimulatedCodex()
+    registerIpc = ipcModule.registerIpc
     const sent = (channel: string, payload: unknown) => {
       for (const listener of electron.rendererListeners.get(channel) ?? []) listener({}, payload)
     }
     electron.mainWebContents.send = sent
-    const win = { isDestroyed: () => false, webContents: electron.mainWebContents }
-    const logger = new Logger(path.join(root, 'test-output'))
-    registerIpc(win as never, database, codex as never, logger)
+    win = { isDestroyed: () => false, webContents: electron.mainWebContents }
+    logger = new loggerModule.Logger(path.join(root, 'test-output'))
+    disposeIpc = registerIpc(win as never, database, codex as never, logger)
     await import('../electron/preload')
     if (!electron.exposed) throw new Error('O preload não expôs window.nocturne.')
     api = electron.exposed
   })
 
   afterAll(() => {
+    disposeIpc?.()
     database?.close()
     fs.rmSync(root, { recursive: true, force: true })
   })
@@ -172,6 +184,22 @@ describe.sequential('fronteiras Electron E2E', () => {
       { key: 'decline-1', accepted: false, forSession: false },
     ])
     expect(codex.restarts).toBe(1)
+  })
+
+  it('remove handlers e listeners antes de registrar uma janela recriada', () => {
+    const handlerCount = electron.handlers.size
+    const listenerCount = codex.eventNames().reduce((total, event) => total + codex.listenerCount(event), 0)
+    expect(handlerCount).toBeGreaterThan(0)
+    expect(listenerCount).toBe(4)
+
+    disposeIpc?.()
+    disposeIpc = null
+    expect(electron.handlers.size).toBe(0)
+    expect(codex.eventNames()).toEqual([])
+
+    disposeIpc = registerIpc(win as never, database, codex as never, logger)
+    expect(electron.handlers.size).toBe(handlerCount)
+    expect(codex.eventNames().reduce((total, event) => total + codex.listenerCount(event), 0)).toBe(listenerCount)
   })
 
   it('exporta e restaura o backup atravessando diálogos e IPC', async () => {

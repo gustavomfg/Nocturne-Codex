@@ -236,19 +236,17 @@ A `.tar.gz` archive is also produced for the Beta release.
 
 ### Requirements
 
-- Node.js 22 LTS;
-- npm;
+- Node.js 22.12 or newer within the Node 22 LTS line;
+- npm 10 (the adopted version is declared in `package.json`);
 - a native build toolchain compatible with `better-sqlite3`;
 - Codex CLI for manual App Server integration testing.
 
 Install dependencies and start the development application:
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
-
-For a lockfile-exact installation, use `npm ci` instead of `npm install`.
 
 Available checks and builds:
 
@@ -263,7 +261,7 @@ npm run smoke:package          # packaged runtime, preload, SQLite, sandbox, and
 npm run verify:release-metadata # version and Codex compatibility consistency
 ```
 
-Tests use a simulated App Server transport and do not call the real Codex service. See [docs/development.md](docs/development.md) for native module and release notes.
+Tests do not call the real Codex service. They combine a simulated App Server transport with direct `CodexClient` lifecycle coverage. See [docs/development.md](docs/development.md) for native module and release notes.
 
 ---
 

@@ -28,15 +28,18 @@
 - confinamento de workspace reforçado contra traversal por links simbólicos;
 - criação de conversas e abertura de ferramentas restritas a workspaces previamente selecionados;
 - Content Security Policy explícita no renderer e remoção do polyfill Electron desnecessário;
-- acesso IPC residual removido do renderer.
+- acesso IPC residual removido do renderer;
 - origem de chamadas IPC privilegiadas validada contra o WebContents e frame principal autorizados;
 - contratos compartilhados aplicados ao preload e handlers IPC separados por domínio;
 - commits restritos aos caminhos selecionados e validados dentro do workspace;
-- migrações SQLite versionadas, transacionais e acompanhadas de backup preventivo.
+- migrações SQLite versionadas, transacionais e acompanhadas de backup preventivo;
+- serviços do processo principal preservados durante a recriação da janela no macOS, com descarte determinístico de handlers IPC e listeners do Codex;
+- ciclo completo do `CodexClient` coberto diretamente, incluindo timeout, aprovações, concorrência, interrupção, queda e reconexão.
 
 ### Persistência
 
 - importação limitada a 25 MB e 200 mil registros, com parsing em worker, schemas por tabela e validação de referências;
+- exportação e restauração passam a compartilhar os mesmos limites canônicos, impedindo a geração de backups incompatíveis com o próprio produto;
 - configurações passam a ser restauradas corretamente pelo backup, sem importar caminhos de executáveis;
 - limpeza de órfãos incluída na transação de importação;
 - retorno booleano de logs detalhados corrigido ao salvar configurações.
@@ -46,8 +49,9 @@
 - configurações reorganizadas para navegação mais fluida e consistente com o aplicativo;
 - indicador de foco da busca corrigido para usar somente o contorno externo;
 - dependências não utilizadas removidas;
-- regressões de protocolo, backup e links simbólicos adicionadas à suíte de testes.
-- suíte ampliada para 34 testes automatizados e smoke test no Electron empacotado real;
+- regressões de protocolo, backup e links simbólicos adicionadas à suíte de testes;
+- suíte ampliada para 62 testes automatizados e smoke test no Electron empacotado real;
+- ambiente de desenvolvimento formalizado em Node.js 22.12+ da linha 22 LTS e npm 10, validando no CI a versão mínima e a linha atual;
 - README, documentação de arquitetura, integração, desenvolvimento e release sincronizados com o produto.
 
 ### Known Issues

@@ -22,14 +22,14 @@ const execFileAsync = promisify(execFile)
 
 export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: CodexClient, logger: Logger) {
   const ipcMain = safeIpcMain(win)
-  registerDataIpc(win, database, logger)
-  registerGitIpc(win, database)
-  registerWorkspaceIpc(win, database, { ensureWorkspace: ensureNocturneWorkspace, assertKnownWorkspace: (value) => assertKnownWorkspace(database, value), run })
-  registerKnowledgeIpc(win, database, logger, { workspace: (id) => getConversation(database, id).workspace, read: readWorkspaceContext, write: writeWorkspaceContext, recordDecision: recordSuggestionDecision })
+  const disposeData = registerDataIpc(win, database, logger)
+  const disposeGit = registerGitIpc(win, database)
+  const disposeWorkspace = registerWorkspaceIpc(win, database, { ensureWorkspace: ensureNocturneWorkspace, assertKnownWorkspace: (value) => assertKnownWorkspace(database, value), run })
+  const disposeKnowledge = registerKnowledgeIpc(win, database, logger, { workspace: (id) => getConversation(database, id).workspace, read: readWorkspaceContext, write: writeWorkspaceContext, recordDecision: recordSuggestionDecision })
   ipcMain.handle('clipboard:readText', () => clipboard.readText().slice(0, 2_000_000))
   ipcMain.handle('clipboard:writeText', (_event, value: unknown) => { clipboard.writeText(z.string().max(2_000_000).parse(value)) })
   const approvalDetails = new Map<string, { command?: string; risk?: string }>()
-  registerCodexBridge(win, codex, logger, approvalDetails)
+  const disposeCodexBridge = registerCodexBridge(win, codex, logger, approvalDetails)
 
   ipcMain.handle('files:attach', async (_event, value: unknown) => {
     const conversation = getConversation(database, idSchema.parse(value))
@@ -188,6 +188,14 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     database.addArtifact(data.conversationId, conversation.workspace, 'document', path.basename(result.filePath), result.filePath, data.format === 'html' ? await fs.promises.readFile(result.filePath, 'utf8') : null, { format: data.format })
     return result.filePath
   })
+  return () => {
+    disposeCodexBridge()
+    ipcMain.dispose()
+    disposeKnowledge()
+    disposeWorkspace()
+    disposeGit()
+    disposeData()
+  }
 }
 
 function getConversation(database: LocalDatabase, id: string) {

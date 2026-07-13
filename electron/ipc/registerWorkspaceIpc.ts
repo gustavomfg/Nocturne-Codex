@@ -35,4 +35,5 @@ export function registerWorkspaceIpc(win: BrowserWindow, database: LocalDatabase
   ipcMain.handle('conversations:create', (_event, value: unknown) => { const workspace = dependencies.assertKnownWorkspace(z.string().min(1).parse(value)); dependencies.ensureWorkspace(workspace); return database.createConversation(workspace) })
   ipcMain.handle('conversations:messages', (_event, value: unknown) => database.listMessages(idSchema.parse(value)))
   ipcMain.handle('conversations:delete', (_event, value: unknown) => database.deleteConversation(idSchema.parse(value)))
+  return () => ipcMain.dispose()
 }

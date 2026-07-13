@@ -22,13 +22,15 @@ let win: BrowserWindow | null = null
 let database: LocalDatabase | null = null
 const codex = new CodexClient()
 let logger: Logger | null = null
+let disposeIpc: (() => void) | null = null
 
 process.on('uncaughtException', (error) => { logger?.error('app', 'uncaughtException no processo principal', error); console.error(error) })
 process.on('unhandledRejection', (reason) => { logger?.error('app', 'unhandledRejection no processo principal', reason); console.error(reason) })
 
 function createWindow() {
+  if (!database || !logger) throw new Error('Serviços do Nocturne não foram inicializados.')
   const rendererUrl = VITE_DEV_SERVER_URL || new URL(`file://${path.join(RENDERER_DIST, 'index.html')}`).toString()
-  win = new BrowserWindow({
+  const currentWindow = new BrowserWindow({
     width: 1440, height: 920, minWidth: 720, minHeight: 600,
     title: APP_NAME, icon: APP_ICON, backgroundColor: '#0b0b0e',
     webPreferences: {
@@ -38,52 +40,63 @@ function createWindow() {
       sandbox: true,
     },
   })
-  win.on('page-title-updated', (event) => {
+  win = currentWindow
+  currentWindow.on('page-title-updated', (event) => {
     event.preventDefault()
-    win?.setTitle(APP_NAME)
+    currentWindow.setTitle(APP_NAME)
   })
-  win.setMenuBarVisibility(false)
-  win.webContents.session.setPermissionCheckHandler(() => false)
-  win.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  currentWindow.setMenuBarVisibility(false)
+  currentWindow.webContents.session.setPermissionCheckHandler(() => false)
+  currentWindow.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
+  currentWindow.webContents.setWindowOpenHandler(({ url }) => {
     try { const parsed = new URL(url); if (parsed.protocol === 'https:') void shell.openExternal(parsed.toString()) } catch { /* deny malformed URL */ }
     return { action: 'deny' }
   })
-  win.webContents.on('will-navigate', (event, url) => {
+  currentWindow.webContents.on('will-navigate', (event, url) => {
     const allowed = url === rendererUrl
     if (!allowed) event.preventDefault()
   })
 
-  database = new LocalDatabase(app.getPath('userData'))
-  logger = new Logger(app.getPath('logs'), database.getSettings().diagnosticMode === 'true')
   logger.info('app', 'Janela principal iniciada', { packaged: app.isPackaged })
-  registerIpc(win, database, codex, logger)
+  disposeIpc = registerIpc(currentWindow, database, codex, logger)
   if (app.isPackaged && process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT) {
     const output = path.resolve(process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT)
-    win.webContents.once('did-finish-load', () => {
+    currentWindow.webContents.once('did-finish-load', () => {
       void runPackageSmoke(output)
     })
   }
-  win.webContents.on('preload-error', (_event, preloadPath, error) => logger?.error('app', `Falha no preload: ${preloadPath}`, error))
-  win.webContents.on('did-fail-load', (_event, code, description, url) => logger?.error('app', 'Falha ao carregar renderer', { code, description, url }))
-  win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+  currentWindow.webContents.on('preload-error', (_event, preloadPath, error) => logger?.error('app', `Falha no preload: ${preloadPath}`, error))
+  currentWindow.webContents.on('did-fail-load', (_event, code, description, url) => logger?.error('app', 'Falha ao carregar renderer', { code, description, url }))
+  currentWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
     if (level >= 2) logger?.warn('app', 'Console do renderer', { level, message: message.slice(0, 8_000), line, sourceId })
   })
-  win.webContents.on('render-process-gone', (_event, details) => {
+  currentWindow.webContents.on('render-process-gone', (_event, details) => {
     logger?.error('app', 'Renderer encerrado inesperadamente', details)
     codex.stop()
-    if (!win?.isDestroyed()) setTimeout(() => { if (win && !win.isDestroyed()) void win.webContents.reload() }, 1_000)
+    if (!currentWindow.isDestroyed()) setTimeout(() => { if (!currentWindow.isDestroyed()) void currentWindow.webContents.reload() }, 1_000)
   })
-  win.webContents.on('unresponsive', () => logger?.warn('app', 'Renderer não está respondendo'))
-  win.webContents.on('responsive', () => logger?.info('app', 'Renderer voltou a responder'))
+  currentWindow.webContents.on('unresponsive', () => logger?.warn('app', 'Renderer não está respondendo'))
+  currentWindow.webContents.on('responsive', () => logger?.info('app', 'Renderer voltou a responder'))
   const memoryTimer = setInterval(() => {
-    if (!win || win.isDestroyed() || !['planning', 'running', 'waiting-approval', 'cancelling'].includes(codex.status)) return
-    const renderer = app.getAppMetrics().find((metric) => metric.pid === win?.webContents.getOSProcessId())
+    if (currentWindow.isDestroyed() || !['planning', 'running', 'waiting-approval', 'cancelling'].includes(codex.status)) return
+    const renderer = app.getAppMetrics().find((metric) => metric.pid === currentWindow.webContents.getOSProcessId())
     logger?.info('app', 'Uso de memória durante execução', { main: process.memoryUsage(), renderer: renderer?.memory, codex: codex.getDiagnostics() })
   }, 10_000)
-  win.on('closed', () => clearInterval(memoryTimer))
-  if (VITE_DEV_SERVER_URL) void win.loadURL(rendererUrl)
-  else void win.loadFile(path.join(RENDERER_DIST, 'index.html'))
+  currentWindow.on('closed', () => {
+    clearInterval(memoryTimer)
+    if (win !== currentWindow) return
+    disposeIpc?.()
+    disposeIpc = null
+    win = null
+  })
+  if (VITE_DEV_SERVER_URL) void currentWindow.loadURL(rendererUrl)
+  else void currentWindow.loadFile(path.join(RENDERER_DIST, 'index.html'))
+}
+
+function initializeServices() {
+  if (database || logger) return
+  database = new LocalDatabase(app.getPath('userData'))
+  logger = new Logger(app.getPath('logs'), database.getSettings().diagnosticMode === 'true')
 }
 
 async function runPackageSmoke(output: string) {
@@ -112,12 +125,17 @@ async function runPackageSmoke(output: string) {
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 app.on('second-instance', () => {
-  if (!win || win.isDestroyed()) return
+  if (!win || win.isDestroyed()) { createWindow(); return }
   if (win.isMinimized()) win.restore()
   win.show()
   win.focus()
 })
-app.on('before-quit', () => { logger?.info('app', 'Encerrando aplicação'); codex.stop(); database?.close() })
+app.on('before-quit', () => {
+  logger?.info('app', 'Encerrando aplicação')
+  disposeIpc?.(); disposeIpc = null
+  codex.stop()
+  database?.close(); database = null
+})
 app.on('child-process-gone', (_event, details) => logger?.error('app', 'Processo filho do Electron encerrado', details))
 if (!hasSingleInstanceLock) app.quit()
-else void app.whenReady().then(createWindow)
+else void app.whenReady().then(() => { initializeServices(); createWindow() })

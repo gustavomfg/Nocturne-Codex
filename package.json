@@ -6,6 +6,11 @@
   "license": "MIT",
   "author": "Nocturne Codex contributors",
   "type": "module",
+  "packageManager": "npm@10.9.4",
+  "engines": {
+    "node": ">=22.12 <23",
+    "npm": ">=10.9 <11"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { agentModes, suggestionStatuses } from '../suggestions'
+import { BACKUP_LIMITS } from './backupLimits'
 
 const uuid = z.string().uuid()
 const timestamp = z.string().datetime({ offset: true })
@@ -17,7 +18,7 @@ const settings = z.object({ model: z.string().max(100).optional(), sandbox: z.en
 
 export const backupSchema = z.object({ schemaVersion: z.number().int().min(1).max(5), exportedAt: timestamp.optional(), conversations: z.array(conversation).max(25_000), workspaces: z.array(workspace).max(5_000), messages: z.array(message).max(100_000), artifacts: z.array(artifact).max(50_000), memories: z.array(memory).max(5_000), suggestions: z.array(suggestion).max(25_000).default([]), suggestionDecisions: z.array(decision).max(50_000).default([]), settings: settings.optional() }).strict().superRefine((data, context) => {
   const totalRecords = data.conversations.length + data.workspaces.length + data.messages.length + data.artifacts.length + data.memories.length + data.suggestions.length + data.suggestionDecisions.length
-  if (totalRecords > 200_000) context.addIssue({ code: 'custom', message: 'O backup excede o limite agregado de 200.000 registros.' })
+  if (totalRecords > BACKUP_LIMITS.maxRecords) context.addIssue({ code: 'custom', message: `O backup excede o limite agregado de ${new Intl.NumberFormat('pt-BR').format(BACKUP_LIMITS.maxRecords)} registros.` })
   const conversations = new Set(data.conversations.map((item) => item.id))
   const suggestions = new Set(data.suggestions.map((item) => item.id))
   for (const [index, item] of data.messages.entries()) if (!conversations.has(item.conversation_id)) context.addIssue({ code: 'custom', path: ['messages', index, 'conversation_id'], message: 'Conversa referenciada não existe no backup.' })

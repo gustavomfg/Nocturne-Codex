@@ -6,6 +6,14 @@ import { reviewInstructions, sandboxModeForAgent, type AgentMode } from '../../s
 import packageMetadata from '../../package.json'
 
 const APPROVAL_METHODS = new Set(['item/commandExecution/requestApproval', 'item/fileChange/requestApproval'])
+export interface CodexProcessAdapter extends EventEmitter {
+  start(executable?: string): void
+  send(message: RpcMessage): void
+  stop(): void
+  isRunning(): boolean
+  readonly pid: number | null
+  readonly path: string
+}
 
 interface PendingCall {
   resolve: (value: unknown) => void
@@ -14,7 +22,7 @@ interface PendingCall {
 }
 
 export class CodexClient extends EventEmitter {
-  private process = new CodexProcess()
+  private readonly process: CodexProcessAdapter
   private nextId = 1
   private pending = new Map<RpcId, PendingCall>()
   private approvalRequests = new Map<string, RpcId>()
@@ -31,8 +39,9 @@ export class CodexClient extends EventEmitter {
   private machine = new AgentStateMachine('disconnected', (from, to) => this.emit('diagnostic', { level: 'warn', message: `Transição inválida do agente: ${from} → ${to}` }))
   status: CodexStatus = 'disconnected'
 
-  constructor() {
+  constructor(process: CodexProcessAdapter = new CodexProcess()) {
     super()
+    this.process = process
     this.process.on('message', (message) => this.handleMessage(message))
     this.process.on('error', (error) => { this.rejectPending(error); this.setStatus('failed', error.message) })
     this.process.on('exit', (code, _signal, intentional: boolean) => {

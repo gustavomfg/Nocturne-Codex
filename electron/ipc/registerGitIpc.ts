@@ -27,6 +27,7 @@ export function registerGitIpc(win: BrowserWindow, database: LocalDatabase) {
     const { stdout } = await run('git', ['commit', '-m', data.message], { cwd: workspace })
     return { output: stdout.trim() }
   })
+  return () => ipcMain.dispose()
 }
 
 export function resolveSelectedGitFiles(currentFiles: Array<{ path: string; originalPath?: string }>, requestedFiles: string[]) {
