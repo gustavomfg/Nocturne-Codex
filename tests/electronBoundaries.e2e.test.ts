@@ -178,6 +178,8 @@ describe.sequential('fronteiras Electron E2E', () => {
 
     electron.dialogs.open.push({ canceled: false, filePaths: [backupPath] })
     await expect(api.data.import()).resolves.toBe(true)
+    const recoverySnapshots = fs.readdirSync(path.join(root, 'data', 'backups')).filter((name) => name.endsWith('.db'))
+    expect(recoverySnapshots).toHaveLength(1)
   })
 
   it('permite preview interno e bloqueia traversal e symlink através do IPC', async () => {

@@ -3,7 +3,7 @@ import { CodexProcess } from './CodexProcess'
 import type { CodexEvent, CodexStatus, RpcId, RpcMessage, RpcResponse } from './protocol'
 import { AgentStateMachine } from '../../shared/agentState'
 import { reviewInstructions, sandboxModeForAgent, type AgentMode } from '../../shared/suggestions'
-import { APP_VERSION } from '../../shared/constants'
+import packageMetadata from '../../package.json'
 
 const APPROVAL_METHODS = new Set(['item/commandExecution/requestApproval', 'item/fileChange/requestApproval'])
 
@@ -154,7 +154,7 @@ export class CodexClient extends EventEmitter {
     this.setStatus('starting')
     this.process.start(this.executable)
     await this.call('initialize', {
-      clientInfo: { name: 'nocturne-codex', title: 'Nocturne Codex', version: APP_VERSION },
+      clientInfo: { name: 'nocturne-codex', title: 'Nocturne Codex', version: packageMetadata.version },
       capabilities: { experimentalApi: true, requestAttestation: false },
     })
     this.notify('initialized')

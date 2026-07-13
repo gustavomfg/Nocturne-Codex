@@ -6,6 +6,7 @@ export type LogCategory = 'app' | 'codex' | 'ipc' | 'workspace' | 'git' | 'artif
 
 export class Logger {
   private readonly file: string
+  private writes = Promise.resolve()
   constructor(private readonly directory: string, private diagnostic = false, private readonly maxBytes = 2_000_000) {
     fs.mkdirSync(directory, { recursive: true })
     this.file = path.join(directory, 'nocturne.log')
@@ -17,16 +18,16 @@ export class Logger {
   error(category: LogCategory, message: string, error?: unknown) { this.write('error', category, message, serializeError(error)) }
   get path() { return this.directory }
   private write(level: LogLevel, category: LogCategory, message: string, data?: unknown) {
-    this.rotate()
     const entry = { timestamp: new Date().toISOString(), level, category, message: redact(message), data: redactValue(data) }
-    fs.appendFileSync(this.file, `${JSON.stringify(entry)}\n`, { encoding: 'utf8', mode: 0o600 })
+    this.writes = this.writes.then(async () => { await this.rotate(); await fs.promises.appendFile(this.file, `${JSON.stringify(entry)}\n`, { encoding: 'utf8', mode: 0o600 }) }).catch((error) => console.error('Falha ao gravar log do Nocturne:', error))
   }
-  private rotate() {
+  flush() { return this.writes }
+  private async rotate() {
     try {
-      if (fs.statSync(this.file).size < this.maxBytes) return
+      if ((await fs.promises.stat(this.file)).size < this.maxBytes) return
       const backup = `${this.file}.1`
-      if (fs.existsSync(backup)) fs.unlinkSync(backup)
-      fs.renameSync(this.file, backup)
+      await fs.promises.unlink(backup).catch(() => undefined)
+      await fs.promises.rename(this.file, backup)
     } catch { /* file does not exist yet */ }
   }
 }

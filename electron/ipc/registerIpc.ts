@@ -55,18 +55,18 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     if (error) throw new Error(error)
   })
 
-  ipcMain.handle('files:preview', (_event, value: unknown) => {
+  ipcMain.handle('files:preview', async (_event, value: unknown) => {
     const data = filePreviewSchema.parse(value)
     const conversation = getConversation(database, data.conversationId)
     const filePath = resolveWorkspaceFile(data.filePath, conversation.workspace)
-    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) throw new Error('Arquivo não encontrado.')
-    const stat = fs.statSync(filePath)
+    const stat = await fs.promises.stat(filePath).catch(() => null)
+    if (!stat?.isFile()) throw new Error('Arquivo não encontrado.')
     if (stat.size > 2_000_000) throw new Error('Preview limitado a arquivos de até 2 MB.')
     const extension = path.extname(filePath).toLowerCase()
     const imageMime = ({ '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml' } as Record<string, string>)[extension]
-    if (imageMime) return { kind: 'image', name: path.basename(filePath), filePath, mime: imageMime, content: `data:${imageMime};base64,${fs.readFileSync(filePath).toString('base64')}`, size: stat.size }
+    if (imageMime) return { kind: 'image', name: path.basename(filePath), filePath, mime: imageMime, content: `data:${imageMime};base64,${(await fs.promises.readFile(filePath)).toString('base64')}`, size: stat.size }
     if (!isTextFile(extension)) throw new Error('Este formato não possui preview interno.')
-    return { kind: extension === '.md' ? 'markdown' : 'text', name: path.basename(filePath), filePath, mime: 'text/plain', content: fs.readFileSync(filePath, 'utf8'), size: stat.size }
+    return { kind: extension === '.md' ? 'markdown' : 'text', name: path.basename(filePath), filePath, mime: 'text/plain', content: await fs.promises.readFile(filePath, 'utf8'), size: stat.size }
   })
 
   ipcMain.handle('codex:start', async () => {
@@ -169,7 +169,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     const result = await dialog.showSaveDialog(win, { title: 'Salvar documento Markdown', defaultPath: path.join(conversation.workspace, safeName(data.name, '.md')), filters: [{ name: 'Markdown', extensions: ['md'] }] })
     if (result.canceled || !result.filePath) return null
     assertInsideWorkspace(result.filePath, conversation.workspace)
-    fs.writeFileSync(result.filePath, data.content, 'utf8')
+    await fs.promises.writeFile(result.filePath, data.content, { encoding: 'utf8', mode: 0o600 })
     database.addArtifact(data.conversationId, conversation.workspace, 'document', path.basename(result.filePath), result.filePath, data.content, { format: 'md' })
     return result.filePath
   })
@@ -183,13 +183,13 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     if (result.canceled || !result.filePath) return null
     assertInsideWorkspace(result.filePath, conversation.workspace)
     await pipeCommand('pandoc', ['-f', 'markdown', '-t', data.format, '-o', result.filePath], data.content, conversation.workspace)
-    database.addArtifact(data.conversationId, conversation.workspace, 'document', path.basename(result.filePath), result.filePath, data.format === 'html' ? fs.readFileSync(result.filePath, 'utf8') : null, { format: data.format })
+    database.addArtifact(data.conversationId, conversation.workspace, 'document', path.basename(result.filePath), result.filePath, data.format === 'html' ? await fs.promises.readFile(result.filePath, 'utf8') : null, { format: data.format })
     return result.filePath
   })
 }
 
 function getConversation(database: LocalDatabase, id: string) {
-  const conversation = database.listConversations().find((item) => item.id === id)
+  const conversation = database.getConversation(id)
   if (!conversation) throw new Error('Conversa não encontrada.')
   return conversation
 }

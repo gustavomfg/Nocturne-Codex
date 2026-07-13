@@ -1,6 +1,7 @@
 import { dialog, type BrowserWindow } from 'electron'
 import fs from 'node:fs'
 import { Worker } from 'node:worker_threads'
+import { performance } from 'node:perf_hooks'
 import type { LocalDatabase } from '../database/Database'
 import type { Logger } from '../logging/Logger'
 import { backupSchema } from '../../shared/ipc/backupSchemas'
@@ -11,8 +12,10 @@ export function registerDataIpc(win: BrowserWindow, database: LocalDatabase, log
   ipcMain.handle('data:export', async () => {
     const result = await dialog.showSaveDialog(win, { title: 'Exportar dados do Nocturne', defaultPath: 'nocturne-backup.json', filters: [{ name: 'JSON', extensions: ['json'] }] })
     if (result.canceled || !result.filePath) return null
-    fs.writeFileSync(result.filePath, `${JSON.stringify(database.exportData(), null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
-    logger.info('persistence', 'Dados exportados')
+    const startedAt = performance.now()
+    const serialized = await serializeBackupInWorker(database.exportData())
+    await fs.promises.writeFile(result.filePath, serialized, { encoding: 'utf8', mode: 0o600 })
+    logger.info('persistence', 'Dados exportados', { bytes: Buffer.byteLength(serialized), durationMs: Math.round(performance.now() - startedAt) })
     return result.filePath
   })
   ipcMain.handle('data:import', async () => {
@@ -25,9 +28,19 @@ export function registerDataIpc(win: BrowserWindow, database: LocalDatabase, log
     const validated = backupSchema.parse(parsed)
     const confirmation = await dialog.showMessageBox(win, { type: 'warning', buttons: ['Cancelar', 'Substituir dados'], defaultId: 0, cancelId: 0, title: 'Restaurar backup', message: 'Substituir todos os dados locais por este backup?', detail: 'Conversas, configurações, memórias e artefatos atuais serão substituídos. Exporte seus dados antes se quiser preservar uma cópia.' })
     if (confirmation.response !== 1) return false
+    const recoveryPath = await database.createRecoverySnapshot()
     database.importData(validated)
-    logger.info('persistence', 'Dados importados')
+    logger.info('persistence', 'Dados importados', { recoveryPath })
     return true
+  })
+}
+
+function serializeBackupInWorker(value: unknown) {
+  return new Promise<string>((resolve, reject) => {
+    const worker = new Worker(`const { parentPort, workerData } = require('node:worker_threads'); try { parentPort.postMessage({ ok: true, value: JSON.stringify(workerData, null, 2) + '\\n' }); } catch (error) { parentPort.postMessage({ ok: false, error: error instanceof Error ? error.message : String(error) }); }`, { eval: true, workerData: value })
+    worker.once('message', (message: { ok: boolean; value?: string; error?: string }) => message.ok && message.value !== undefined ? resolve(message.value) : reject(new Error(message.error || 'Falha ao serializar backup.')))
+    worker.once('error', reject)
+    worker.once('exit', (code) => { if (code !== 0) reject(new Error(`Worker de exportação encerrou com código ${code}.`)) })
   })
 }
 

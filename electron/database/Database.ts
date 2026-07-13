@@ -60,6 +60,28 @@ export class LocalDatabase {
       created_at createdAt, updated_at updatedAt FROM conversations ORDER BY updated_at DESC`).all() as ConversationRow[]
   }
 
+  getConversation(id: string): ConversationRow | null {
+    return this.db.prepare(`SELECT id, title, workspace, codex_thread_id codexThreadId,
+      created_at createdAt, updated_at updatedAt FROM conversations WHERE id=?`).get(id) as ConversationRow | undefined ?? null
+  }
+
+  async createRecoverySnapshot(retain = 5) {
+    const directory = path.join(path.dirname(this.databasePath), 'backups')
+    await fs.promises.mkdir(directory, { recursive: true, mode: 0o700 })
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const destination = path.join(directory, `nocturne-before-restore-${timestamp}.db`)
+    try {
+      await this.db.backup(destination)
+      await fs.promises.chmod(destination, 0o600)
+      const snapshots = (await fs.promises.readdir(directory)).filter((name) => name.startsWith('nocturne-before-restore-') && name.endsWith('.db')).sort().reverse()
+      await Promise.all(snapshots.slice(Math.max(1, retain)).map((name) => fs.promises.unlink(path.join(directory, name))))
+      return destination
+    } catch (error) {
+      await fs.promises.unlink(destination).catch(() => undefined)
+      throw new Error(`Não foi possível criar o ponto de recuperação: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
   createConversation(workspace: string): ConversationRow {
     this.touchWorkspace(workspace)
     const now = new Date().toISOString()

@@ -20,6 +20,7 @@
     "package:dir": "npm run build && electron-builder --dir",
     "smoke:package": "node scripts/smoke-package.mjs",
     "checksums": "node scripts/smoke-package.mjs --checksums",
+    "verify:release-metadata": "node scripts/verify-release-metadata.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

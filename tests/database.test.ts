@@ -22,6 +22,15 @@ describe('persistência SQLite', () => {
     expect(db.getWorkspaceMemory(workspace).content).toBe('decisão')
     expect(db.listArtifacts(conversation.id)[0].type).toBe('markdown'); db.close()
   })
+  it('consulta conversa diretamente e cria snapshot consistente do estado anterior', async () => {
+    const db = create(); const conversation = db.createConversation('/tmp/snapshot'); db.addMessage(conversation.id, 'user', 'Antes da restauração')
+    expect(db.getConversation(conversation.id)).toMatchObject({ id: conversation.id, workspace: '/tmp/snapshot' })
+    expect(db.getConversation('00000000-0000-4000-8000-000000000099')).toBeNull()
+    const snapshot = await db.createRecoverySnapshot(); const recovered = new Sqlite(snapshot, { readonly: true })
+    expect((recovered.prepare('SELECT content FROM messages WHERE conversation_id=?').get(conversation.id) as { content: string }).content).toBe('Antes da restauração')
+    expect(fs.statSync(snapshot).mode & 0o777).toBe(0o600)
+    recovered.close(); db.close()
+  })
   it('exporta e importa um fluxo completo restaurável', () => {
     const source = create(); const conversation = source.createConversation('/tmp/project'); source.addMessage(conversation.id, 'assistant', 'Resposta simulada'); source.setSettings({ theme: 'dark', model: 'modelo-teste' }); const data = source.exportData(); source.close()
     const target = create(); target.importData(data); expect(target.listConversations()).toHaveLength(1); expect(target.listMessages(conversation.id)[0].content).toBe('Resposta simulada'); expect(target.getSettings().model).toBe('modelo-teste'); target.close()

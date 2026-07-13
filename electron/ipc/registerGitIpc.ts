@@ -42,7 +42,7 @@ export function resolveSelectedGitFiles(currentFiles: Array<{ path: string; orig
 }
 
 function getWorkspace(database: LocalDatabase, id: string) {
-  const conversation = database.listConversations().find((item) => item.id === id)
+  const conversation = database.getConversation(id)
   if (!conversation) throw new Error('Conversa não encontrada.')
   return conversation.workspace
 }
