@@ -3512,6 +3512,11 @@ button {
   border-color: #39373e;
 }
 
+.connection-symbol {
+  display: none;
+  font-style: normal;
+}
+
 .error-card {
   border-left: 3px solid var(--color-danger);
   box-shadow: var(--shadow-sm);
@@ -4211,7 +4216,6 @@ button {
     gap: 0;
     overflow: hidden;
     font-size: 0;
-    color: #0000 !important;
   }
 
   .connection > span {
@@ -4321,7 +4325,7 @@ button {
     scroll-behavior: auto;
   }
 
-  .connection.starting > span, .status-dot.starting, .caret, .timeline-dot.running svg {
+  .connection.starting > span, .connection-symbol.busy svg, .status-dot.starting, .caret, .timeline-dot.running svg {
     animation: none !important;
   }
 
@@ -4741,7 +4745,16 @@ button {
   }
 
   .connection > span {
-    flex: 0 0 8px;
+    display: none;
+  }
+
+  .connection-symbol {
+    display: grid;
+    place-items: center;
+  }
+
+  .connection-symbol.busy svg {
+    animation: 1.3s linear infinite spin;
   }
 
   .onboarding-remediation {

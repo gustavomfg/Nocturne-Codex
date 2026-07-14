@@ -69,6 +69,16 @@ test.describe('renderer do produto', () => {
     expect(await composer.evaluate((element) => element.getBoundingClientRect().height)).toBe(initialHeight)
   })
 
+  test('mantém um símbolo textual do estado Codex em 520px', async ({ page }) => {
+    await page.setViewportSize({ width: 520, height: 760 })
+    await ready(page)
+    const connection = page.getByRole('button', { name: /Codex:/ })
+    await expect(connection.locator('.connection-symbol')).toBeVisible()
+    await expect(connection.locator('.connection-symbol')).toHaveAttribute('data-symbol', 'ready')
+    await page.evaluate(() => (window as unknown as { __nocturneTest: { emitStatus(payload: unknown): void } }).__nocturneTest.emitStatus({ status: 'failed' }))
+    await expect(connection.locator('.connection-symbol')).toHaveAttribute('data-symbol', 'unavailable')
+  })
+
   test('expõe streaming, erro e aprovação pendente sem deslocar controles essenciais', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await ready(page)
