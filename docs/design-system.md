@@ -447,7 +447,7 @@ This review evaluates the current interface as a first-time user. It documents o
 
 ### Small remaining inconsistencies
 
-- Some legacy CSS declarations remain below the design-system layer even though they are overridden by the current tokens. Consolidating them would improve stylesheet maintainability, but would be a refactor outside this visual-only phase.
+- The legacy structural layer remains only where it still supplies unique layout behavior. Declarations shadowed by identical selectors were removed without changing computed styles, and `npm run lint:design` now rejects new shadowed declarations before they accumulate.
 - A few icon sizes are defined directly in JSX. They align visually, but future work should map icon sizes to explicit component primitives.
 - Native `title` tooltips depend on the operating system and do not have the same timing or surface as the application.
 - Dialog semantics and focus trapping are not uniform across every modal; addressing that requires behavioral work rather than visual styling.

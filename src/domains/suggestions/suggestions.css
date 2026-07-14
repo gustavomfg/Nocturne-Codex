@@ -1,16 +1,16 @@
 .suggestions-view { display: flex; flex-direction: column; gap: var(--spacing-md); }
-.health-card { padding: var(--spacing-lg); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+.health-card { border: 1px solid var(--color-border); border-radius: var(--radius-md); }
 .health-card > div:first-child { display: flex; align-items: baseline; justify-content: space-between; gap: var(--spacing-sm); }
 .health-card > div:first-child strong { font-size: var(--font-title); font-weight: 650; letter-spacing: -.02em; }
 .health-card small { color: var(--color-text-muted); font-size: var(--font-caption); line-height: var(--leading-ui); }
-.health-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-sm); margin-top: var(--spacing-md); }
+.health-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-sm); }
 .health-grid span { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--spacing-xs) var(--spacing-sm); min-height: 64px; padding: var(--spacing-sm); background: var(--color-panel); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); }
 .health-grid b { color: var(--color-text-secondary); font-size: var(--font-label); font-weight: 550; }
 .health-grid strong { color: #c2b1f2; font-size: var(--font-small); font-weight: 650; }
 .health-grid span small { display: block; grid-column: 1 / -1; }
 
 .suggestion-list { display: flex; flex-direction: column; gap: var(--spacing-md); }
-.suggestion-card { padding: var(--spacing-md); border: 1px solid var(--color-border); border-left: 3px solid var(--color-text-subtle); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+.suggestion-card { border: 1px solid var(--color-border); border-left: 3px solid var(--color-text-subtle); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-sm); }
 .suggestion-card.high, .suggestion-card.critical { border-left-color: var(--color-danger); }
 .suggestion-card.medium { border-left-color: var(--color-warning); }
 .suggestion-card.low { border-left-color: var(--color-info); }
