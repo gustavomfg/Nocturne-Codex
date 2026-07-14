@@ -8,7 +8,7 @@ export const IPC_CHANNELS = {
   suggestions: { list: 'suggestions:list', create: 'suggestions:create', status: 'suggestions:status' },
   data: { export: 'data:export', import: 'data:import' },
   diagnostics: { openLogs: 'diagnostics:openLogs', copy: 'diagnostics:copy', rendererError: 'diagnostics:rendererError', rendererStats: 'diagnostics:rendererStats' },
-  settings: { get: 'settings:get', set: 'settings:set' },
+  settings: { get: 'settings:get', check: 'settings:check', set: 'settings:set' },
   git: { status: 'git:status', commit: 'git:commit' },
   documents: { saveMarkdown: 'documents:saveMarkdown', export: 'documents:export' },
   clipboard: { readText: 'clipboard:readText', writeText: 'clipboard:writeText' },

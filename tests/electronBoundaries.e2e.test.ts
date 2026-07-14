@@ -71,6 +71,7 @@ class SimulatedCodex extends EventEmitter {
   interruptions: string[] = []
   approvals: Array<{ key: string; accepted: boolean; forSession: boolean }> = []
   restarts = 0
+  configReads = 0
 
   async start() { this.status = 'ready' }
   async restart() { this.restarts += 1; this.status = 'ready' }
@@ -80,7 +81,7 @@ class SimulatedCodex extends EventEmitter {
   async sendTurn(threadId: string, _workspace: string, prompt: string) { this.turns.push({ threadId, prompt }); return { id: `turn-${this.turns.length}` } }
   async interrupt(threadId: string) { this.interruptions.push(threadId) }
   async resolveApproval(key: string, accepted: boolean, forSession = false) { this.approvals.push({ key, accepted, forSession }) }
-  async readConfig() { return {} }
+  async readConfig() { this.configReads += 1; return {} }
 }
 
 describe.sequential('fronteiras Electron E2E', () => {
@@ -139,6 +140,9 @@ describe.sequential('fronteiras Electron E2E', () => {
     expect(Object.keys(api).sort()).toEqual(['artifacts', 'clipboard', 'codex', 'conversations', 'data', 'diagnostics', 'documents', 'files', 'git', 'memory', 'settings', 'suggestions', 'workspace'])
     await api.clipboard.writeText('commit sugerido')
     await expect(api.clipboard.readText()).resolves.toBe('commit sugerido')
+    const configReads = codex.configReads
+    await expect(api.settings.get()).resolves.toMatchObject({ serverStatus: 'ready' })
+    expect(codex.configReads).toBe(configReads)
     electron.dialogs.open.push({ canceled: false, filePaths: [workspace] })
     await expect(api.workspace.select()).resolves.toBe(workspace)
     expect(fs.existsSync(path.join(workspace, '.nocturne', 'project.json'))).toBe(true)

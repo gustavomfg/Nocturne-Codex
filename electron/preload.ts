@@ -46,7 +46,7 @@ export const nocturneApi: NocturneApi = {
   suggestions: { list: (conversationId: string) => ipcRenderer.invoke(channels.suggestions.list, conversationId), create: (conversationId: string, content: string) => ipcRenderer.invoke(channels.suggestions.create, { conversationId, content }), status: (conversationId: string, suggestionId: string, status: string, result?: string) => ipcRenderer.invoke(channels.suggestions.status, { conversationId, suggestionId, status, result }) },
   data: { export: () => ipcRenderer.invoke(channels.data.export), import: () => ipcRenderer.invoke(channels.data.import) },
   diagnostics: { openLogs: () => ipcRenderer.invoke(channels.diagnostics.openLogs), copy: () => ipcRenderer.invoke(channels.diagnostics.copy), rendererError: (value: unknown) => ipcRenderer.invoke(channels.diagnostics.rendererError, value), rendererStats: (value: unknown) => ipcRenderer.invoke(channels.diagnostics.rendererStats, value) },
-  settings: { get: () => ipcRenderer.invoke(channels.settings.get), set: (settings: unknown) => ipcRenderer.invoke(channels.settings.set, settings) },
+  settings: { get: () => ipcRenderer.invoke(channels.settings.get), check: () => ipcRenderer.invoke(channels.settings.check), set: (settings: unknown) => ipcRenderer.invoke(channels.settings.set, settings) },
   git: { status: (conversationId: string) => ipcRenderer.invoke(channels.git.status, conversationId), commit: (conversationId: string, message: string, files: string[]) => ipcRenderer.invoke(channels.git.commit, { conversationId, message, files }) },
   documents: {
     saveMarkdown: (conversationId: string, content: string, name?: string) => ipcRenderer.invoke(channels.documents.saveMarkdown, { conversationId, content, name }),

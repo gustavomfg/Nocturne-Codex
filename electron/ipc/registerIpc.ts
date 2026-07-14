@@ -31,6 +31,8 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   ipcMain.handle('clipboard:writeText', (_event, value: unknown) => { clipboard.writeText(z.string().max(2_000_000).parse(value)) })
   const approvalDetails = new Map<string, { command?: string; risk?: string }>()
   const disposeCodexBridge = registerCodexBridge(win, codex, logger, approvalDetails)
+  let readinessCache: { expiresAt: number; value: Record<string, unknown> } | null = null
+  let readinessRequest: Promise<Record<string, unknown>> | null = null
 
   ipcMain.handle('files:attach', async (_event, value: unknown) => {
     const conversation = getConversation(database, idSchema.parse(value))
@@ -156,13 +158,21 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     return codex.resolveApproval(data.key, data.accepted, data.forSession)
   })
 
-  ipcMain.handle('settings:get', async () => { const saved = database.getSettings(); return { ...saved, diagnosticMode: saved.diagnosticMode === 'true', ...(await getCodexInfo(codex)) } })
+  const savedSettings = () => { const saved = database.getSettings(); return { ...saved, diagnosticMode: saved.diagnosticMode === 'true', ...(readinessCache?.value ?? {}), serverStatus: codex.status } }
+  ipcMain.handle('settings:get', () => savedSettings())
+  ipcMain.handle('settings:check', async () => {
+    if (readinessCache && readinessCache.expiresAt > Date.now()) return savedSettings()
+    readinessRequest ??= getCodexInfo(codex, database.getSettings().codexPath).then((value) => { readinessCache = { value, expiresAt: Date.now() + 30_000 }; return value }).finally(() => { readinessRequest = null })
+    await readinessRequest
+    return savedSettings()
+  })
   ipcMain.handle('settings:set', (_event, value: unknown) => {
     const data = z.object({ model: z.string().max(100), sandbox: z.enum(['read-only', 'workspace-write']), approvalPolicy: z.enum(['untrusted', 'on-request']), codexPath: z.string().trim().max(1_000).optional(), diagnosticMode: z.boolean().optional(), theme: z.literal('dark').default('dark'), defaultAgentMode: z.enum(agentModes).default('review') }).parse(value)
     if (data.codexPath && !path.isAbsolute(data.codexPath) && data.codexPath !== 'codex') throw new Error('Use um caminho absoluto para o executável do Codex.')
     if (data.codexPath && path.isAbsolute(data.codexPath) && (!fs.existsSync(data.codexPath) || !fs.statSync(data.codexPath).isFile())) throw new Error('Executável do Codex não encontrado.')
     logger.setDiagnostic(Boolean(data.diagnosticMode))
     database.setSettings({ ...data, diagnosticMode: String(Boolean(data.diagnosticMode)) })
+    readinessCache = null
     return { ...database.getSettings(), diagnosticMode: Boolean(data.diagnosticMode) }
   })
 
@@ -249,15 +259,17 @@ async function run(command: string, args: string[], cwd: string) {
   catch (error) { throw new Error(error instanceof Error ? error.message : String(error)) }
 }
 
-async function getCodexInfo(codex: CodexClient) {
-  const executable = findExecutable('codex')
-  const version = await commandVersion(executable || 'codex')
-  let config: unknown = null
-  try { config = await codex.readConfig() } catch { /* status remains truthful through the Codex status event */ }
-  const authStatus = executable ? await commandOutput(executable, ['login', 'status']) : null
+async function getCodexInfo(codex: CodexClient, configuredExecutable?: string) {
+  const executable = configuredExecutable || findExecutable('codex') || 'codex'
+  const [version, config, authStatus, pandocVersion] = await Promise.all([
+    commandVersion(executable),
+    codex.readConfig().catch(() => null),
+    commandOutput(executable, ['login', 'status']),
+    commandVersion('pandoc'),
+  ])
   const parsedVersion = version?.match(/(\d+\.\d+\.\d+)/)?.[1]
   const compatible = Boolean(parsedVersion && compareVersions(parsedVersion, CODEX_COMPATIBILITY.minimum) >= 0)
-  return { codexPath: executable || 'codex', codexVersion: version || 'indisponível', codexCompatible: compatible, codexCompatibilityMessage: parsedVersion ? compatible ? `Compatível (mínimo ${CODEX_COMPATIBILITY.minimum})` : `Versão incompatível; instale ${CODEX_COMPATIBILITY.minimum} ou superior.` : 'Não foi possível identificar a versão do Codex CLI.', pandocVersion: await commandVersion('pandoc') || 'indisponível', serverStatus: codex.status, authStatus: authStatus || 'Não foi possível verificar a autenticação.', authenticated: Boolean(authStatus && /logged in|autenticado/i.test(authStatus)), rawConfig: config }
+  return { codexPath: executable, codexVersion: version || 'indisponível', codexCompatible: compatible, codexCompatibilityMessage: parsedVersion ? compatible ? `Compatível (mínimo ${CODEX_COMPATIBILITY.minimum})` : `Versão incompatível; instale ${CODEX_COMPATIBILITY.minimum} ou superior.` : 'Não foi possível identificar a versão do Codex CLI.', pandocVersion: pandocVersion || 'indisponível', serverStatus: codex.status, authStatus: authStatus || 'Não foi possível verificar a autenticação.', authenticated: Boolean(authStatus && /logged in|autenticado/i.test(authStatus)), rawConfig: config }
 }
 
 function compareVersions(left: string, right: string) { const a = left.split('.').map(Number); const b = right.split('.').map(Number); for (let index = 0; index < 3; index += 1) { if ((a[index] || 0) !== (b[index] || 0)) return (a[index] || 0) - (b[index] || 0) } return 0 }

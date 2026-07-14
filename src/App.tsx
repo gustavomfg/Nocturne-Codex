@@ -89,7 +89,10 @@ function App() {
     void Promise.all([window.nocturne.conversations.list(), window.nocturne.workspace.list(), window.nocturne.settings.get()]).then(async ([conversations, savedWorkspaces, savedSettings]) => {
       const normalized = { ...savedSettings, model: savedSettings.model || '', sandbox: savedSettings.sandbox || 'workspace-write', approvalPolicy: savedSettings.approvalPolicy === 'untrusted' ? 'untrusted' : 'on-request', theme: 'dark', defaultAgentMode: savedSettings.defaultAgentMode || 'review' } as CodexSettings
       store.setConversations(conversations); store.setStatus(normalized.serverStatus || 'disconnected'); setWorkspaces(savedWorkspaces); setSettings(normalized); setAgentMode(normalized.defaultAgentMode || 'review')
-      await window.nocturne.codex.start()
+      void window.nocturne.codex.start().then(async () => {
+        const readiness = await window.nocturne.settings.check()
+        setSettings((current) => ({ ...current, ...readiness })); store.setStatus(readiness.serverStatus || useAppStore.getState().status)
+      }).catch((error) => store.setError(errorMessage(error)))
       if (conversations[0]) await openConversation(conversations[0].id, conversations)
     }).catch((error) => store.setError(error.message))
     const offStatus = window.nocturne.codex.onStatus(({ status, error }) => { store.setStatus(status); if (status === 'completed' && activeTurnRef.current) store.setFinalizing(true); if (error) store.setError(error) })
@@ -370,7 +373,7 @@ function App() {
   async function recheckReadiness() {
     try {
       await window.nocturne.codex.start()
-      const refreshed = await window.nocturne.settings.get()
+      const refreshed = await window.nocturne.settings.check()
       const normalized = { ...refreshed, model: refreshed.model || '', sandbox: refreshed.sandbox || 'workspace-write', approvalPolicy: refreshed.approvalPolicy === 'untrusted' ? 'untrusted' : 'on-request', theme: 'dark', defaultAgentMode: refreshed.defaultAgentMode || 'review' } as CodexSettings
       setSettings(normalized); store.setStatus(normalized.serverStatus || useAppStore.getState().status)
       notify('Verificações de prontidão atualizadas.')

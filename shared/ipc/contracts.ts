@@ -10,7 +10,7 @@ export interface NocturneApi {
   suggestions: { list(conversationId: string): Promise<Suggestion[]>; create(conversationId: string, content: string): Promise<{ suggestions: Suggestion[]; content: string }>; status(conversationId: string, suggestionId: string, status: SuggestionStatus, result?: string): Promise<Suggestion> }
   data: { export(): Promise<string | null>; import(): Promise<boolean> }
   diagnostics: { openLogs(): Promise<string>; copy(): Promise<string>; rendererError(value: { type: 'error' | 'unhandledRejection'; message: string; stack?: string }): Promise<void>; rendererStats(value: { responseSize: number; activities: number; messages: number }): Promise<void> }
-  settings: { get(): Promise<CodexSettings>; set(settings: Pick<CodexSettings, 'model' | 'sandbox' | 'approvalPolicy' | 'codexPath' | 'diagnosticMode' | 'theme' | 'defaultAgentMode'>): Promise<CodexSettings> }
+  settings: { get(): Promise<CodexSettings>; check(): Promise<CodexSettings>; set(settings: Pick<CodexSettings, 'model' | 'sandbox' | 'approvalPolicy' | 'codexPath' | 'diagnosticMode' | 'theme' | 'defaultAgentMode'>): Promise<CodexSettings> }
   git: { status(conversationId: string): Promise<GitInfo>; commit(conversationId: string, message: string, files: string[]): Promise<{ output: string }> }
   documents: { saveMarkdown(conversationId: string, content: string, name?: string): Promise<string | null>; export(conversationId: string, content: string, format: 'docx' | 'pdf' | 'html'): Promise<string | null> }
   clipboard: { readText(): Promise<string>; writeText(value: string): Promise<void> }
