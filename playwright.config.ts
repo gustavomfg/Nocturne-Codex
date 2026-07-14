@@ -14,7 +14,7 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:4174',
     colorScheme: 'dark',
     locale: 'pt-BR',
-    reducedMotion: 'reduce',
+    contextOptions: { reducedMotion: 'reduce' },
     timezoneId: 'America/Sao_Paulo',
     trace: 'retain-on-failure',
   },
