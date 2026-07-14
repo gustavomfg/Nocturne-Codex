@@ -1,18 +1,19 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, type RefObject } from 'react'
 import { ChevronRight, Code2, Folder, FolderOpen, History, Laptop, Menu, MessageSquarePlus, Search, Settings, Star, Trash2, X } from 'lucide-react'
 import type { CodexSettings, Conversation, Workspace } from '../../types'
 import { relativeTime } from '../../shared/format'
+import { useOffCanvasPanel } from '../../shared/useOffCanvasPanel'
 
 interface SidebarProps {
-  open: boolean; conversations: Conversation[]; hasConversations: boolean; activeId: string | null; search: string; searchRef: RefObject<HTMLInputElement>; workspace: string; workspaces: Workspace[]; settings: CodexSettings; status: string;
+  open: boolean; compact: boolean; triggerRef: RefObject<HTMLElement>; conversations: Conversation[]; hasConversations: boolean; activeId: string | null; search: string; searchRef: RefObject<HTMLInputElement>; workspace: string; workspaces: Workspace[]; settings: CodexSettings; status: string;
   onClose(): void; onNew(): void; onSearch(value: string): void; onConversation(id: string): void; onDelete(id: string): void; onWorkspace(): void; onSavedWorkspace(path: string): void; onFavorite(item: Workspace): void; onSettings(): void
 }
 
-export function Sidebar({ open, conversations, hasConversations, activeId, search, searchRef, workspace, workspaces, settings, status, onClose, onNew, onSearch, onConversation, onDelete, onWorkspace, onSavedWorkspace, onFavorite, onSettings }: SidebarProps) {
-  const sidebarRef = useRef<HTMLElement>(null)
+export function Sidebar({ open, compact, triggerRef, conversations, hasConversations, activeId, search, searchRef, workspace, workspaces, settings, status, onClose, onNew, onSearch, onConversation, onDelete, onWorkspace, onSavedWorkspace, onFavorite, onSettings }: SidebarProps) {
+  const sidebarRef = useOffCanvasPanel<HTMLElement>({ open, modal: compact, onClose, triggerRef })
   const newShortcut = navigator.platform.toLowerCase().includes('mac') ? '⌘ N' : 'Ctrl N'
-  useEffect(() => { if (sidebarRef.current) sidebarRef.current.inert = !open }, [open])
-  return <aside ref={sidebarRef} className={`sidebar ${open ? 'open' : 'collapsed'}`} aria-hidden={!open}>
+  useEffect(() => { if (sidebarRef.current) sidebarRef.current.inert = !open }, [open, sidebarRef])
+  return <aside id="workspace-sidebar" ref={sidebarRef} className={`sidebar ${open ? 'open' : 'collapsed'}`} aria-hidden={!open} role={compact && open ? 'dialog' : undefined} aria-modal={compact && open ? true : undefined} aria-label={compact && open ? 'Navegação do workspace' : undefined} tabIndex={-1}>
     <div className="brand"><div className="brand-mark"><img src="./nocturne.svg" alt=""/></div><span>Nocturne <b>Codex</b></span><button className="icon-button sidebar-toggle" aria-label="Recolher barra lateral" title="Recolher barra lateral" onClick={onClose}><Menu size={17}/></button></div>
     <button className="new-chat" onClick={onNew}><MessageSquarePlus size={17}/><span>Nova conversa</span><kbd>{newShortcut}</kbd></button>
     <label className="search-box"><Search size={15}/><span className="sr-only">Buscar conversas</span><input ref={searchRef} value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Buscar conversas" aria-label="Buscar conversas"/>{search && <button type="button" aria-label="Limpar busca" title="Limpar busca" onClick={() => onSearch('')}><X size={13}/></button>}</label>

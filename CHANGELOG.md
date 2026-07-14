@@ -57,7 +57,10 @@
 - cascata visual consolidada, com remoção de declarações redundantes e seletores responsivos sem dependência da posição no DOM;
 - dependências não utilizadas removidas;
 - regressões de protocolo, backup e links simbólicos adicionadas à suíte de testes;
-- suíte ampliada para 62 testes automatizados e smoke test no Electron empacotado real;
+- suíte ampliada para 62 testes unitários e de integração, 10 cenários de renderer com quatro referências visuais e smoke test no Electron empacotado real;
+- painéis compactos passam a ser mutuamente exclusivos, modais para teclado e capazes de restaurar o foco ao acionador;
+- composer cresce progressivamente para facilitar a revisão de prompts longos;
+- breakpoints consolidados em cinco faixas canônicas, removendo regras responsivas legadas e tipografia residual abaixo de 13 px;
 - ambiente de desenvolvimento formalizado em Node.js 22.12+ da linha 22 LTS e npm 10, validando no CI a versão mínima e a linha atual;
 - README, documentação de arquitetura, integração, desenvolvimento e release sincronizados com o produto.
 

@@ -1,4 +1,4 @@
-import type { FormEvent, KeyboardEvent, RefObject } from 'react'
+import { useLayoutEffect, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
 import { Code2, FileCode2, GitBranch, Paperclip, Send, ShieldCheck, Square, X } from 'lucide-react'
 import type { AgentMode, Attachment, CodexSettings } from '../../types'
 import { isBusy } from '../../shared/format'
@@ -16,6 +16,15 @@ const modes: Array<{ id: AgentMode; label: string; description: string }> = [
 
 export function Composer({ agentMode, attachments, prompt, status, finalizing, settings, active, pendingApprovals, composerRef, onMode, onPrompt, onRemoveAttachment, onAttach, onCancel, onSubmit, onQuick }: ComposerProps) {
   const busy = isBusy(status) || finalizing
+  useLayoutEffect(() => {
+    const textarea = composerRef.current
+    if (!textarea) return
+    if (!prompt) { textarea.style.height = ''; textarea.style.overflowY = 'hidden'; return }
+    textarea.style.height = 'auto'
+    const maximum = 220
+    textarea.style.height = `${Math.min(textarea.scrollHeight, maximum)}px`
+    textarea.style.overflowY = textarea.scrollHeight > maximum ? 'auto' : 'hidden'
+  }, [composerRef, prompt])
   const moveModeFocus = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
     event.preventDefault()

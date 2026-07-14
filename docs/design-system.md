@@ -154,6 +154,18 @@ Every state needs a text label or recognizable icon. A colored dot alone is insu
 
 At narrow widths, the inspector hides before the main reading column becomes uncomfortable. The sidebar remains available as a desktop overlay. No content should require a font-size reduction to fit.
 
+### Canonical breakpoints
+
+- 1320 px: reduce the desktop panel widths;
+- 1120 px: use the compact desktop panel density;
+- 980 px: convert sidebar and inspector into mutually exclusive off-canvas dialogs;
+- 720 px: compact the topbar, composer, settings navigation, and secondary labels;
+- 520 px: preserve only essential topbar actions and single-column remediation.
+
+Do not add an intermediate breakpoint without documenting a layout failure that cannot be solved by flexible sizing. Responsive behavior must use semantic classes rather than DOM position selectors. At 980 px and below, only one lateral panel may be open, focus stays inside it, Escape closes it, and focus returns to its trigger.
+
+`npm run lint:design` enforces the 13 px typography floor and the canonical breakpoint set so legacy values cannot silently return to the cascade.
+
 ## Component guidance
 
 ### Sidebar
@@ -166,7 +178,7 @@ Assistant responses use the highest reading comfort in the product: 15 px with a
 
 ### Composer and inputs
 
-The composer is raised through border and modest shadow, not glow. Placeholders use the subtle text token. `focus-within` must remain visible. Send and stop states retain both icon shape and tooltip/context.
+The composer is raised through border and modest shadow, not glow. Placeholders use the subtle text token. `focus-within` must remain visible. Send and stop states retain both icon shape and tooltip/context. The prompt field grows with its content up to 220 px and only then introduces internal scrolling.
 
 ### Activity and plans
 

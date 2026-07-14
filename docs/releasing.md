@@ -11,7 +11,7 @@ O workflow `Package validation` executa typecheck, lint, testes, empacotamento e
 
 Para reproduzir localmente:
 
-1. Execute `npm ci`, `npm run typecheck`, `npm run lint` e `npm test`.
+1. Execute `npm ci`, `npm run typecheck`, `npm run lint`, `npm test` e `npm run test:renderer`.
 2. Execute `npm run package` para gerar os artefatos e o diretório unpacked.
 3. Execute `npm run smoke:package`.
 4. Execute `npm run checksums` e confira `release/<versão>/SHA256SUMS`.

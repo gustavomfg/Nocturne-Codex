@@ -1,22 +1,23 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useState, type KeyboardEvent, type RefObject } from 'react'
 import { Activity as ActivityIcon, Check, Command, ExternalLink, Eye, FileCode2, FileDown, FolderOpen, GitBranch, ListChecks, LoaderCircle, PackageOpen, ShieldCheck, Sparkles, Trash2, X } from 'lucide-react'
 import type { Activity, Approval, Artifact, ChangedFile, GitInfo, PlanStep, Suggestion, SuggestionStatus } from '../../types'
 import { errorMessage, relativeTime } from '../../shared/format'
 import { SuggestionsPanel } from '../suggestions/SuggestionsPanel'
 import { GitPanel } from '../git/GitPanel'
+import { useOffCanvasPanel } from '../../shared/useOffCanvasPanel'
 
 interface AgentPanelProps {
-  open: boolean; activities: Activity[]; approvals: Approval[]; diff: string; files: ChangedFile[]; artifacts: Artifact[]; suggestions: Suggestion[]; plan: PlanStep[]; planExplanation: string; activeId: string | null; gitInfo: GitInfo | null; documentContent: string;
-  onDecide(key: string, accepted: boolean): void; onError(value: string): void; onNotify(value: string): void; onGitRefresh(): void; onArtifactsRefresh(): void; onPreview(filePath: string): void; onArtifact(artifact: Artifact): void; onDeleteArtifact(id: string): void; onSuggestionStatus(suggestion: Suggestion, status: SuggestionStatus): void; onSuggestionApply(suggestion: Suggestion): void; onPlanChange(plan: PlanStep[]): void; onPlanExecute(plan: PlanStep[]): void
+  open: boolean; compact: boolean; triggerRef: RefObject<HTMLElement>; activities: Activity[]; approvals: Approval[]; diff: string; files: ChangedFile[]; artifacts: Artifact[]; suggestions: Suggestion[]; plan: PlanStep[]; planExplanation: string; activeId: string | null; gitInfo: GitInfo | null; documentContent: string;
+  onClose(): void; onDecide(key: string, accepted: boolean): void; onError(value: string): void; onNotify(value: string): void; onGitRefresh(): void; onArtifactsRefresh(): void; onPreview(filePath: string): void; onArtifact(artifact: Artifact): void; onDeleteArtifact(id: string): void; onSuggestionStatus(suggestion: Suggestion, status: SuggestionStatus): void; onSuggestionApply(suggestion: Suggestion): void; onPlanChange(plan: PlanStep[]): void; onPlanExecute(plan: PlanStep[]): void
 }
 
 const tabs = ['activity', 'plan', 'suggestions', 'artifacts'] as const
 
-export function AgentPanel({ open: isOpen, activities, approvals, diff, files, artifacts, suggestions, plan, planExplanation, activeId, gitInfo, documentContent, onDecide, onError, onNotify, onGitRefresh, onArtifactsRefresh, onPreview, onArtifact, onDeleteArtifact, onSuggestionStatus, onSuggestionApply, onPlanChange, onPlanExecute }: AgentPanelProps) {
+export function AgentPanel({ open: isOpen, compact, triggerRef, activities, approvals, diff, files, artifacts, suggestions, plan, planExplanation, activeId, gitInfo, documentContent, onClose, onDecide, onError, onNotify, onGitRefresh, onArtifactsRefresh, onPreview, onArtifact, onDeleteArtifact, onSuggestionStatus, onSuggestionApply, onPlanChange, onPlanExecute }: AgentPanelProps) {
   const [tab, setTab] = useState<'activity' | 'plan' | 'suggestions' | 'artifacts'>('activity')
   const [exporting, setExporting] = useState<string | null>(null)
-  const inspectorRef = useRef<HTMLElement>(null)
-  useEffect(() => { if (inspectorRef.current) inspectorRef.current.inert = !isOpen }, [isOpen])
+  const inspectorRef = useOffCanvasPanel<HTMLElement>({ open: isOpen, modal: compact, onClose, triggerRef })
+  useEffect(() => { if (inspectorRef.current) inspectorRef.current.inert = !isOpen }, [inspectorRef, isOpen])
   const open = async (filePath: string, action: 'file' | 'folder' | 'editor') => { if (!activeId) return; try { await window.nocturne.files.open(activeId, filePath, action); onNotify(action === 'folder' ? 'Pasta do arquivo aberta.' : 'Arquivo aberto com sucesso.') } catch (error) { onError(errorMessage(error)) } }
   const exportDocument = async (format: 'md' | 'docx' | 'pdf' | 'html') => {
     if (!activeId || !documentContent || exporting) { if (!documentContent) onError('Não há uma resposta Markdown para exportar.'); return }
@@ -35,7 +36,7 @@ export function AgentPanel({ open: isOpen, activities, approvals, diff, files, a
   const pendingApprovals = approvals.filter((approval) => approval.status === 'pending')
   const resolvedApprovals = approvals.filter((approval) => approval.status !== 'pending')
   const currentActivity = [...activities].reverse().find((activity) => activity.status === 'running') ?? activities[activities.length - 1]
-  return <aside ref={inspectorRef} className={`inspector ${isOpen ? 'open' : 'closed'}`} aria-hidden={!isOpen}><div className="inspector-header"><div><ActivityIcon size={16}/><strong>Agente</strong></div><span>{activities.some((activity) => activity.status === 'running') ? 'Em execução' : 'Em espera'}</span></div>
+  return <aside id="agent-inspector" ref={inspectorRef} className={`inspector ${isOpen ? 'open' : 'closed'}`} aria-hidden={!isOpen} role={compact && isOpen ? 'dialog' : undefined} aria-modal={compact && isOpen ? true : undefined} aria-label={compact && isOpen ? 'Painel do agente' : undefined} tabIndex={-1}><div className="inspector-header"><div><ActivityIcon size={16}/><strong>Agente</strong></div><span>{activities.some((activity) => activity.status === 'running') ? 'Em execução' : 'Em espera'}</span>{compact && <button className="inspector-close" aria-label="Fechar painel do agente" title="Fechar painel" onClick={onClose}><X size={16}/></button>}</div>
     <div className="inspector-tabs" role="tablist" aria-label="Painel do agente"><button id="agent-tab-activity" role="tab" aria-controls="agent-panel-activity" aria-selected={tab === 'activity'} tabIndex={tab === 'activity' ? 0 : -1} className={tab === 'activity' ? 'active' : ''} onKeyDown={(event) => moveTab(event, 0)} onClick={() => setTab('activity')}><ActivityIcon size={12}/>Atividade</button><button id="agent-tab-plan" role="tab" aria-controls="agent-panel-plan" aria-selected={tab === 'plan'} tabIndex={tab === 'plan' ? 0 : -1} className={tab === 'plan' ? 'active' : ''} onKeyDown={(event) => moveTab(event, 1)} onClick={() => setTab('plan')}><ListChecks size={12}/>Plano{plan.length > 0 && <span className="tab-count">{plan.length}</span>}</button><button id="agent-tab-suggestions" role="tab" aria-controls="agent-panel-suggestions" aria-selected={tab === 'suggestions'} tabIndex={tab === 'suggestions' ? 0 : -1} className={tab === 'suggestions' ? 'active' : ''} onKeyDown={(event) => moveTab(event, 2)} onClick={() => setTab('suggestions')}><ShieldCheck size={12}/>Sugestões{suggestions.length > 0 && <span className="tab-count">{suggestions.length}</span>}</button><button id="agent-tab-artifacts" role="tab" aria-controls="agent-panel-artifacts" aria-selected={tab === 'artifacts'} tabIndex={tab === 'artifacts' ? 0 : -1} className={tab === 'artifacts' ? 'active' : ''} onKeyDown={(event) => moveTab(event, 3)} onClick={() => setTab('artifacts')}><PackageOpen size={12}/>Artefatos{artifacts.length > 0 && <span className="tab-count">{artifacts.length}</span>}</button></div>
     <div className="inspector-scroll">
       {tab === 'activity' && <div id="agent-panel-activity" aria-labelledby="agent-tab-activity" className="tab-panel activity-panel" role="tabpanel">

@@ -39,6 +39,7 @@ function App() {
   const [search, setSearch] = useState('')
   const [rightOpen, setRightOpen] = useState(() => window.innerWidth > 980)
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 980)
+  const [compactLayout, setCompactLayout] = useState(() => window.matchMedia('(max-width: 980px)').matches)
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -57,6 +58,9 @@ function App() {
   const noticeTimerRef = useRef<number | null>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const sidebarTriggerRef = useRef<HTMLButtonElement>(null)
+  const inspectorTriggerRef = useRef<HTMLButtonElement>(null)
+  const desktopPanelsRef = useRef({ sidebar: true, inspector: true })
   const { queueStreamDelta, flushStream, appendActivityDetail, addItemActivity, completeItem } = useBufferedCodexEvents()
   const activeTurnRef = useRef<ActiveTurnContext | null>(null)
   const applyingSuggestionRef = useRef<string | null>(null)
@@ -66,6 +70,18 @@ function App() {
   const filtered = store.conversations.filter((item) => item.title.toLowerCase().includes(search.toLowerCase()) && (!workspace || item.workspace === workspace))
   const finishTurn = useTurnLifecycle({ flushStream, activeTurnRef, refreshGit })
   const interactionLocked = () => { const state = useAppStore.getState(); return isBusy(state.status) || state.finalizing }
+
+  function setSidebarVisibility(open: boolean) {
+    if (compactLayout) { if (open) setRightOpen(false) }
+    else desktopPanelsRef.current.sidebar = open
+    setSidebarOpen(open)
+  }
+
+  function setInspectorVisibility(open: boolean) {
+    if (compactLayout) { if (open) setSidebarOpen(false) }
+    else desktopPanelsRef.current.inspector = open
+    setRightOpen(open)
+  }
 
   const refresh = async () => store.setConversations(await window.nocturne.conversations.list())
 
@@ -83,6 +99,21 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 980px)')
+    const synchronizeLayout = (compact: boolean) => {
+      setCompactLayout(compact)
+      if (compact) setRightOpen(false)
+      else {
+        setSidebarOpen(desktopPanelsRef.current.sidebar)
+        setRightOpen(desktopPanelsRef.current.inspector)
+      }
+    }
+    synchronizeLayout(query.matches)
+    const onChange = (event: MediaQueryListEvent) => synchronizeLayout(event.matches)
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [])
   useEffect(() => {
     const scroller = chatScrollRef.current
     if (!scroller) return
@@ -361,14 +392,14 @@ function App() {
   const pathLabel = active?.workspace ?? workspace
 
   return <div className="app-shell">
-    {sidebarOpen && <button className="panel-backdrop sidebar-backdrop" aria-label="Fechar barra lateral" onClick={() => setSidebarOpen(false)}/>}
-    <Sidebar open={sidebarOpen} conversations={filtered} hasConversations={store.conversations.length > 0} activeId={store.activeId} search={search} searchRef={searchRef} workspace={workspace} workspaces={workspaces} settings={settings} status={store.status} onClose={() => setSidebarOpen(false)} onNew={createConversation} onSearch={setSearch} onConversation={openConversation} onDelete={(id) => void removeConversation(id)} onWorkspace={selectWorkspace} onSavedWorkspace={chooseSavedWorkspace} onFavorite={(item) => void favoriteWorkspace(item)} onSettings={() => setSettingsOpen(true)}/>
+    {compactLayout && sidebarOpen && <button tabIndex={-1} className="panel-backdrop sidebar-backdrop" aria-label="Fechar barra lateral" onClick={() => setSidebarVisibility(false)}/>}
+    <Sidebar open={sidebarOpen} compact={compactLayout} triggerRef={sidebarTriggerRef} conversations={filtered} hasConversations={store.conversations.length > 0} activeId={store.activeId} search={search} searchRef={searchRef} workspace={workspace} workspaces={workspaces} settings={settings} status={store.status} onClose={() => setSidebarVisibility(false)} onNew={() => void createConversation().finally(() => { if (compactLayout) setSidebarVisibility(false) })} onSearch={setSearch} onConversation={(id) => void openConversation(id).finally(() => { if (compactLayout) setSidebarVisibility(false) })} onDelete={(id) => void removeConversation(id)} onWorkspace={() => void selectWorkspace().finally(() => { if (compactLayout) setSidebarVisibility(false) })} onSavedWorkspace={(path) => void chooseSavedWorkspace(path).finally(() => { if (compactLayout) setSidebarVisibility(false) })} onFavorite={(item) => void favoriteWorkspace(item)} onSettings={() => { if (compactLayout) setSidebarVisibility(false); setSettingsOpen(true) }}/>
 
     <main className="main-panel">
       <header className="topbar">
-        {!sidebarOpen && <button className="icon-button" aria-label="Abrir barra lateral" title="Abrir barra lateral" onClick={() => setSidebarOpen(true)}><Menu size={18}/></button>}
+        {!sidebarOpen && <button ref={sidebarTriggerRef} className="icon-button" aria-label="Abrir barra lateral" title="Abrir barra lateral" aria-controls="workspace-sidebar" aria-expanded={sidebarOpen} onClick={() => setSidebarVisibility(true)}><Menu size={18}/></button>}
         <div className="title-block"><h1>{title}</h1>{pathLabel && <button className="path-pill" onClick={selectWorkspace}><Folder size={13}/>{pathLabel.split(/[/\\]/).pop()}<ChevronRight size={12}/></button>}</div>
-        <div className="top-actions">{gitInfo && <span className="branch-pill top-action-branch"><GitBranch size={12}/>{gitInfo.branch}</span>}{pathLabel && <><button className="icon-button top-action-workspace" aria-label="Abrir no VS Code" title="Abrir no VS Code" onClick={() => void openWorkspaceTool('editor')}><Code2 size={16}/></button><button className="icon-button top-action-workspace" aria-label="Abrir terminal" title="Abrir terminal" onClick={() => void openWorkspaceTool('terminal')}><Terminal size={16}/></button></>}<button className={`connection top-action-essential ${store.status}`} onClick={reconnect} aria-label={`Codex: ${statusText(store.status)}. Reconectar`} title="Reconectar ao App Server"><span/>{statusText(store.status)}</button><button className={`icon-button top-action-essential ${memory.content ? 'has-memory' : ''}`} aria-label="Memória do workspace" onClick={() => store.activeId ? setMemoryOpen(true) : store.setError('Abra uma conversa para configurar a memória do workspace.')} title="Memória do workspace"><Brain size={17}/></button><button className="icon-button top-action-secondary" aria-label="Abrir configurações" title="Abrir configurações" onClick={() => setSettingsOpen(true)}><Settings size={17}/></button><button className={`icon-button top-action-essential ${rightOpen ? 'selected' : ''}`} aria-label={rightOpen ? 'Ocultar painel do agente' : 'Mostrar painel do agente'} title={rightOpen ? 'Ocultar painel do agente' : 'Mostrar painel do agente'} onClick={() => setRightOpen(!rightOpen)}><PanelRight size={18}/></button></div>
+        <div className="top-actions">{gitInfo && <span className="branch-pill top-action-branch"><GitBranch size={12}/>{gitInfo.branch}</span>}{pathLabel && <><button className="icon-button top-action-workspace" aria-label="Abrir no VS Code" title="Abrir no VS Code" onClick={() => void openWorkspaceTool('editor')}><Code2 size={16}/></button><button className="icon-button top-action-workspace" aria-label="Abrir terminal" title="Abrir terminal" onClick={() => void openWorkspaceTool('terminal')}><Terminal size={16}/></button></>}<button className={`connection top-action-essential ${store.status}`} onClick={reconnect} aria-label={`Codex: ${statusText(store.status)}. Reconectar`} title="Reconectar ao App Server"><span/>{statusText(store.status)}</button><button className={`icon-button top-action-essential ${memory.content ? 'has-memory' : ''}`} aria-label="Memória do workspace" onClick={() => store.activeId ? setMemoryOpen(true) : store.setError('Abra uma conversa para configurar a memória do workspace.')} title="Memória do workspace"><Brain size={17}/></button><button className="icon-button top-action-secondary" aria-label="Abrir configurações" title="Abrir configurações" onClick={() => setSettingsOpen(true)}><Settings size={17}/></button><button ref={inspectorTriggerRef} className={`icon-button top-action-essential ${rightOpen ? 'selected' : ''}`} aria-label={rightOpen ? 'Ocultar painel do agente' : 'Mostrar painel do agente'} title={rightOpen ? 'Ocultar painel do agente' : 'Mostrar painel do agente'} aria-controls="agent-inspector" aria-expanded={rightOpen} onClick={() => setInspectorVisibility(!rightOpen)}><PanelRight size={18}/></button></div>
       </header>
 
       <section ref={chatScrollRef} className="chat-scroll" onScroll={handleChatScroll}>
@@ -383,9 +414,9 @@ function App() {
 
       <Composer agentMode={agentMode} attachments={attachments} prompt={prompt} status={store.status} finalizing={store.finalizing} settings={settings} active={Boolean(store.activeId)} pendingApprovals={store.approvals.filter((item) => item.status === 'pending').length} composerRef={composerRef} onMode={setAgentMode} onPrompt={setPrompt} onRemoveAttachment={(path) => setAttachments((current) => current.filter((file) => file.path !== path))} onAttach={attachFiles} onCancel={cancelRun} onSubmit={send} onQuick={preparePrompt}/>
     </main>
-    {rightOpen && <button className="panel-backdrop inspector-backdrop" aria-label="Fechar painel do agente" onClick={() => setRightOpen(false)}/>}
+    {compactLayout && rightOpen && <button tabIndex={-1} className="panel-backdrop inspector-backdrop" aria-label="Fechar painel do agente" onClick={() => setInspectorVisibility(false)}/>}
 
-    <Suspense fallback={null}><AgentPanel open={rightOpen} activities={store.activities} approvals={store.approvals} diff={store.diff} files={store.files} artifacts={store.artifacts} suggestions={store.suggestions} plan={store.plan} planExplanation={store.planExplanation} activeId={store.activeId} gitInfo={gitInfo} documentContent={documentContent} onDecide={decide} onError={store.setError} onNotify={notify} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onSuggestionStatus={updateSuggestion} onSuggestionApply={applySuggestion} onPlanChange={(plan) => store.setPlan(plan, store.planExplanation)} onPlanExecute={(plan) => preparePrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`, 'build')}/></Suspense>
+    <Suspense fallback={null}><AgentPanel open={rightOpen} compact={compactLayout} triggerRef={inspectorTriggerRef} activities={store.activities} approvals={store.approvals} diff={store.diff} files={store.files} artifacts={store.artifacts} suggestions={store.suggestions} plan={store.plan} planExplanation={store.planExplanation} activeId={store.activeId} gitInfo={gitInfo} documentContent={documentContent} onClose={() => setInspectorVisibility(false)} onDecide={decide} onError={store.setError} onNotify={notify} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onSuggestionStatus={updateSuggestion} onSuggestionApply={applySuggestion} onPlanChange={(plan) => store.setPlan(plan, store.planExplanation)} onPlanExecute={(plan) => preparePrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`, 'build')}/></Suspense>
     <Suspense fallback={null}>{settingsOpen && <SettingsDialog
       value={settings}
       status={store.status}
