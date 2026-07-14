@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.7.0-beta — 2026-07-14
+
+### Produto e experiência
+
+- continuidade de leitura preservada durante respostas longas, com acompanhamento inteligente do streaming e retorno voluntário ao conteúdo mais recente;
+- painéis compactos mutuamente exclusivos, modais para teclado, fecháveis por `Escape` e capazes de restaurar o foco ao acionador;
+- composer com crescimento progressivo e ações rápidas que preparam prompts editáveis antes do envio;
+- estados vazios, onboarding e Atividade reorganizados para comunicar contexto, prontidão e próxima ação útil;
+- configurações e superfícies secundárias refinadas para transições fluidas, inclusive no aplicativo empacotado;
+- memória do workspace protege edições não salvas, evita salvamentos duplicados e confirma a persistência;
+- feedback de configurações, memória, clipboard, sugestões e Git permanece no contexto que iniciou a operação;
+- estados assíncronos e erros urgentes são comunicados visualmente e por tecnologias assistivas.
+
+### Sistema visual e acessibilidade
+
+- responsividade consolidada em cinco faixas canônicas, removendo regras legadas e conflitos de cascata;
+- tipografia mínima, densidade, alvos interativos, foco, hover, estados desabilitados e movimento revisados de forma consistente;
+- diálogos e drawers preservam o contexto de teclado, com contenção de foco e retorno previsível;
+- verificação automatizada do design system passa a reconhecer corretamente declarações de largura mínima e máxima;
+- quatro referências visuais cobrem larguras desktop e compactas.
+
+### Qualidade e estabilidade
+
+- aquisição de instância única impede processos concorrentes sobre o mesmo banco e restaura a janela existente;
+- migrações SQLite passam a ser incrementais, transacionais e testáveis a partir de versões intermediárias;
+- handlers IPC foram separados por domínio, mantendo contratos, validação de origem e limites canônicos compartilhados;
+- status Git limita diffs extensos e informa truncamento, evitando pressão desnecessária sobre main e renderer;
+- ciclo do Codex foi extraído em roteamento e buffering próprios, com recuperação, concorrência, interrupção e reconexão cobertas diretamente;
+- restauração de backup, recriação da janela no macOS e descarte de recursos recebem lifecycle determinístico;
+- Markdown e clipboard são tratados por superfícies seguras, e anexos e artefatos preservam seus fluxos após mudanças de conversa;
+- suíte ampliada para 62 testes unitários e de integração e 15 cenários determinísticos de renderer;
+- regressões adicionadas para falhas contextuais, proteção de edições, navegação por teclado e comportamento responsivo;
+- builds do renderer, processo principal e preload validados em produção;
+- smoke test executado no Electron empacotado, cobrindo preload, SQLite, sandbox, isolamento de contexto e permissões;
+- artefatos de release acompanhados por checksums SHA-256.
+
+### Known Issues
+
+- App Server ainda é experimental e depende da versão instalada do Codex CLI;
+- pacotes ainda não possuem assinatura de código;
+- atualizações automáticas ainda não foram implementadas;
+- exportação avançada depende de Pandoc;
+- suporte Beta empacotado e validado prioritariamente em Linux x64.
+
 ## 0.6.0-beta — 2026-07-11
 
 ### Produto e experiência
@@ -10,13 +54,7 @@
 - confirmações destrutivas integradas à linguagem visual do Nocturne, com foco controlado e retorno ao elemento de origem;
 - feedback explícito para cópia, salvamento, reinício do Codex, aprovações pendentes e operações assíncronas;
 - navegação por teclado, diálogos acessíveis, redução de movimento e contraste elevado revisados;
-- composer e modos Build, Review e Docs refinados com consequências e estados mais claros;
-- continuidade de leitura preservada durante respostas longas, com acompanhamento inteligente do streaming e retorno voluntário ao conteúdo mais recente;
-- ações rápidas passam a preparar o pedido no composer para revisão do usuário antes do envio;
-- estados vazios distinguem ausência de conteúdo de filtros sem resultado, e configurações não salvas recebem proteção contra descarte acidental;
-- onboarding orientado por prontidão real do Codex, autenticação, App Server e workspace, sem marcar etapas incompletas como concluídas;
-- painel de Atividade prioriza operação atual e aprovações, mantendo detalhes técnicos progressivamente revelados;
-- topbar responsiva, alvos de interação, tipografia mínima, abas por teclado e explicações de Saúde do Projeto reforçados.
+- composer e modos Build, Review e Docs refinados com consequências e estados mais claros.
 
 ### Fluxos de engenharia
 
@@ -34,18 +72,15 @@
 - confinamento de workspace reforçado contra traversal por links simbólicos;
 - criação de conversas e abertura de ferramentas restritas a workspaces previamente selecionados;
 - Content Security Policy explícita no renderer e remoção do polyfill Electron desnecessário;
-- acesso IPC residual removido do renderer;
+- acesso IPC residual removido do renderer.
 - origem de chamadas IPC privilegiadas validada contra o WebContents e frame principal autorizados;
 - contratos compartilhados aplicados ao preload e handlers IPC separados por domínio;
 - commits restritos aos caminhos selecionados e validados dentro do workspace;
-- migrações SQLite versionadas, transacionais e acompanhadas de backup preventivo;
-- serviços do processo principal preservados durante a recriação da janela no macOS, com descarte determinístico de handlers IPC e listeners do Codex;
-- ciclo completo do `CodexClient` coberto diretamente, incluindo timeout, aprovações, concorrência, interrupção, queda e reconexão.
+- migrações SQLite versionadas, transacionais e acompanhadas de backup preventivo.
 
 ### Persistência
 
 - importação limitada a 25 MB e 200 mil registros, com parsing em worker, schemas por tabela e validação de referências;
-- exportação e restauração passam a compartilhar os mesmos limites canônicos, impedindo a geração de backups incompatíveis com o próprio produto;
 - configurações passam a ser restauradas corretamente pelo backup, sem importar caminhos de executáveis;
 - limpeza de órfãos incluída na transação de importação;
 - retorno booleano de logs detalhados corrigido ao salvar configurações.
@@ -54,14 +89,9 @@
 
 - configurações reorganizadas para navegação mais fluida e consistente com o aplicativo;
 - indicador de foco da busca corrigido para usar somente o contorno externo;
-- cascata visual consolidada, com remoção de declarações redundantes e seletores responsivos sem dependência da posição no DOM;
 - dependências não utilizadas removidas;
-- regressões de protocolo, backup e links simbólicos adicionadas à suíte de testes;
-- suíte ampliada para 62 testes unitários e de integração, 10 cenários de renderer com quatro referências visuais e smoke test no Electron empacotado real;
-- painéis compactos passam a ser mutuamente exclusivos, modais para teclado e capazes de restaurar o foco ao acionador;
-- composer cresce progressivamente para facilitar a revisão de prompts longos;
-- breakpoints consolidados em cinco faixas canônicas, removendo regras responsivas legadas e tipografia residual abaixo de 13 px;
-- ambiente de desenvolvimento formalizado em Node.js 22.12+ da linha 22 LTS e npm 10, validando no CI a versão mínima e a linha atual;
+- regressões de protocolo, backup e links simbólicos adicionadas à suíte de testes.
+- suíte ampliada para 34 testes automatizados e smoke test no Electron empacotado real;
 - README, documentação de arquitetura, integração, desenvolvimento e release sincronizados com o produto.
 
 ### Known Issues

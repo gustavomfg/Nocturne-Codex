@@ -3,7 +3,7 @@ import { Check, GitBranch } from 'lucide-react'
 import type { GitInfo } from '../../types'
 import { errorMessage } from '../../shared/format'
 
-export function GitPanel({ activeId, gitInfo, onRefresh, onError }: { activeId: string | null; gitInfo: GitInfo; onRefresh(): void; onError(value: string): void }) {
+export function GitPanel({ activeId, gitInfo, onRefresh, onError, onNotify }: { activeId: string | null; gitInfo: GitInfo; onRefresh(): void; onError(value: string): void; onNotify(value: string): void }) {
   const [commitMessage, setCommitMessage] = useState('')
   const [selected, setSelected] = useState<string[]>([])
   const initializedForRef = useRef<string | null>(null)
@@ -17,7 +17,7 @@ export function GitPanel({ activeId, gitInfo, onRefresh, onError }: { activeId: 
   const commit = async () => {
     if (!activeId || !commitMessage.trim() || !selected.length || committing) return
     setCommitting(true)
-    try { await window.nocturne.git.commit(activeId, commitMessage, selected); setCommitMessage(''); onRefresh() }
+    try { await window.nocturne.git.commit(activeId, commitMessage, selected); setCommitMessage(''); onRefresh(); onNotify('Commit criado com sucesso.') }
     catch (error) { onError(errorMessage(error)) }
     finally { setCommitting(false) }
   }

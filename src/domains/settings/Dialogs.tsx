@@ -31,15 +31,21 @@ export function OnboardingDialog({ settings, status, hasWorkspace, onWorkspace, 
   </div></div>
 }
 
-export function MemoryDialog({ value, onClose, onSave }: { value: WorkspaceMemory; onClose(): void; onSave(content: string, rules: string): void }) {
+export function MemoryDialog({ value, onClose, onSave }: { value: WorkspaceMemory; onClose(): void; onSave(content: string, rules: string): void | Promise<void> }) {
   const [content, setContent] = useState(value.content)
   const [rules, setRules] = useState(value.rules)
-  const dialogRef = useDialogA11y<HTMLDivElement>(onClose)
-  return <div className="modal-backdrop" onMouseDown={onClose}><div ref={dialogRef} className="settings-dialog memory-dialog" role="dialog" aria-modal="true" aria-labelledby="memory-title" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
-    <div className="modal-title"><Brain size={17}/><strong id="memory-title">Contexto do workspace</strong><button aria-label="Fechar contexto" title="Fechar" onClick={onClose}><X size={16}/></button></div>
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const dirty = content !== value.content || rules !== value.rules
+  const requestClose = () => { if (dirty && !saving) setConfirmDiscard(true); else onClose() }
+  const save = async () => { if (saving || !dirty) return; setSaving(true); setSaveError(null); try { await onSave(content, rules) } catch (error) { setSaveError(errorMessage(error)) } finally { setSaving(false) } }
+  const dialogRef = useDialogA11y<HTMLDivElement>(requestClose)
+  return <div className="modal-backdrop" onMouseDown={requestClose}><div ref={dialogRef} className="settings-dialog memory-dialog" role="dialog" aria-modal="true" aria-labelledby="memory-title" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
+    <div className="modal-title"><Brain size={17}/><strong id="memory-title">Contexto do workspace</strong><button aria-label="Fechar contexto" title="Fechar" onClick={requestClose}><X size={16}/></button></div>
     <p className="memory-description">Arquivos reais em <b>.nocturne/</b>, enviados ao Codex em cada novo turno.</p>{value.project && <div className="project-summary"><strong>{value.project.name}</strong><small>{value.project.primaryLanguage} · {value.project.stack.join(', ') || 'Stack não detectada'}</small></div>}
     <label>Memória e decisões<textarea value={content} onChange={(event) => setContent(event.target.value)} maxLength={20_000}/></label><label>Regras e padrões<textarea value={rules} onChange={(event) => setRules(event.target.value)} maxLength={20_000}/></label>
-    <div className="memory-footer"><small>{(content.length + rules.length).toLocaleString()} caracteres · {value.updatedAt ? `Atualizada ${relativeTime(value.updatedAt)}` : 'Ainda não salva'}</small><div className="modal-actions"><button onClick={onClose}>Cancelar</button><button className="primary" onClick={() => onSave(content, rules)}>Salvar contexto</button></div></div>
+    <div className={`memory-footer ${confirmDiscard ? 'confirm-discard' : ''} ${saveError ? 'has-error' : ''}`}>{confirmDiscard ? <><span role="alert"><strong>Descartar alterações?</strong><small>O contexto editado ainda não foi salvo.</small></span><div className="modal-actions"><button onClick={() => setConfirmDiscard(false)}>Continuar editando</button><button className="danger" onClick={onClose}>Descartar</button></div></> : <><small role={saveError ? 'alert' : undefined}>{saveError || `${(content.length + rules.length).toLocaleString()} caracteres · ${value.updatedAt ? `Atualizada ${relativeTime(value.updatedAt)}` : 'Ainda não salva'}`}</small><div className="modal-actions"><button disabled={saving} onClick={requestClose}>Cancelar</button><button className="primary" disabled={saving || !dirty} onClick={() => void save()}>{saving ? 'Salvando…' : 'Salvar contexto'}</button></div></>}</div>
   </div></div>
 }
 

@@ -21,6 +21,7 @@ export function SettingsDialog({ value, status, workspaces, onClose, onSave, onN
   const [copied, setCopied] = useState(false)
   const [operation, setOperation] = useState<string | null>(null)
   const [discardAction, setDiscardAction] = useState<'close' | 'onboarding' | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const dirty = editableSettings(form) !== editableSettings(value)
   const requestExit = (action: 'close' | 'onboarding' = 'close') => { if (dirty && !saving) setDiscardAction(action); else if (action === 'onboarding') onOnboarding(); else onClose() }
   const confirmDiscard = () => { const action = discardAction; setDiscardAction(null); if (action === 'onboarding') onOnboarding(); else onClose() }
@@ -30,7 +31,7 @@ export function SettingsDialog({ value, status, workspaces, onClose, onSave, onN
     setDiagnostic('Carregando diagnóstico…')
     void window.nocturne.codex.diagnostics().then((item) => setDiagnostic(`PID: ${item.pid ?? '—'} · ${item.executable}\nÚltima falha: ${item.lastFailure || 'nenhuma'}`)).catch((error) => setDiagnostic(errorMessage(error)))
   }, [page])
-  const save = async () => { if (saving) return; setSaving(true); try { await onSave(form) } finally { setSaving(false) } }
+  const save = async () => { if (saving) return; setSaving(true); setSaveError(null); try { await onSave(form) } catch (error) { setSaveError(errorMessage(error)) } finally { setSaving(false) } }
   const runOperation = async (name: string, operationTask: () => Promise<string | null | void>, success: string) => {
     if (operation) return
     setOperation(name)
@@ -55,7 +56,7 @@ export function SettingsDialog({ value, status, workspaces, onClose, onSave, onN
           {page === 'diagnostics' && <SettingsSection title="Informações do sistema"><pre className="diagnostic-summary" aria-live="polite">{diagnostic}</pre><div className="diagnostic-actions"><button disabled={isBusy(status) || Boolean(operation)} title={isBusy(status) ? 'Aguarde ou cancele a execução atual' : 'Reiniciar Codex'} onClick={() => { setDiagnostic('Reiniciando Codex…'); void runOperation('restart', async () => { await window.nocturne.codex.restart(); setDiagnostic('Codex reiniciado com sucesso.') }, 'Codex reiniciado com sucesso.') }}>{operation === 'restart' ? 'Reiniciando…' : 'Reiniciar Codex'}</button><button disabled={Boolean(operation)} onClick={() => void runOperation('logs', () => window.nocturne.diagnostics.openLogs(), 'Pasta de logs aberta.')}>Abrir logs</button><button disabled={Boolean(operation)} onClick={() => void runOperation('copy', async () => { const content = await window.nocturne.diagnostics.copy(); await window.nocturne.clipboard.writeText(content); setCopied(true) }, 'Informações de diagnóstico copiadas.')}>{operation === 'copy' ? 'Copiando…' : copied ? 'Informações copiadas' : 'Copiar informações'}</button><button disabled={Boolean(operation)} onClick={() => void runOperation('export', () => window.nocturne.data.export(), 'Backup exportado com sucesso.')}>{operation === 'export' ? 'Exportando…' : 'Exportar dados'}</button></div></SettingsSection>}
         </main>
       </div>
-      <footer className={`settings-footer ${discardAction ? 'confirm-discard' : ''}`}>{discardAction ? <><span role="alert"><strong>Descartar alterações?</strong> Os campos editados ainda não foram salvos.</span><div className="modal-actions"><button onClick={() => setDiscardAction(null)}>Continuar editando</button><button className="danger" onClick={confirmDiscard}>Descartar</button></div></> : <><span>{dirty ? 'Existem alterações não salvas.' : 'Nenhuma alteração pendente.'}</span><div className="modal-actions"><button disabled={saving} onClick={() => requestExit()}>Cancelar</button><button className="primary" disabled={saving || !dirty} onClick={() => void save()}>{saving ? 'Salvando…' : 'Salvar alterações'}</button></div></>}</footer>
+      <footer className={`settings-footer ${discardAction ? 'confirm-discard' : ''} ${saveError ? 'has-error' : ''}`}>{discardAction ? <><span role="alert"><strong>Descartar alterações?</strong> Os campos editados ainda não foram salvos.</span><div className="modal-actions"><button onClick={() => setDiscardAction(null)}>Continuar editando</button><button className="danger" onClick={confirmDiscard}>Descartar</button></div></> : <><span role={saveError ? 'alert' : undefined}>{saveError || (dirty ? 'Existem alterações não salvas.' : 'Nenhuma alteração pendente.')}</span><div className="modal-actions"><button disabled={saving} onClick={() => requestExit()}>Cancelar</button><button className="primary" disabled={saving || !dirty} onClick={() => void save()}>{saving ? 'Salvando…' : 'Salvar alterações'}</button></div></>}</footer>
     </div>
   </div>
 }

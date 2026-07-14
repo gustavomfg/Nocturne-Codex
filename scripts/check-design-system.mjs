@@ -6,7 +6,7 @@ const failures = []
 
 for (const file of files) {
   const source = fs.readFileSync(file, 'utf8')
-  for (const match of source.matchAll(/@media\s*\([^)]*width\s*[<>]?=\s*(\d+)px[^)]*\)/g)) {
+  for (const match of source.matchAll(/@media\s*\([^)]*(?:min-|max-)?width\s*(?::|[<>]?=)\s*(\d+)px[^)]*\)/g)) {
     const width = Number(match[1])
     if (!allowedBreakpoints.has(width)) failures.push(`${file}: breakpoint não canônico de ${width}px`)
   }

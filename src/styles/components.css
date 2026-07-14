@@ -4445,7 +4445,36 @@ button {
   font-size: var(--font-small);
 }
 
-.settings-footer .modal-actions .danger {
+.settings-footer.has-error > span, .memory-footer.has-error > small {
+  color: #e6a5ac;
+}
+
+.memory-footer.confirm-discard {
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: #21181a;
+  border: 1px solid #513237;
+  border-radius: var(--radius-md);
+}
+
+.memory-footer.confirm-discard > span {
+  color: #f0c2c7;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  display: flex;
+}
+
+.memory-footer.confirm-discard > span strong {
+  font-size: var(--font-small);
+}
+
+.memory-footer.confirm-discard > span small {
+  color: #d7a2a8;
+  font-size: var(--font-caption);
+}
+
+.settings-footer .modal-actions .danger, .memory-footer .modal-actions .danger {
   color: #fff;
   background: #a44751;
   border-color: #bd5964;

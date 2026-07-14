@@ -4,7 +4,7 @@
 
 Nocturne Codex is a local desktop engineering workspace for working with the Codex CLI and App Server. It brings project context, persistent conversations, agent activity, review, planning, approvals, artifacts, and Git awareness into one place—without moving engineering decisions away from the developer.
 
-The project is currently available as **v0.6.0-beta** for Linux x64 and remains under active development.
+The project is currently available as **v0.7.0-beta** for Linux x64 and remains under active development.
 
 > Nocturne Codex is an independent open source project. It is not an official OpenAI product and is not affiliated with OpenAI.
 
@@ -221,11 +221,11 @@ Nocturne Codex starts and supervises the App Server automatically. It does not b
 
 ### Linux AppImage
 
-Download the AppImage from the [v0.6.0-beta release](https://github.com/gustavomfg/Nocturne-Codex/releases/tag/v0.6.0-beta), then:
+Download the AppImage from the [v0.7.0-beta release](https://github.com/gustavomfg/Nocturne-Codex/releases/tag/v0.7.0-beta), then:
 
 ```bash
-chmod +x Nocturne.Codex-Linux-0.6.0-beta.AppImage
-./Nocturne.Codex-Linux-0.6.0-beta.AppImage
+chmod +x Nocturne.Codex-Linux-0.7.0-beta.AppImage
+./Nocturne.Codex-Linux-0.7.0-beta.AppImage
 ```
 
 A `.tar.gz` archive is also produced for the Beta release.
@@ -307,7 +307,7 @@ The core local workflow is implemented and packaged for Linux x64, but the proje
 
 Project Health is an explained estimate derived from open suggestions, not a formal security or quality audit. AI suggestions can be incomplete or wrong and must be reviewed like any other proposed engineering change.
 
-Known issues and release changes are tracked in [CHANGELOG.md](CHANGELOG.md). The complete notes for this build are available in [docs/releases/v0.6.0-beta.md](docs/releases/v0.6.0-beta.md).
+Known issues and release changes are tracked in [CHANGELOG.md](CHANGELOG.md). The complete notes for this build are available in [docs/releases/v0.7.0-beta.md](docs/releases/v0.7.0-beta.md).
 
 ---
 

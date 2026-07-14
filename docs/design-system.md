@@ -510,7 +510,7 @@ The final v0.5 review evaluated professional confidence, comfort, affordance, an
 - Geist weights, 13 px minimum text, stable scroll gutters, and bounded reading width support long sessions.
 - Brand, Electron, GitHub, favicon, monochrome, dark, and raster exports have documented canonical sources.
 
-### Remaining considerations for v0.6 — not implemented
+### Remaining considerations after v0.5 — not implemented in that phase
 
 - Introduce shared Button, Badge, Tooltip, and Dialog primitives only as an approved architectural task.
 - Add automated visual and contrast regression checks before the stable release.

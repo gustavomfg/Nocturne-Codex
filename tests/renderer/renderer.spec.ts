@@ -78,11 +78,13 @@ test.describe('renderer do produto', () => {
       bridge.emitEvent({ method: 'item/agentMessage/delta', params: { delta: 'Analisando a experiência em tempo real…' } })
       bridge.emitEvent({ method: 'item/commandExecution/requestApproval', params: { approvalKey: 'approval-1', command: 'npm test' } })
       bridge.emitEvent({ method: 'warning', params: { message: 'Validação visual pendente.' } })
+      bridge.emitEvent({ method: 'error', params: { message: 'Falha simulada do renderer.' } })
     })
     await expect(page.getByText('Analisando a experiência em tempo real…')).toBeVisible()
     await expect(page.getByText('Decisões pendentes')).toBeVisible()
     await page.getByRole('button', { name: 'Ver detalhes técnicos' }).click()
     await expect(page.getByText('Validação visual pendente.')).toBeVisible()
+    await expect(page.getByRole('alert')).toContainText('Falha simulada do renderer.')
     await expect(page.locator('.composer')).toBeVisible()
   })
 
@@ -96,6 +98,70 @@ test.describe('renderer do produto', () => {
     await expect(page.getByText('Descartar alterações?')).toBeVisible()
     await page.getByRole('button', { name: 'Continuar editando' }).click()
     await expect(page.getByRole('textbox', { name: 'Modelo' })).toHaveValue('modelo-local')
+  })
+
+  test('mantém falhas de salvamento dentro do diálogo de configurações', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await ready(page)
+    await page.evaluate(() => { window.nocturne.settings.set = async () => { throw new Error('Não foi possível salvar as configurações.') } })
+    await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
+    await page.getByRole('textbox', { name: 'Modelo' }).fill('modelo-local')
+    await page.getByRole('button', { name: 'Salvar alterações' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Configurações' })
+    await expect(dialog.getByRole('alert')).toContainText('Não foi possível salvar as configurações.')
+    await expect(dialog).toBeVisible()
+  })
+
+  test('protege e salva o contexto do workspace com feedback', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await ready(page)
+    await page.getByRole('button', { name: 'Memória do workspace' }).click()
+    const memory = page.getByRole('dialog', { name: 'Contexto do workspace' })
+    await memory.getByLabel('Memória e decisões').fill('Decisão importante para o projeto.')
+    await page.keyboard.press('Escape')
+    await expect(memory.getByRole('alert')).toContainText('Descartar alterações?')
+    await memory.getByRole('button', { name: 'Continuar editando' }).click()
+    await memory.getByRole('button', { name: 'Salvar contexto' }).click()
+    await expect(memory).toBeHidden()
+    await expect(page.locator('.product-toast')).toContainText('Contexto do workspace salvo.')
+  })
+
+  test('mantém falhas de memória dentro do diálogo', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await ready(page)
+    await page.evaluate(() => { window.nocturne.memory.set = async () => { throw new Error('Não foi possível salvar o contexto.') } })
+    await page.getByRole('button', { name: 'Memória do workspace' }).click()
+    const memory = page.getByRole('dialog', { name: 'Contexto do workspace' })
+    await memory.getByLabel('Regras e padrões').fill('Sempre validar o pacote.')
+    await memory.getByRole('button', { name: 'Salvar contexto' }).click()
+    await expect(memory.getByRole('alert')).toContainText('Não foi possível salvar o contexto.')
+    await expect(memory).toBeVisible()
+  })
+
+  test('confirma a criação de commit no próprio fluxo', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await ready(page)
+    await page.getByText('Git e commit').click()
+    await page.getByRole('textbox', { name: 'Mensagem do commit' }).fill('fix: confirmar operação')
+    await page.getByRole('button', { name: 'Criar commit com arquivos selecionados' }).click()
+    await expect(page.locator('.product-toast')).toContainText('Commit criado com sucesso.')
+  })
+
+  test('mantém falhas de clipboard dentro da solução aberta', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await ready(page)
+    await page.evaluate(() => {
+      window.nocturne.suggestions.list = async () => [{
+        id: 'suggestion-1', workspaceId: 'workspace-1', conversationId: 'conversation-1', title: 'Melhorar feedback', description: 'Problema', reasoning: 'Evidência', category: 'accessibility', severity: 'medium', affectedFiles: ['src/App.tsx'], proposedChanges: '+ feedback', expectedBenefits: ['Mais confiança'], complexity: 'low', risk: 'low', status: 'pending', createdAt: '2026-07-13T20:00:00.000Z', updatedAt: '2026-07-13T20:00:00.000Z',
+      }]
+      window.nocturne.clipboard.writeText = async () => { throw new Error('Clipboard indisponível.') }
+    })
+    await page.locator('.conversation-open').click()
+    await page.getByRole('tab', { name: /Sugestões/ }).click()
+    await page.getByRole('button', { name: 'Ver solução' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Melhorar feedback' })
+    await dialog.getByRole('button', { name: 'Copiar diff' }).click()
+    await expect(dialog.getByRole('alert')).toContainText('Clipboard indisponível.')
   })
 
   for (const viewport of [{ width: 1440, height: 900 }, { width: 980, height: 820 }, { width: 720, height: 800 }, { width: 520, height: 760 }]) {

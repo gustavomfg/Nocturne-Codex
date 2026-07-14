@@ -321,7 +321,7 @@ function App() {
 
   async function saveSettings(next: CodexSettings) {
     try { const saved = await window.nocturne.settings.set(next); setSettings({ ...next, ...saved }); setAgentMode(next.defaultAgentMode || 'review'); setSettingsOpen(false); notify('Configurações salvas.') }
-    catch (error) { store.setError(errorMessage(error)) }
+    catch (error) { throw new Error(errorMessage(error)) }
   }
 
   async function showFilePreview(filePath: string) {
@@ -358,8 +358,8 @@ function App() {
 
   async function saveMemory(content: string, rules: string) {
     if (!store.activeId) return
-    try { setMemory(await window.nocturne.memory.set(store.activeId, content, rules)); setMemoryOpen(false) }
-    catch (error) { store.setError(errorMessage(error)) }
+    try { setMemory(await window.nocturne.memory.set(store.activeId, content, rules)); setMemoryOpen(false); notify('Contexto do workspace salvo.') }
+    catch (error) { throw new Error(errorMessage(error)) }
   }
 
   async function reconnect() {
@@ -403,10 +403,10 @@ function App() {
       </header>
 
       <section ref={chatScrollRef} className="chat-scroll" onScroll={handleChatScroll}>
-        {!store.activeId && !store.messages.length ? <div className="chat-content welcome-content"><Welcome onNew={createConversation} onWorkspace={selectWorkspace} onPrompt={preparePrompt}/>{store.error && <div className="error-card"><X size={16}/><span>{store.error}</span><button onClick={() => store.setError(null)}>Fechar</button></div>}</div> : <div className="chat-content">
+        {!store.activeId && !store.messages.length ? <div className="chat-content welcome-content"><Welcome onNew={createConversation} onWorkspace={selectWorkspace} onPrompt={preparePrompt}/>{store.error && <div className="error-card" role="alert" aria-live="assertive"><X size={16}/><span>{store.error}</span><button onClick={() => store.setError(null)}>Fechar</button></div>}</div> : <div className="chat-content">
           {store.messages.map((message, index) => <Fragment key={message.id}>{(index === 0 || dayKey(store.messages[index - 1].createdAt) !== dayKey(message.createdAt)) && <div className="date-divider"><span>{dayLabel(message.createdAt)}</span></div>}<MessageBubble message={message}/></Fragment>) }
           {store.streaming && <AssistantMessage content={store.streaming} streaming/>}
-          {store.error && <div className="error-card"><X size={16}/><span>{store.error}</span><button onClick={() => store.setError(null)}>Fechar</button></div>}
+          {store.error && <div className="error-card" role="alert" aria-live="assertive"><X size={16}/><span>{store.error}</span><button onClick={() => store.setError(null)}>Fechar</button></div>}
           <div ref={endRef}/>
         </div>}
       </section>
