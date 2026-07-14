@@ -36,6 +36,18 @@
 - smoke test executado no Electron empacotado, cobrindo preload, SQLite, sandbox, isolamento de contexto e permissões;
 - artefatos de release acompanhados por checksums SHA-256.
 
+### Aprimoramentos posteriores da linha 0.7
+
+- backups restauram workspaces como não autorizados, rejeitam raízes amplas e não promovem executáveis importados;
+- registros automáticos de sugestões são neutralizados antes de entrar na memória persistente;
+- preferências locais carregam sem aguardar diagnósticos externos, agora paralelos, explícitos e temporariamente armazenados;
+- estados compactos do Codex e controles dos painéis laterais permanecem legíveis e sem sobreposição em janelas estreitas;
+- indicadores de saúde separam rótulo, nota e explicação, com regressão geométrica no renderer;
+- cascata CSS remove declarações sombreadas e passa a rejeitar novas duplicações equivalentes;
+- releases estáveis recebem gate protegido para assinatura, notarização e verificação por plataforma;
+- smoke opt-in valida o contrato de um Codex CLI real em workspace temporário e produz somente relatório sanitizado;
+- suíte ampliada para 65 testes unitários e de integração e 16 cenários determinísticos de renderer.
+
 ### Known Issues
 
 - App Server ainda é experimental e depende da versão instalada do Codex CLI;

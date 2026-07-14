@@ -259,10 +259,12 @@ npm run test:renderer # browser interaction and visual regression tests
 npm run build       # renderer, main, and preload production builds
 npm run package     # Linux AppImage and tar.gz
 npm run smoke:package          # packaged runtime, preload, SQLite, sandbox, and permissions
+npm run smoke:codex            # opt-in contract smoke against an authenticated real Codex CLI
+npm run verify:signatures      # require platform signatures/notarization for stable artifacts
 npm run verify:release-metadata # version and Codex compatibility consistency
 ```
 
-Tests do not call the real Codex service. They combine a simulated App Server transport with direct `CodexClient` lifecycle coverage. Renderer tests use a deterministic `window.nocturne` bridge and versioned references at 1440, 980, 720, and 520 px. See [docs/development.md](docs/development.md) for native module and release notes.
+The default automated suite does not call the real Codex service. It combines a simulated App Server transport with direct `CodexClient` lifecycle coverage. `npm run smoke:codex` is a separate, deliberate opt-in check that requires an authenticated CLI, uses a temporary read-only workspace, and stores only a sanitized report. Renderer tests use a deterministic `window.nocturne` bridge and versioned references at 1440, 980, 720, and 520 px. See [docs/development.md](docs/development.md) for native module and release notes.
 
 ---
 
