@@ -1,12 +1,17 @@
 # Roadmap
 
-## Após a Beta
+## Entregue na linha 0.7
 
-- assinatura de pacotes e checksums publicados;
+- testes E2E das fronteiras Electron e smoke do pacote;
+- regressão visual e de interação do renderer em breakpoints canônicos;
+- matriz versionada e smoke opt-in do contrato App Server;
+- checksums publicados e gate automatizado para futuras assinaturas.
+
+## Próximos marcos
+
+- provisionar as identidades oficiais e publicar pacotes assinados;
 - ícones finais e pacote deb com mantenedor real;
-- testes E2E Electron;
 - diff e aplicação por hunk;
-- compatibilidade versionada do App Server;
 - atualização automática opcional;
 - acessibilidade e localização ampliadas.
 

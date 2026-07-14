@@ -272,7 +272,7 @@ The following items are plans, not current capabilities.
 
 ### Short term
 
-- [ ] End-to-end Electron tests for onboarding, review, approval, and recovery
+- [x] End-to-end Electron boundary tests for review, approval, backup, files, and recovery
 - [ ] Signed release artifacts
 - [x] Published SHA-256 checksums
 - [x] Accessibility, keyboard navigation, responsive layout, and reduced-motion pass
