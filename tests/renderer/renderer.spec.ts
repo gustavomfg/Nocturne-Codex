@@ -35,6 +35,7 @@ test.describe('renderer do produto', () => {
     await expect(page.locator('#workspace-sidebar')).toHaveClass(/collapsed/)
     await expect(page.locator('#agent-inspector')).toHaveClass(/open/)
     await expect(page.locator('.panel-backdrop')).toHaveCount(1)
+    await expect(page.getByRole('button', { name: 'Ocultar painel do agente' })).toHaveCount(0)
     await expect(page.locator('#agent-inspector').getByRole('button', { name: 'Fechar painel do agente' })).toBeFocused()
     await page.keyboard.press('Escape')
     await expect(page.getByRole('button', { name: 'Mostrar painel do agente' })).toBeFocused()
