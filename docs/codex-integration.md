@@ -13,3 +13,9 @@ O executável configurado inicia com `app-server --stdio`. A aplicação envia `
 A autenticação pertence ao Codex CLI instalado no sistema. Tokens e credenciais não passam pelo preload. Em queda inesperada, chamadas pendentes são rejeitadas e uma reconexão com backoff é tentada quando não há encerramento intencional.
 
 O App Server é experimental: incompatibilidades devem aparecer como falha, nunca como estado pronto.
+
+## Smoke contra o CLI real
+
+`npm run smoke:codex` é opt-in e exige uma instalação autenticada do Codex CLI. Ele cria um workspace temporário, inicializa `app-server --stdio`, valida `config/read`, `thread/start`, `turn/start` e `turn/interrupt`, usa sandbox somente leitura e recusa qualquer solicitação de aprovação. O processo é encerrado e o workspace removido mesmo em falha.
+
+O relatório `test-results/codex-contract-smoke.json` contém apenas versão, etapas booleanas e contadores; prompts, respostas, configuração e credenciais não são preservados. Execute o workflow protegido `Codex CLI contract smoke` ao alterar a versão em `shared/codex-compatibility.json` e antes de cada release.

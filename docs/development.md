@@ -25,3 +25,7 @@ Os testes não chamam o serviço real do Codex. `SimulatedAppServerTransport` fo
 O Playwright inicia somente o renderer Vite e injeta uma ponte `window.nocturne` determinística; nenhum banco, workspace ou login real é acessado. A suíte cobre painéis off-canvas, foco, Escape, tabulação modal, composer multilinha, streaming, aprovações, erros, configurações não salvas e estados vazios. As referências visuais versionadas usam os breakpoints de 1440, 980, 720 e 520 px.
 
 Depois de uma alteração visual intencional, revise as imagens produzidas e atualize as referências com `npm run test:renderer:update`. Nunca atualize snapshots apenas para silenciar uma falha.
+
+## Contrato real do App Server
+
+Em uma máquina isolada com o Codex CLI autenticado, execute `npm run smoke:codex`. Esse teste é deliberadamente separado da suíte rápida: ele usa o serviço real, não altera o projeto e gera somente um relatório sanitizado. A automação equivalente usa um runner próprio e o ambiente protegido `codex-contract-smoke`; não disponibilize autenticação do Codex a workflows de pull request.

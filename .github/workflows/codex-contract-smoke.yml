@@ -1,0 +1,27 @@
+name: Codex CLI contract smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    environment: codex-contract-smoke
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run smoke:codex
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: codex-contract-smoke
+          path: test-results/codex-contract-smoke.json
+          if-no-files-found: error
