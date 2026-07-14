@@ -11,4 +11,4 @@
 - decisões de aprovação são persistidas;
 - logs removem chaves e valores com aparência de token, senha ou autorização.
 
-Não registre conteúdo completo de arquivos em logs. Para releases públicas, adicione assinatura de código, CSP explícita e revisão independente do protocolo App Server.
+Não registre conteúdo completo de arquivos em logs. Releases estáveis passam pelo ambiente protegido `stable-release`: macOS exige Developer ID e notarização, Windows exige Authenticode válido e Linux exige checksums assinados por GPG. As chaves nunca são disponibilizadas a pull requests ou ao workflow comum de validação.

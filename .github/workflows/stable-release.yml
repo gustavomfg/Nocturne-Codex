@@ -1,0 +1,66 @@
+name: Stable signed artifacts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-package:
+    name: Sign and verify (${{ matrix.os }})
+    environment: stable-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    env:
+      CSC_LINK: ${{ runner.os == 'macOS' && secrets.MAC_CSC_LINK || '' }}
+      CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && secrets.MAC_CSC_KEY_PASSWORD || '' }}
+      APPLE_ID: ${{ runner.os == 'macOS' && secrets.APPLE_ID || '' }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+      APPLE_TEAM_ID: ${{ runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
+      WIN_CSC_LINK: ${{ runner.os == 'Windows' && secrets.WIN_CSC_LINK || '' }}
+      WIN_CSC_KEY_PASSWORD: ${{ runner.os == 'Windows' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
+      GPG_PRIVATE_KEY: ${{ runner.os == 'Linux' && secrets.GPG_PRIVATE_KEY || '' }}
+      GPG_PASSPHRASE: ${{ runner.os == 'Linux' && secrets.GPG_PASSPHRASE || '' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - name: Require a stable version
+        shell: bash
+        run: node -e "const v=require('./package.json').version;if(v.includes('-'))throw new Error('Stable signing requires a version without a prerelease suffix: '+v)"
+      - run: npm ci
+      - name: Import Linux release key
+        if: runner.os == 'Linux'
+        shell: bash
+        run: echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+      - run: npm run package -- --publish never
+      - run: npm run checksums
+      - name: Sign Linux checksums
+        if: runner.os == 'Linux'
+        shell: bash
+        run: gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --detach-sign --output "release/$(node -p "require('./package.json').version")/SHA256SUMS.sig" "release/$(node -p "require('./package.json').version")/SHA256SUMS"
+      - run: npm run verify:signatures
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nocturne-signed-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            release/*/*.AppImage
+            release/*/*.tar.gz
+            release/*/*.dmg
+            release/*/*.exe
+            release/*/SHA256SUMS
+            release/*/SHA256SUMS.sig
+          if-no-files-found: error
+
+  stable-gate:
+    name: Stable release gate
+    needs: signed-package
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "All announced platforms produced verified signed artifacts."

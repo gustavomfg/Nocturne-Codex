@@ -23,12 +23,16 @@
     "build/icon.png"
   ],
   "mac": {
+    "hardenedRuntime": true,
+    "gatekeeperAssess": false,
+    "notarize": true,
     "target": [
       "dmg"
     ],
     "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
   },
   "win": {
+    "signAndEditExecutable": true,
     "target": [
       {
         "target": "nsis",
