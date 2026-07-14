@@ -9,6 +9,7 @@ import { LocalDatabase, type ConversationRow } from '../database/Database'
 import { Logger } from '../logging/Logger'
 import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
 import { agentModes } from '../../shared/suggestions'
+import { assertSafeWorkspaceScope } from '../security/WorkspaceTrust'
 import { approvalSchema, codexSendSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, saveAssistantSchema, saveMarkdownSchema } from '../../shared/ipc/schemas'
 import { CODEX_COMPATIBILITY } from '../../shared/constants'
 import { registerDataIpc } from './registerDataIpc'
@@ -205,11 +206,12 @@ function getConversation(database: LocalDatabase, id: string) {
 }
 
 function assertKnownWorkspace(database: LocalDatabase, value: string) {
-  const workspace = path.resolve(value)
-  const known = [...database.listWorkspaces().map((item) => item.path), ...database.listConversations().map((item) => item.workspace)]
-    .some((item) => path.resolve(item) === workspace)
+  const workspace = assertSafeWorkspaceScope(value)
+  const known = database.listWorkspaces().some((item) => {
+    if (!item.authorized) return false
+    try { return assertSafeWorkspaceScope(item.path) === workspace } catch { return false }
+  })
   if (!known) throw new Error('Workspace não autorizado. Selecione-o pelo aplicativo antes de continuar.')
-  if (!fs.existsSync(workspace) || !fs.statSync(workspace).isDirectory()) throw new Error('Workspace não encontrado.')
   return workspace
 }
 

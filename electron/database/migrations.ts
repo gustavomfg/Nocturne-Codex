@@ -33,6 +33,9 @@ export const migrations: Migration[] = [
     if (!hasColumn(db, 'suggestions', 'complexity')) db.exec("ALTER TABLE suggestions ADD COLUMN complexity TEXT NOT NULL DEFAULT 'medium'")
     if (!hasColumn(db, 'suggestions', 'risk')) db.exec("ALTER TABLE suggestions ADD COLUMN risk TEXT NOT NULL DEFAULT 'medium'")
   } },
+  { version: 6, up: (db) => {
+    if (!hasColumn(db, 'workspaces', 'authorized')) db.exec('ALTER TABLE workspaces ADD COLUMN authorized INTEGER NOT NULL DEFAULT 1')
+  } },
 ]
 
 export function migrateDatabase(db: Database.Database, currentVersion: number) {

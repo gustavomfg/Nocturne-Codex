@@ -29,6 +29,7 @@ describe('schema de backup', () => {
     const data = valid()
     const message = { id: randomUUID(), conversation_id: randomUUID(), role: 'user' as const, content: 'órfã', metadata: null, created_at: now }
     expect(() => backupSchema.parse({ ...data, messages: [message] })).toThrow(/Conversa referenciada não existe/)
+    expect(() => backupSchema.parse({ ...data, conversations: [{ ...conversation, workspace: '/tmp/unknown' }] })).toThrow(/Workspace referenciado não existe/)
   })
 
   it('rejeita UUIDs, enums e JSON serializado inválidos', () => {

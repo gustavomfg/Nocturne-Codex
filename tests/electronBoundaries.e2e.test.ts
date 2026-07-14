@@ -205,13 +205,17 @@ describe.sequential('fronteiras Electron E2E', () => {
   it('exporta e restaura o backup atravessando diálogos e IPC', async () => {
     electron.dialogs.save.push({ canceled: false, filePath: backupPath })
     await expect(api.data.export()).resolves.toBe(backupPath)
-    const backup = JSON.parse(fs.readFileSync(backupPath, 'utf8')) as { schemaVersion: number; conversations: unknown[]; messages: unknown[] }
-    expect(backup.schemaVersion).toBe(5)
+    const backup = JSON.parse(fs.readFileSync(backupPath, 'utf8')) as { schemaVersion: number; conversations: unknown[]; messages: unknown[]; settings: Record<string, string> }
+    expect(backup.schemaVersion).toBe(6)
     expect(backup.conversations.length).toBeGreaterThan(0)
     expect(backup.messages.length).toBeGreaterThan(0)
+    backup.settings.codexPath = path.join(outside, 'untrusted-codex')
+    fs.writeFileSync(backupPath, JSON.stringify(backup))
 
     electron.dialogs.open.push({ canceled: false, filePaths: [backupPath] })
     await expect(api.data.import()).resolves.toBe(true)
+    expect(database.getSettings().codexPath).toBeUndefined()
+    expect(database.listWorkspaces().every((item) => !item.authorized)).toBe(true)
     const recoverySnapshots = fs.readdirSync(path.join(root, 'data', 'backups')).filter((name) => name.endsWith('.db'))
     expect(recoverySnapshots).toHaveLength(1)
   })

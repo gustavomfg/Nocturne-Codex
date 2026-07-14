@@ -1,11 +1,11 @@
 import { dialog, type BrowserWindow } from 'electron'
 import fs from 'node:fs'
-import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { z } from 'zod'
 import type { LocalDatabase } from '../database/Database'
 import { idSchema, workspaceFavoriteSchema, workspaceToolSchema } from '../../shared/ipc/schemas'
 import { safeIpcMain } from './safeIpc'
+import { assertSafeWorkspaceScope } from '../security/WorkspaceTrust'
 
 interface Dependencies {
   ensureWorkspace(workspace: string): void
@@ -18,9 +18,9 @@ export function registerWorkspaceIpc(win: BrowserWindow, database: LocalDatabase
   ipcMain.handle('workspace:select', async () => {
     const result = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], title: 'Selecionar workspace' })
     if (result.canceled || !result.filePaths[0]) return null
-    database.touchWorkspace(result.filePaths[0]); dependencies.ensureWorkspace(result.filePaths[0]); return result.filePaths[0]
+    const workspace = assertSafeWorkspaceScope(result.filePaths[0]); database.touchWorkspace(workspace); dependencies.ensureWorkspace(workspace); return workspace
   })
-  ipcMain.handle('workspace:validate', (_event, value: unknown) => { const resolved = path.resolve(z.string().min(1).parse(value)); return fs.existsSync(resolved) && fs.statSync(resolved).isDirectory() ? resolved : null })
+  ipcMain.handle('workspace:validate', (_event, value: unknown) => { try { return assertSafeWorkspaceScope(z.string().min(1).parse(value)) } catch { return null } })
   ipcMain.handle('workspaces:list', () => database.listWorkspaces())
   ipcMain.handle('workspaces:remove', (_event, value: unknown) => database.removeWorkspace(z.string().min(1).parse(value)))
   ipcMain.handle('workspaces:favorite', (_event, value: unknown) => { const data = workspaceFavoriteSchema.parse(value); dependencies.assertKnownWorkspace(data.workspace); database.setWorkspaceFavorite(data.workspace, data.favorite) })

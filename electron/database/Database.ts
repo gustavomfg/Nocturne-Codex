@@ -23,11 +23,11 @@ export interface MessageRow {
   createdAt: string
 }
 
-export interface WorkspaceRow { path: string; name: string; favorite: boolean; createdAt: string; lastOpenedAt: string }
+export interface WorkspaceRow { path: string; name: string; favorite: boolean; authorized: boolean; createdAt: string; lastOpenedAt: string }
 export interface ArtifactRow { id: string; conversationId: string; workspace: string; type: string; title: string; filePath: string | null; content: string | null; metadata: string | null; createdAt: string; updatedAt: string }
 
 const importColumns: Record<string, ReadonlySet<string>> = {
-  workspaces: new Set(['path', 'name', 'favorite', 'created_at', 'last_opened_at']),
+  workspaces: new Set(['path', 'name', 'favorite', 'authorized', 'created_at', 'last_opened_at']),
   conversations: new Set(['id', 'title', 'workspace', 'codex_thread_id', 'created_at', 'updated_at']),
   messages: new Set(['id', 'conversation_id', 'role', 'content', 'metadata', 'created_at']),
   artifacts: new Set(['id', 'conversation_id', 'workspace', 'type', 'title', 'file_path', 'content', 'metadata', 'created_at', 'updated_at']),
@@ -97,15 +97,15 @@ export class LocalDatabase {
   clearThread(id: string) { this.db.prepare('UPDATE conversations SET codex_thread_id=NULL WHERE id=?').run(id) }
 
   listWorkspaces(): WorkspaceRow[] {
-    const rows = this.db.prepare(`SELECT path, name, favorite, created_at createdAt, last_opened_at lastOpenedAt
-      FROM workspaces ORDER BY favorite DESC, last_opened_at DESC`).all() as Array<Omit<WorkspaceRow, 'favorite'> & { favorite: number }>
-    return rows.map((row) => ({ ...row, favorite: Boolean(row.favorite) }))
+    const rows = this.db.prepare(`SELECT path, name, favorite, authorized, created_at createdAt, last_opened_at lastOpenedAt
+      FROM workspaces ORDER BY favorite DESC, last_opened_at DESC`).all() as Array<Omit<WorkspaceRow, 'favorite' | 'authorized'> & { favorite: number; authorized: number }>
+    return rows.map((row) => ({ ...row, favorite: Boolean(row.favorite), authorized: Boolean(row.authorized) }))
   }
 
   touchWorkspace(workspace: string) {
     const now = new Date().toISOString()
-    this.db.prepare(`INSERT INTO workspaces(path,name,created_at,last_opened_at) VALUES(?,?,?,?)
-      ON CONFLICT(path) DO UPDATE SET name=excluded.name,last_opened_at=excluded.last_opened_at`)
+    this.db.prepare(`INSERT INTO workspaces(path,name,authorized,created_at,last_opened_at) VALUES(?,?,1,?,?)
+      ON CONFLICT(path) DO UPDATE SET name=excluded.name,authorized=1,last_opened_at=excluded.last_opened_at`)
       .run(workspace, path.basename(workspace), now, now)
   }
 
@@ -185,7 +185,7 @@ export class LocalDatabase {
   }
 
   exportData() {
-    return { schemaVersion: 5, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), suggestions: this.db.prepare('SELECT * FROM suggestions').all(), suggestionDecisions: this.db.prepare('SELECT * FROM suggestion_decisions').all(), settings: this.getSettings() }
+    return { schemaVersion: 6, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), suggestions: this.db.prepare('SELECT * FROM suggestions').all(), suggestionDecisions: this.db.prepare('SELECT * FROM suggestion_decisions').all(), settings: this.getSettings() }
   }
 
   importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[]; suggestions?: unknown[]; suggestionDecisions?: unknown[]; settings?: Record<string, string> }) {
@@ -202,7 +202,7 @@ export class LocalDatabase {
     }
     this.db.transaction(() => {
       this.db.exec('DELETE FROM suggestion_decisions; DELETE FROM suggestions; DELETE FROM artifacts; DELETE FROM messages; DELETE FROM conversations; DELETE FROM workspaces; DELETE FROM workspace_memory; DELETE FROM settings;')
-      insert('workspaces', data.workspaces); insert('conversations', data.conversations); insert('messages', data.messages); insert('artifacts', data.artifacts); insert('workspace_memory', data.memories); insert('suggestions', data.suggestions ?? []); insert('suggestion_decisions', data.suggestionDecisions ?? [])
+      insert('workspaces', data.workspaces.map((row) => ({ ...(row as Record<string, unknown>), authorized: 0 }))); insert('conversations', data.conversations); insert('messages', data.messages); insert('artifacts', data.artifacts); insert('workspace_memory', data.memories); insert('suggestions', data.suggestions ?? []); insert('suggestion_decisions', data.suggestionDecisions ?? [])
       if (data.settings) this.setSettings(data.settings)
       this.cleanupOrphans()
     })()

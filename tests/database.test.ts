@@ -12,7 +12,7 @@ afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(direc
 
 describe('persistência SQLite', () => {
   it('mantém migrações incrementais, ordenadas e sem lacunas', () => {
-    expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5])
+    expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6])
   })
   it('persiste conversa, thread, mensagens, memória e artefatos', () => {
     const db = create(); const workspace = '/tmp/workspace'; const conversation = db.createConversation(workspace)
@@ -33,7 +33,7 @@ describe('persistência SQLite', () => {
   })
   it('exporta e importa um fluxo completo restaurável', () => {
     const source = create(); const conversation = source.createConversation('/tmp/project'); source.addMessage(conversation.id, 'assistant', 'Resposta simulada'); source.setSettings({ theme: 'dark', model: 'modelo-teste' }); const data = source.exportData(); source.close()
-    const target = create(); target.importData(data); expect(target.listConversations()).toHaveLength(1); expect(target.listMessages(conversation.id)[0].content).toBe('Resposta simulada'); expect(target.getSettings().model).toBe('modelo-teste'); target.close()
+    const target = create(); target.importData(data); expect(target.listConversations()).toHaveLength(1); expect(target.listMessages(conversation.id)[0].content).toBe('Resposta simulada'); expect(target.getSettings().model).toBe('modelo-teste'); expect(target.listWorkspaces()[0].authorized).toBe(false); target.close()
   })
   it('substitui dados locais ao restaurar em vez de mesclar históricos', () => {
     const source = create(); const restored = source.createConversation('/tmp/restored'); const data = source.exportData(); source.close()
@@ -57,7 +57,7 @@ describe('persistência SQLite', () => {
     const db = new LocalDatabase(directory)
     db.close()
     const migrated = new Sqlite(file, { readonly: true })
-    expect(migrated.pragma('user_version', { simple: true })).toBe(5)
+    expect(migrated.pragma('user_version', { simple: true })).toBe(6)
     const tables = migrated.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>
     expect(tables.map((item) => item.name)).toContain('suggestions')
     expect(tables.map((item) => item.name)).toContain('workspace_memory')
