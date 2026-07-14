@@ -4,7 +4,7 @@
 .health-card > div:first-child strong { font-size: var(--font-title); font-weight: 650; letter-spacing: -.02em; }
 .health-card small { color: var(--color-text-muted); font-size: var(--font-caption); line-height: var(--leading-ui); }
 .health-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-sm); margin-top: var(--spacing-md); }
-.health-grid span { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--spacing-xs) var(--spacing-sm); min-height: 64px; padding: var(--spacing-sm) var(--spacing-md); background: var(--color-panel); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); }
+.health-grid span { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--spacing-xs) var(--spacing-sm); min-height: 64px; padding: var(--spacing-sm); background: var(--color-panel); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); }
 .health-grid b { color: var(--color-text-secondary); font-size: var(--font-label); font-weight: 550; }
 .health-grid strong { color: #c2b1f2; font-size: var(--font-small); font-weight: 650; }
 .health-grid span small { display: block; grid-column: 1 / -1; }
