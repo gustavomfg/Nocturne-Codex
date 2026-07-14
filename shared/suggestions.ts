@@ -15,8 +15,12 @@ export interface Suggestion {
   createdAt: string; updatedAt: string; status: SuggestionStatus
 }
 
+export function sanitizeSuggestionTitle(value: string) {
+  return value.replace(/\p{Cc}+/gu, ' ').replace(/\s+/g, ' ').trim()
+}
+
 export const suggestionInputSchema = z.object({
-  title: z.string().trim().min(1).max(200), description: z.string().trim().min(1).max(10_000), reasoning: z.string().trim().min(1).max(10_000),
+  title: z.string().max(200).transform(sanitizeSuggestionTitle).pipe(z.string().min(1).max(200)), description: z.string().trim().min(1).max(10_000), reasoning: z.string().trim().min(1).max(10_000),
   category: z.enum(suggestionCategories), severity: z.enum(suggestionSeverities), affectedFiles: z.array(z.string().trim().min(1).max(1_000)).max(100).default([]), proposedChanges: z.string().max(100_000).default(''), expectedBenefits: z.array(z.string().trim().min(1).max(1_000)).max(20).default([]), complexity: z.enum(['low', 'medium', 'high']).default('medium'), risk: z.enum(['low', 'medium', 'high']).default('medium'),
 })
 

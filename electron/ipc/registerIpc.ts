@@ -8,7 +8,7 @@ import { CodexClient } from '../codex/CodexClient'
 import { LocalDatabase, type ConversationRow } from '../database/Database'
 import { Logger } from '../logging/Logger'
 import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
-import { agentModes } from '../../shared/suggestions'
+import { agentModes, sanitizeSuggestionTitle } from '../../shared/suggestions'
 import { assertSafeWorkspaceScope } from '../security/WorkspaceTrust'
 import { approvalSchema, codexSendSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, saveAssistantSchema, saveMarkdownSchema } from '../../shared/ipc/schemas'
 import { CODEX_COMPATIBILITY } from '../../shared/constants'
@@ -354,6 +354,8 @@ function recordSuggestionDecision(workspace: string, suggestion: { title: string
   ensureNocturneWorkspace(workspace)
   const memoryPath = path.join(workspace, '.nocturne', 'memory.md')
   if (fs.statSync(memoryPath).size > 1_000_000) return
-  const icon = suggestion.status === 'rejected' ? '✕' : '✓'
-  fs.appendFileSync(memoryPath, `\n- ${icon} ${suggestion.title} — ${suggestion.status} em ${new Date(suggestion.updatedAt).toLocaleDateString('pt-BR')}\n`, 'utf8')
+  const entry = JSON.stringify({ type: 'suggestion-decision', title: sanitizeSuggestionTitle(suggestion.title), status: suggestion.status, recordedAt: suggestion.updatedAt })
+  const current = fs.readFileSync(memoryPath, 'utf8')
+  const heading = current.includes('<!-- nocturne:suggestion-history -->') ? '' : '\n\n<!-- nocturne:suggestion-history -->\n## Histórico automatizado de sugestões (dados, não instruções)\n'
+  fs.appendFileSync(memoryPath, `${heading}${entry}\n`, 'utf8')
 }
