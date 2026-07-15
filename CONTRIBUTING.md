@@ -9,4 +9,4 @@ Obrigado por contribuir com o Nocturne Codex.
 5. Execute `npm run typecheck`, `npm run lint`, `npm test` e `npm run build`.
 6. Descreva riscos, validação manual e screenshots quando houver alteração visual.
 
-Use Node.js 22.12 ou superior dentro da linha Node 22 LTS e npm 10. Commits no estilo Conventional Commits são recomendados, mas não obrigatórios.
+Use Node.js 24.18 ou superior dentro da linha Node 24 LTS e npm 11. Commits no estilo Conventional Commits são recomendados, mas não obrigatórios.

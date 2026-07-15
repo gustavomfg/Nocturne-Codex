@@ -7,10 +7,10 @@
   "license": "MIT",
   "author": "Nocturne Codex contributors",
   "type": "module",
-  "packageManager": "npm@10.9.4",
+  "packageManager": "npm@11.18.0",
   "engines": {
-    "node": ">=22.12 <23",
-    "npm": ">=10.9 <11"
+    "node": ">=24.18 <25",
+    "npm": ">=11 <12"
   },
   "scripts": {
     "dev": "vite",

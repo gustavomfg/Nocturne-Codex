@@ -11,6 +11,7 @@ on:
       - electron-builder.json5
       - package.json
       - package-lock.json
+      - .nvmrc
       - playwright.config.ts
       - tests/renderer/**
       - .github/workflows/package-validation.yml
@@ -30,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ['22.12.0', '22']
+        node: ['24.18.0', '24']
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -51,7 +52,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
@@ -80,7 +81,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
       # Validation jobs build artifacts only. GitHub Releases are published explicitly

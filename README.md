@@ -245,8 +245,8 @@ This fallback is intended for driver troubleshooting; keeping hardware accelerat
 
 ### Requirements
 
-- Node.js 22.12 or newer within the Node 22 LTS line;
-- npm 10 (the adopted version is declared in `package.json`);
+- Node.js 24.18 or newer within the Node 24 LTS line;
+- npm 11 (the adopted version is declared in `package.json`);
 - a native build toolchain compatible with `better-sqlite3`;
 - Codex CLI for manual App Server integration testing.
 
