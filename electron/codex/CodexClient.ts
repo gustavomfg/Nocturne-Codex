@@ -200,7 +200,8 @@ export class CodexClient extends EventEmitter {
       if (!pending) return
       clearTimeout(pending.timer)
       this.pending.delete(response.id)
-      response.error ? pending.reject(new Error(response.error.message)) : pending.resolve(response.result)
+      if (response.error) pending.reject(new Error(response.error.message))
+      else pending.resolve(response.result)
       return
     }
 

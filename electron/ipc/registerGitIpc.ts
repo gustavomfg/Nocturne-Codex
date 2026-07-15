@@ -83,7 +83,11 @@ function readGitOutput(workspace: string, args: string[], limit: number) {
     })
     child.stderr.on('data', (chunk: Buffer) => { stderr = `${stderr}${chunk.toString()}`.slice(-64_000) })
     child.on('error', (error) => { clearTimeout(timeout); reject(error) })
-    child.on('close', (code) => { clearTimeout(timeout); code === 0 ? resolve({ stdout, truncated }) : reject(new Error(stderr || `Git encerrou com código ${code ?? 'desconhecido'}.`)) })
+    child.on('close', (code) => {
+      clearTimeout(timeout)
+      if (code === 0) resolve({ stdout, truncated })
+      else reject(new Error(stderr || `Git encerrou com código ${code ?? 'desconhecido'}.`))
+    })
   })
 }
 

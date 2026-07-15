@@ -274,7 +274,13 @@ function pipeCommand(command: string, args: string[], input: string, cwd: string
     const child = spawn(command, args, { cwd, stdio: ['pipe', 'ignore', 'pipe'] })
     let error = ''
     let settled = false
-    const finish = (failure?: Error) => { if (settled) return; settled = true; clearTimeout(timer); failure ? reject(failure) : resolve() }
+    const finish = (failure?: Error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      if (failure) reject(failure)
+      else resolve()
+    }
     const timer = setTimeout(() => { child.kill(); finish(new Error('A exportação excedeu o limite de 60 segundos.')) }, 60_000)
     child.stderr.on('data', (chunk) => { error = `${error}${chunk.toString()}`.slice(-64_000) })
     child.on('error', (failure) => finish(failure))
