@@ -1,17 +1,21 @@
-import { FormEvent, Fragment, lazy, Suspense, useEffect, useRef, useState, type MutableRefObject, type RefObject } from 'react'
+import { FormEvent, lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { AlertTriangle, ArrowDown, Brain, Check, ChevronRight, Code2, Folder, GitBranch, LoaderCircle, Menu, PanelRight, Settings, Terminal, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useAppStore } from './store'
 import type { Activity, AgentMode, Artifact, Attachment, ChangedFile, CodexEvent, CodexSettings, FilePreview, GitInfo, PlanStep, Suggestion, SuggestionStatus, Workspace, WorkspaceMemory } from './types'
 import { Sidebar } from './domains/workspaces/Sidebar'
+import { WorkspaceTopbar } from './domains/workspaces/WorkspaceTopbar'
 import { Composer } from './domains/chat/Composer'
-import { AssistantMessage, MessageBubble, Welcome } from './domains/chat/ChatContent'
-import { errorMessage, isBusy, statusText } from './shared/format'
+import { ChatViewport } from './domains/chat/ChatViewport'
+import { errorMessage, isBusy } from './shared/format'
 import { UI_TIMING } from '../shared/constants'
 import { useTurnLifecycle, type ActiveTurnContext } from './domains/agent/useTurnLifecycle'
 import { routeCodexEvent } from './domains/agent/routeCodexEvent'
 import { useBufferedCodexEvents } from './domains/agent/useBufferedCodexEvents'
 import { useConfirmDialog } from './shared/ConfirmDialog'
+import { useResponsivePanels } from './shared/useResponsivePanels'
+import { AppOverlays } from './domains/settings/AppOverlays'
+import { loadSettingsDialog } from './domains/settings/loadSettingsDialog'
 import './styles/components.css'
 import './domains/settings/settings.css'
 import './domains/agent/agent.css'
@@ -19,34 +23,7 @@ import './styles/product-constraints.css'
 
 const now = () => new Date().toISOString()
 const fakeId = () => crypto.randomUUID()
-const dayKey = (value: string) => new Date(value).toLocaleDateString('pt-BR')
-const dayLabel = (value: string) => {
-  const date = new Date(value)
-  const today = new Date()
-  const yesterday = new Date(); yesterday.setDate(today.getDate() - 1)
-  if (date.toDateString() === today.toDateString()) return 'Hoje'
-  if (date.toDateString() === yesterday.toDateString()) return 'Ontem'
-  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'long', year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric' }).format(date)
-}
 const AgentPanel = lazy(() => import('./domains/agent/AgentPanel').then((module) => ({ default: module.AgentPanel })))
-const loadSettingsDialog = () => import('./domains/settings/SettingsDialog').then((module) => ({ default: module.SettingsDialog }))
-const SettingsDialog = lazy(loadSettingsDialog)
-const MemoryDialog = lazy(() => import('./domains/settings/Dialogs').then((module) => ({ default: module.MemoryDialog })))
-const OnboardingDialog = lazy(() => import('./domains/settings/Dialogs').then((module) => ({ default: module.OnboardingDialog })))
-const PreviewDialog = lazy(() => import('./domains/settings/Dialogs').then((module) => ({ default: module.PreviewDialog })))
-
-function StreamingResponse({ chatScrollRef, stickToBottomRef, onNewContent }: { chatScrollRef: RefObject<HTMLElement>; stickToBottomRef: MutableRefObject<boolean>; onNewContent(value: boolean): void }) {
-  const streaming = useAppStore((state) => state.streaming)
-  useEffect(() => {
-    const scroller = chatScrollRef.current
-    if (!scroller || !streaming) return
-    if (stickToBottomRef.current) {
-      scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'auto' })
-      onNewContent(false)
-    } else onNewContent(true)
-  }, [chatScrollRef, onNewContent, stickToBottomRef, streaming])
-  return streaming ? <AssistantMessage content={streaming} streaming/> : null
-}
 
 function App() {
   const store = useAppStore(useShallow((state) => ({
@@ -59,9 +36,7 @@ function App() {
   const [workspace, setWorkspace] = useState('')
   const [prompt, setPrompt] = useState('')
   const [search, setSearch] = useState('')
-  const [rightOpen, setRightOpen] = useState(() => window.innerWidth > 980)
-  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 980)
-  const [compactLayout, setCompactLayout] = useState(() => window.matchMedia('(max-width: 980px)').matches)
+  const { compact: compactLayout, inspectorOpen: rightOpen, sidebarOpen, setInspectorVisibility, setSidebarVisibility } = useResponsivePanels()
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -84,7 +59,6 @@ function App() {
   const searchRef = useRef<HTMLInputElement>(null)
   const sidebarTriggerRef = useRef<HTMLButtonElement>(null)
   const inspectorTriggerRef = useRef<HTMLButtonElement>(null)
-  const desktopPanelsRef = useRef({ sidebar: true, inspector: true })
   const { queueStreamDelta, flushStream, appendActivityDetail, addItemActivity, completeItem } = useBufferedCodexEvents()
   const activeTurnRef = useRef<ActiveTurnContext | null>(null)
   const applyingSuggestionRef = useRef<string | null>(null)
@@ -94,18 +68,6 @@ function App() {
   const filtered = store.conversations.filter((item) => item.title.toLowerCase().includes(search.toLowerCase()) && (!workspace || item.workspace === workspace))
   const finishTurn = useTurnLifecycle({ flushStream, activeTurnRef, refreshGit })
   const interactionLocked = () => { const state = useAppStore.getState(); return isBusy(state.status) || state.finalizing }
-
-  function setSidebarVisibility(open: boolean) {
-    if (compactLayout) { if (open) setRightOpen(false) }
-    else desktopPanelsRef.current.sidebar = open
-    setSidebarOpen(open)
-  }
-
-  function setInspectorVisibility(open: boolean) {
-    if (compactLayout) { if (open) setSidebarOpen(false) }
-    else desktopPanelsRef.current.inspector = open
-    setRightOpen(open)
-  }
 
   const refresh = async () => store.setConversations(await window.nocturne.conversations.list())
 
@@ -126,21 +88,6 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  useEffect(() => {
-    const query = window.matchMedia('(max-width: 980px)')
-    const synchronizeLayout = (compact: boolean) => {
-      setCompactLayout(compact)
-      if (compact) setRightOpen(false)
-      else {
-        setSidebarOpen(desktopPanelsRef.current.sidebar)
-        setRightOpen(desktopPanelsRef.current.inspector)
-      }
-    }
-    synchronizeLayout(query.matches)
-    const onChange = (event: MediaQueryListEvent) => synchronizeLayout(event.matches)
-    query.addEventListener('change', onChange)
-    return () => query.removeEventListener('change', onChange)
-  }, [])
   useEffect(() => {
     const scroller = chatScrollRef.current
     if (!scroller) return
@@ -454,49 +401,22 @@ function App() {
 
   const title = active?.title ?? 'Nova conversa'
   const pathLabel = active?.workspace ?? workspace
-  const connectionSymbol = store.status === 'ready' || store.status === 'completed' ? 'ready' : store.status === 'failed' || store.status === 'disconnected' ? 'unavailable' : store.status === 'waiting-approval' ? 'attention' : 'busy'
 
   return <div className="app-shell">
     {compactLayout && sidebarOpen && <button tabIndex={-1} className="panel-backdrop sidebar-backdrop" aria-label="Fechar barra lateral" onClick={() => setSidebarVisibility(false)}/>}
     <Sidebar open={sidebarOpen} compact={compactLayout} triggerRef={sidebarTriggerRef} conversations={filtered} hasConversations={store.conversations.length > 0} activeId={store.activeId} search={search} searchRef={searchRef} workspace={workspace} workspaces={workspaces} settings={settings} status={store.status} onClose={() => setSidebarVisibility(false)} onNew={() => void createConversation().finally(() => { if (compactLayout) setSidebarVisibility(false) })} onSearch={setSearch} onConversation={(id) => void openConversation(id).finally(() => { if (compactLayout) setSidebarVisibility(false) })} onDelete={(id) => void removeConversation(id)} onWorkspace={() => void selectWorkspace().finally(() => { if (compactLayout) setSidebarVisibility(false) })} onSavedWorkspace={(path) => void chooseSavedWorkspace(path).finally(() => { if (compactLayout) setSidebarVisibility(false) })} onFavorite={(item) => void favoriteWorkspace(item)} onSettings={() => { if (compactLayout) setSidebarVisibility(false); setSettingsOpen(true) }}/>
 
     <main className="main-panel">
-      <header className="topbar">
-        {!sidebarOpen && <button ref={sidebarTriggerRef} className="icon-button" aria-label="Abrir barra lateral" title="Abrir barra lateral" aria-controls="workspace-sidebar" aria-expanded={sidebarOpen} onClick={() => setSidebarVisibility(true)}><Menu size={18}/></button>}
-        <div className="title-block"><h1 title={title}>{title}</h1>{pathLabel && <button className="path-pill" title={pathLabel} onClick={selectWorkspace}><Folder size={13}/><span>{pathLabel.split(/[/\\]/).pop()}</span><ChevronRight size={12}/></button>}</div>
-        <div className="top-actions">{gitInfo && <span className="branch-pill top-action-branch"><GitBranch size={12}/>{gitInfo.branch}</span>}{pathLabel && <><button className="icon-button top-action-workspace" aria-label="Abrir no WebStorm" title="Abrir no WebStorm" onClick={() => void openWorkspaceTool('editor')}><Code2 size={16}/></button><button className="icon-button top-action-workspace" aria-label="Abrir terminal" title="Abrir terminal" onClick={() => void openWorkspaceTool('terminal')}><Terminal size={16}/></button></>}<button className={`connection top-action-essential ${store.status}`} onClick={reconnect} aria-label={`Codex: ${statusText(store.status)}. Reconectar`} title="Reconectar ao App Server"><span/><i className={`connection-symbol ${connectionSymbol}`} data-symbol={connectionSymbol} aria-hidden="true">{connectionSymbol === 'ready' ? <Check size={16}/> : connectionSymbol === 'attention' ? <AlertTriangle size={15}/> : connectionSymbol === 'busy' ? <LoaderCircle size={16}/> : <X size={16}/>}</i>{statusText(store.status)}</button><button className={`icon-button top-action-essential ${memory.content ? 'has-memory' : ''}`} aria-label="Memória do workspace" onClick={() => store.activeId ? setMemoryOpen(true) : store.setError('Abra uma conversa para configurar a memória do workspace.')} title="Memória do workspace"><Brain size={17}/></button><button className="icon-button top-action-secondary" aria-label="Abrir configurações" title="Abrir configurações" onClick={() => setSettingsOpen(true)}><Settings size={17}/></button>{(!compactLayout || !rightOpen) && <button ref={inspectorTriggerRef} className={`icon-button top-action-essential ${rightOpen ? 'selected' : ''}`} aria-label={rightOpen ? 'Ocultar painel do agente' : 'Mostrar painel do agente'} title={rightOpen ? 'Ocultar painel do agente' : 'Mostrar painel do agente'} aria-controls="agent-inspector" aria-expanded={rightOpen} onClick={() => setInspectorVisibility(!rightOpen)}><PanelRight size={18}/></button>}</div>
-      </header>
+      <WorkspaceTopbar title={title} pathLabel={pathLabel} gitInfo={gitInfo} status={store.status} sidebarOpen={sidebarOpen} inspectorOpen={rightOpen} compact={compactLayout} hasMemory={Boolean(memory.content)} sidebarTriggerRef={sidebarTriggerRef} inspectorTriggerRef={inspectorTriggerRef} onOpenSidebar={() => setSidebarVisibility(true)} onSelectWorkspace={() => void selectWorkspace()} onOpenTool={(tool) => void openWorkspaceTool(tool)} onReconnect={() => void reconnect()} onMemory={() => store.activeId ? setMemoryOpen(true) : store.setError('Abra uma conversa para configurar a memória do workspace.')} onSettings={() => setSettingsOpen(true)} onToggleInspector={() => setInspectorVisibility(!rightOpen)}/>
 
-      <section ref={chatScrollRef} className="chat-scroll" onScroll={handleChatScroll}>
-        {!store.activeId && !store.messages.length ? <div className="chat-content welcome-content"><Welcome onNew={createConversation} onWorkspace={selectWorkspace} onPrompt={preparePrompt}/>{store.error && <div className="error-card" role="alert" aria-live="assertive"><X size={16}/><span>{store.error}</span><button onClick={() => store.setError(null)}>Fechar</button></div>}</div> : <div className="chat-content">
-          {historyHasMore && <button className="load-history" disabled={historyLoading} onClick={() => void loadOlderMessages()}>{historyLoading ? 'Carregando histórico…' : 'Carregar mensagens anteriores'}</button>}
-          {store.messages.map((message, index) => <Fragment key={message.id}>{(index === 0 || dayKey(store.messages[index - 1].createdAt) !== dayKey(message.createdAt)) && <div className="date-divider"><span>{dayLabel(message.createdAt)}</span></div>}<MessageBubble message={message}/></Fragment>) }
-          <StreamingResponse chatScrollRef={chatScrollRef} stickToBottomRef={stickToBottomRef} onNewContent={setNewContent}/>
-          {store.error && <div className="error-card" role="alert" aria-live="assertive"><X size={16}/><span>{store.error}</span><button onClick={() => store.setError(null)}>Fechar</button></div>}
-          <div ref={endRef}/>
-        </div>}
-      </section>
-      {newContent && <button className="jump-latest" onClick={jumpToLatest}><ArrowDown size={15}/><span>Nova resposta disponível</span></button>}
+      <ChatViewport active={Boolean(store.activeId)} messages={store.messages} error={store.error} historyHasMore={historyHasMore} historyLoading={historyLoading} newContent={newContent} chatScrollRef={chatScrollRef} endRef={endRef} stickToBottomRef={stickToBottomRef} onNew={() => void createConversation()} onWorkspace={() => void selectWorkspace()} onPrompt={preparePrompt} onLoadOlder={() => void loadOlderMessages()} onScroll={handleChatScroll} onNewContent={setNewContent} onDismissError={() => store.setError(null)} onJumpLatest={jumpToLatest}/>
 
       <Composer agentMode={agentMode} attachments={attachments} prompt={prompt} status={store.status} finalizing={store.finalizing} settings={settings} active={Boolean(store.activeId)} pendingApprovals={store.approvals.filter((item) => item.status === 'pending').length} composerRef={composerRef} onMode={setAgentMode} onPrompt={setPrompt} onRemoveAttachment={(path) => setAttachments((current) => current.filter((file) => file.path !== path))} onAttach={attachFiles} onCancel={cancelRun} onSubmit={send} onQuick={preparePrompt}/>
     </main>
     {compactLayout && rightOpen && <button tabIndex={-1} className="panel-backdrop inspector-backdrop" aria-label="Fechar painel do agente" onClick={() => setInspectorVisibility(false)}/>}
 
     <Suspense fallback={null}><AgentPanel open={rightOpen} compact={compactLayout} triggerRef={inspectorTriggerRef} gitInfo={gitInfo} onClose={() => setInspectorVisibility(false)} onDecide={decide} onError={store.setError} onNotify={notify} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onSuggestionStatus={updateSuggestion} onSuggestionApply={applySuggestion} onPlanChange={(plan) => store.setPlan(plan, useAppStore.getState().planExplanation)} onPlanExecute={(plan) => preparePrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`, 'build')}/></Suspense>
-    <Suspense fallback={null}>{settingsOpen && <SettingsDialog
-      value={settings}
-      status={store.status}
-      workspaces={workspaces}
-      onClose={() => setSettingsOpen(false)}
-      onSave={saveSettings}
-      onNotify={notify}
-      onOnboarding={() => { setSettingsOpen(false); setOnboardingOpen(true) }}
-    />}</Suspense>
-    {confirmation.dialog}<Suspense fallback={null}>
-    {memoryOpen && <MemoryDialog value={memory} onClose={() => setMemoryOpen(false)} onSave={saveMemory}/>}
-    {preview && <PreviewDialog preview={preview} activeId={store.activeId} onClose={() => setPreview(null)} onError={store.setError} onNotify={notify}/>}
-    {onboardingOpen && <OnboardingDialog settings={settings} status={store.status} hasWorkspace={Boolean(workspace)} onWorkspace={selectWorkspace} onSettings={() => { setOnboardingOpen(false); setSettingsOpen(true) }} onRecheck={recheckReadiness} onDismiss={() => { setOnboardingOpen(false); composerRef.current?.focus() }} onComplete={() => { localStorage.setItem('nocturne.onboarding.completed', 'true'); setOnboardingOpen(false); notify('Nocturne pronto para trabalhar.'); composerRef.current?.focus() }}/>}
-    </Suspense>{notice && <div className="product-toast" role="status" aria-live="polite"><span>{notice}</span><button aria-label="Fechar notificação" onClick={() => setNotice(null)}><X size={14}/></button></div>}
+    {confirmation.dialog}<AppOverlays settingsOpen={settingsOpen} settings={settings} status={store.status} workspaces={workspaces} memoryOpen={memoryOpen} memory={memory} preview={preview} onboardingOpen={onboardingOpen} activeId={store.activeId} workspace={workspace} onSettingsClose={() => setSettingsOpen(false)} onSaveSettings={saveSettings} onNotify={notify} onOpenOnboarding={() => { setSettingsOpen(false); setOnboardingOpen(true) }} onMemoryClose={() => setMemoryOpen(false)} onSaveMemory={saveMemory} onPreviewClose={() => setPreview(null)} onError={store.setError} onWorkspace={selectWorkspace} onOpenSettings={() => { setOnboardingOpen(false); setSettingsOpen(true) }} onRecheck={recheckReadiness} onDismissOnboarding={() => { setOnboardingOpen(false); composerRef.current?.focus() }} onCompleteOnboarding={() => { localStorage.setItem('nocturne.onboarding.completed', 'true'); setOnboardingOpen(false); notify('Nocturne pronto para trabalhar.'); composerRef.current?.focus() }}/>{notice && <div className="product-toast" role="status" aria-live="polite"><span>{notice}</span><button aria-label="Fechar notificação" onClick={() => setNotice(null)}><X size={14}/></button></div>}
   </div>
 }
 
