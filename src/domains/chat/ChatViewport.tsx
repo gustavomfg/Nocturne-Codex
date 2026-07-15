@@ -21,8 +21,8 @@ interface ChatViewportProps {
   historyHasMore: boolean
   historyLoading: boolean
   newContent: boolean
-  chatScrollRef: RefObject<HTMLElement>
-  endRef: RefObject<HTMLDivElement>
+  chatScrollRef: RefObject<HTMLElement | null>
+  endRef: RefObject<HTMLDivElement | null>
   stickToBottomRef: MutableRefObject<boolean>
   onNew(): void
   onWorkspace(): void

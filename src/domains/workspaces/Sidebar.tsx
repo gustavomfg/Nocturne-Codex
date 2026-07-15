@@ -5,7 +5,7 @@ import { relativeTime } from '../../shared/format'
 import { useOffCanvasPanel } from '../../shared/useOffCanvasPanel'
 
 interface SidebarProps {
-  open: boolean; compact: boolean; triggerRef: RefObject<HTMLElement>; conversations: Conversation[]; hasConversations: boolean; activeId: string | null; search: string; searchRef: RefObject<HTMLInputElement>; workspace: string; workspaces: Workspace[]; settings: CodexSettings; status: string;
+  open: boolean; compact: boolean; triggerRef: RefObject<HTMLElement | null>; conversations: Conversation[]; hasConversations: boolean; activeId: string | null; search: string; searchRef: RefObject<HTMLInputElement | null>; workspace: string; workspaces: Workspace[]; settings: CodexSettings; status: string;
   onClose(): void; onNew(): void; onSearch(value: string): void; onConversation(id: string): void; onDelete(id: string): void; onWorkspace(): void; onSavedWorkspace(path: string): void; onFavorite(item: Workspace): void; onSettings(): void
 }
 

@@ -6,10 +6,10 @@ interface OffCanvasPanelOptions {
   open: boolean
   modal: boolean
   onClose(): void
-  triggerRef: RefObject<HTMLElement>
+  triggerRef: RefObject<HTMLElement | null>
 }
 
-export function useOffCanvasPanel<T extends HTMLElement>({ open, modal, onClose, triggerRef }: OffCanvasPanelOptions): RefObject<T> {
+export function useOffCanvasPanel<T extends HTMLElement>({ open, modal, onClose, triggerRef }: OffCanvasPanelOptions): RefObject<T | null> {
   const panelRef = useRef<T>(null)
   const closeRef = useRef(onClose)
   const wasModalOpenRef = useRef(false)

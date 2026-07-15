@@ -2,7 +2,7 @@ import { useEffect, useRef, type RefObject } from 'react'
 
 const focusable = 'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
 
-export function useDialogA11y<T extends HTMLElement>(onClose: () => void): RefObject<T> {
+export function useDialogA11y<T extends HTMLElement>(onClose: () => void): RefObject<T | null> {
   const ref = useRef<T>(null)
   const closeRef = useRef(onClose)
   closeRef.current = onClose

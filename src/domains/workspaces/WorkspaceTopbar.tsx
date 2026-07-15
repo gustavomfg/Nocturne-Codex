@@ -12,8 +12,8 @@ interface WorkspaceTopbarProps {
   inspectorOpen: boolean
   compact: boolean
   hasMemory: boolean
-  sidebarTriggerRef: RefObject<HTMLButtonElement>
-  inspectorTriggerRef: RefObject<HTMLButtonElement>
+  sidebarTriggerRef: RefObject<HTMLButtonElement | null>
+  inspectorTriggerRef: RefObject<HTMLButtonElement | null>
   onOpenSidebar(): void
   onSelectWorkspace(): void
   onOpenTool(tool: 'editor' | 'terminal'): void

@@ -4,7 +4,7 @@ import type { AgentMode, Attachment, CodexSettings } from '../../types'
 import { isBusy } from '../../shared/format'
 
 interface ComposerProps {
-  agentMode: AgentMode; attachments: Attachment[]; prompt: string; status: string; finalizing: boolean; settings: CodexSettings; active: boolean; pendingApprovals: number; composerRef: RefObject<HTMLTextAreaElement>;
+  agentMode: AgentMode; attachments: Attachment[]; prompt: string; status: string; finalizing: boolean; settings: CodexSettings; active: boolean; pendingApprovals: number; composerRef: RefObject<HTMLTextAreaElement | null>;
   onMode(mode: AgentMode): void; onPrompt(value: string): void; onRemoveAttachment(path: string): void; onAttach(): void; onCancel(): void; onSubmit(event: FormEvent<HTMLFormElement>): void; onQuick(prompt: string, mode?: AgentMode): void
 }
 

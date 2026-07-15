@@ -9,7 +9,7 @@ import { GitPanel } from '../git/GitPanel'
 import { useOffCanvasPanel } from '../../shared/useOffCanvasPanel'
 
 interface AgentPanelProps {
-  open: boolean; compact: boolean; triggerRef: RefObject<HTMLElement>; gitInfo: GitInfo | null;
+  open: boolean; compact: boolean; triggerRef: RefObject<HTMLElement | null>; gitInfo: GitInfo | null;
   onClose(): void; onDecide(key: string, accepted: boolean): void; onError(value: string): void; onNotify(value: string): void; onGitRefresh(): void; onArtifactsRefresh(): void; onPreview(filePath: string): void; onArtifact(artifact: Artifact): void; onDeleteArtifact(id: string): void; onSuggestionStatus(suggestion: Suggestion, status: SuggestionStatus): void; onSuggestionApply(suggestion: Suggestion): void; onPlanChange(plan: PlanStep[]): void; onPlanExecute(plan: PlanStep[]): void
 }
 
