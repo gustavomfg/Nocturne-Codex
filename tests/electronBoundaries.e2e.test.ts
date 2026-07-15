@@ -218,19 +218,48 @@ describe.sequential('fronteiras Electron E2E', () => {
   it('exporta e restaura o backup atravessando diálogos e IPC', async () => {
     electron.dialogs.save.push({ canceled: false, filePath: backupPath })
     await expect(api.data.export()).resolves.toBe(backupPath)
-    const backup = JSON.parse(fs.readFileSync(backupPath, 'utf8')) as { schemaVersion: number; conversations: unknown[]; messages: unknown[]; settings: Record<string, string> }
+    const backup = JSON.parse(fs.readFileSync(backupPath, 'utf8')) as { schemaVersion: number; conversations: Array<Record<string, unknown>>; workspaces: Array<Record<string, unknown>>; messages: unknown[]; artifacts: Array<Record<string, unknown>>; memories: Array<Record<string, unknown>>; suggestions: Array<Record<string, unknown>>; settings: Record<string, string> }
     expect(backup.schemaVersion).toBe(6)
     expect(backup.conversations.length).toBeGreaterThan(0)
     expect(backup.messages.length).toBeGreaterThan(0)
-    backup.settings.codexPath = path.join(outside, 'untrusted-codex')
-    fs.writeFileSync(backupPath, JSON.stringify(backup))
+    const manipulated = structuredClone(backup)
+    manipulated.settings.codexPath = path.join(outside, 'untrusted-codex')
+    manipulated.workspaces.forEach((item) => { item.path = outside; item.name = 'outside' })
+    manipulated.conversations.forEach((item) => { item.workspace = outside; item.codex_thread_id = 'thread-from-backup' })
+    manipulated.artifacts.forEach((item) => { item.workspace = outside })
+    manipulated.memories.forEach((item) => { item.workspace = outside })
+    manipulated.suggestions.forEach((item) => { item.workspace_id = outside })
+    fs.writeFileSync(backupPath, JSON.stringify(manipulated))
 
     electron.dialogs.open.push({ canceled: false, filePaths: [backupPath] })
     await expect(api.data.import()).resolves.toBe(true)
     expect(database.getSettings().codexPath).toBeUndefined()
     expect(database.listWorkspaces().every((item) => !item.authorized)).toBe(true)
+    const restored = (await api.conversations.list())[0]
+    await expect(api.conversations.messages(restored.id)).resolves.not.toThrow()
+    await expect(api.artifacts.list(restored.id)).resolves.not.toThrow()
+    await expect(api.suggestions.list(restored.id)).resolves.not.toThrow()
+    await expect(api.memory.get(restored.id)).rejects.toThrow(/Workspace não autorizado/)
+    await expect(api.codex.resume(restored.id)).rejects.toThrow(/Workspace não autorizado/)
+    await expect(api.files.preview(restored.id, path.join(outside, 'secret.md'))).rejects.toThrow(/Workspace não autorizado/)
+    await expect(api.git.status(restored.id)).rejects.toThrow(/Workspace não autorizado/)
+    await expect(api.documents.saveMarkdown(restored.id, '# bloqueado')).rejects.toThrow(/Workspace não autorizado/)
+    const pendingBlock = `\`\`\`nocturne-suggestions\n${JSON.stringify({ title: 'Pendente', description: 'Teste', reasoning: 'Teste', category: 'security', severity: 'high' })}\n\`\`\``
+    const [pending] = (await api.suggestions.create(restored.id, pendingBlock)).suggestions
+    await expect(api.suggestions.status(restored.id, pending.id, 'rejected')).rejects.toThrow(/Workspace não autorizado/)
+    expect((await api.suggestions.list(restored.id)).find((item) => item.id === pending.id)?.status).toBe('pending')
+
+    fs.writeFileSync(backupPath, JSON.stringify(backup))
+    electron.dialogs.open.push({ canceled: false, filePaths: [backupPath] })
+    await expect(api.data.import()).resolves.toBe(true)
+    electron.dialogs.open.push({ canceled: false, filePaths: [outside] })
+    await expect(api.workspace.select(workspace)).rejects.toThrow(/mesma pasta/)
+    expect(database.listWorkspaces().every((item) => !item.authorized)).toBe(true)
+    electron.dialogs.open.push({ canceled: false, filePaths: [workspace] })
+    await expect(api.workspace.select(workspace)).resolves.toBe(workspace)
+    expect(database.listWorkspaces().find((item) => item.path === workspace)?.authorized).toBe(true)
     const recoverySnapshots = fs.readdirSync(path.join(root, 'data', 'backups')).filter((name) => name.endsWith('.db'))
-    expect(recoverySnapshots).toHaveLength(1)
+    expect(recoverySnapshots).toHaveLength(2)
   })
 
   it('permite preview interno e bloqueia traversal e symlink através do IPC', async () => {

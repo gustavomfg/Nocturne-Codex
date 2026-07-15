@@ -368,6 +368,7 @@ Do not create component-specific easings without documenting a physical reason. 
 - The active tab underline scales horizontally rather than appearing abruptly.
 - Count badges transition surface and border in 120 ms; they do not bounce or pulse.
 - Long timeline, artifact, and suggestion lists use `content-visibility: auto` so offscreen cards do not consume unnecessary paint.
+- Domain refinements for Agent, Settings, and Suggestions live beside their React domains; cross-product interaction floors remain in `styles/product-constraints.css`. `App.tsx` imports them in canonical cascade order.
 
 ### Dialogs
 

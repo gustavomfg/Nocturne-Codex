@@ -11,7 +11,7 @@ const on = <T>(channel: string, listener: (payload: T) => void) => {
 
 export const nocturneApi: NocturneApi = {
   workspace: {
-    select: () => ipcRenderer.invoke(channels.workspace.select),
+    select: (expectedWorkspace?: string) => ipcRenderer.invoke(channels.workspace.select, expectedWorkspace),
     validate: (workspace: string) => ipcRenderer.invoke(channels.workspace.validate, workspace),
     list: () => ipcRenderer.invoke(channels.workspace.list),
     remove: (workspace: string) => ipcRenderer.invoke(channels.workspace.remove, workspace),

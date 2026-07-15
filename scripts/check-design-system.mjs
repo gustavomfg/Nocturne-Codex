@@ -1,7 +1,13 @@
 import fs from 'node:fs'
 import postcss from 'postcss'
 
-const files = ['src/styles/components.css', 'src/domains/suggestions/suggestions.css']
+const files = [
+  'src/styles/components.css',
+  'src/styles/product-constraints.css',
+  'src/domains/agent/agent.css',
+  'src/domains/settings/settings.css',
+  'src/domains/suggestions/suggestions.css',
+]
 const allowedBreakpoints = new Set([520, 720, 980, 981, 1120, 1320])
 const failures = []
 

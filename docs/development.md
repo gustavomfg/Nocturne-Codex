@@ -2,7 +2,7 @@
 
 ## Compatibilidade do Codex CLI
 
-O desenvolvimento e os testes de contrato usam Codex CLI `0.144.1`; a versão mínima suportada é `0.144.0`. Ao atualizar o CLI, execute o smoke do pacote e registre a nova versão verificada em `shared/constants.ts` e `docs/codex-integration.md`.
+O desenvolvimento e os testes de contrato usam Codex CLI `0.144.1`; a versão mínima suportada é `0.144.0`. Ao atualizar o CLI, execute o smoke do pacote e registre a nova versão verificada em `shared/codex-compatibility.json` e `docs/codex-integration.md`.
 
 Use Node.js 22.12 ou superior dentro da linha Node 22 LTS, com npm 10. A faixa suportada está declarada no `package.json`, o `.nvmrc` fixa o runtime mínimo verificado e o CI valida tanto esse mínimo quanto a versão atual da linha Node 22.
 
@@ -29,3 +29,7 @@ Depois de uma alteração visual intencional, revise as imagens produzidas e atu
 ## Contrato real do App Server
 
 Em uma máquina isolada com o Codex CLI autenticado, execute `npm run smoke:codex`. Esse teste é deliberadamente separado da suíte rápida: ele usa o serviço real, não altera o projeto e gera somente um relatório sanitizado. A automação equivalente usa um runner próprio e o ambiente protegido `codex-contract-smoke`; não disponibilize autenticação do Codex a workflows de pull request.
+
+O workflow protegido também roda semanalmente e sempre que a matriz de compatibilidade ou o próprio smoke muda no `master`. O runner deve manter uma instalação controlada do CLI, autenticação exclusiva para esse teste e nenhum workspace real acessível. Cada execução conserva por 30 dias um relatório associado à versão observada.
+
+O workflow `Package validation` valida todo push no `master`. Typecheck, lint, testes e renderer rodam sobre a fonte integrada; a matriz de empacotamento permanece restrita a pull requests relevantes, tags e execuções manuais para evitar builds de plataforma redundantes.

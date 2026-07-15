@@ -2,6 +2,19 @@ name: Codex CLI contract smoke
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - shared/codex-compatibility.json
+      - scripts/smoke-codex-cli.mjs
+      - .github/workflows/codex-contract-smoke.yml
+  schedule:
+    - cron: '17 06 * * 1'
+
+concurrency:
+  group: codex-contract-smoke
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -22,6 +35,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: codex-contract-smoke
+          name: codex-contract-smoke-${{ github.run_id }}
           path: test-results/codex-contract-smoke.json
           if-no-files-found: error
+          retention-days: 30

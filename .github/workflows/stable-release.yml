@@ -33,7 +33,8 @@ jobs:
           cache: npm
       - name: Require a stable version
         shell: bash
-        run: node -e "const v=require('./package.json').version;if(v.includes('-'))throw new Error('Stable signing requires a version without a prerelease suffix: '+v)"
+        run: |
+          node -e "const v=require('./package.json').version;if(v.includes('-'))throw new Error('Stable signing requires a version without a prerelease suffix: '+v)"
       - run: npm ci
       - name: Import Linux release key
         if: runner.os == 'Linux'
@@ -44,7 +45,9 @@ jobs:
       - name: Sign Linux checksums
         if: runner.os == 'Linux'
         shell: bash
-        run: gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --detach-sign --output "release/$(node -p "require('./package.json').version")/SHA256SUMS.sig" "release/$(node -p "require('./package.json').version")/SHA256SUMS"
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --detach-sign --output "release/$version/SHA256SUMS.sig" "release/$version/SHA256SUMS"
       - run: npm run verify:signatures
       - uses: actions/upload-artifact@v7
         with:

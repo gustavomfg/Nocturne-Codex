@@ -5,6 +5,7 @@
 - navegação interna restrita e abertura externa somente por HTTPS;
 - argumentos IPC validados com Zod;
 - caminhos normalizados e confinados ao workspace;
+- workspaces importados permanecem sem autorização: histórico e metadados continuam legíveis, mas memória, Git, arquivos, documentos e Codex exigem nova seleção explícita da pasta original;
 - anexos limitados por formato, quantidade e tamanho;
 - política central classifica comandos seguros, sensíveis e perigosos;
 - `sudo`, `rm -rf`, `git push`, `git clean`, `git reset`, `mkfs` e equivalentes são destacados como perigosos;

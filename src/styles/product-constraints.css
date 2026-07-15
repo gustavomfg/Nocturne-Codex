@@ -1,0 +1,61 @@
+/* Canonical interaction and type floors: compact visuals must remain readable
+   and expose a real 32px pointer target. */
+.changed-file > button:not(:nth-child(2)), .artifact-delete, .commit-row > button, .preview-dialog header button, .settings-close, .workspace-favorite, .delete-button, .attachment-list button, .search-box > button {
+  min-width: var(--control-sm);
+  min-height: var(--control-sm);
+}
+
+.conversation-copy strong, .workspace-card strong, .profile strong, .artifact-main strong, .timeline-item strong, .current-operation strong {
+  font-size: var(--font-small);
+}
+
+.conversation-copy small, .workspace-card small, .profile small, .artifact-main small, .date-divider, .assistant-name span, .settings-navigation small {
+  font-size: var(--font-caption);
+}
+
+@media (width <= 520px) {
+  .topbar {
+    gap: var(--spacing-xs);
+  }
+
+  .title-block {
+    flex: 1;
+  }
+
+  .title-block h1 {
+    max-width: 26vw;
+  }
+
+  .path-pill {
+    display: none;
+  }
+
+  .top-actions {
+    flex: none;
+  }
+
+  .top-actions .top-action-secondary {
+    display: none;
+  }
+
+  .connection {
+    border-radius: 999px;
+  }
+
+  .connection > span {
+    display: none;
+  }
+
+  .connection-symbol {
+    display: grid;
+    place-items: center;
+  }
+
+  .connection-symbol.busy svg {
+    animation: 1.3s linear infinite spin;
+  }
+
+  .onboarding-remediation {
+    grid-template-columns: 1fr;
+  }
+}

@@ -6,6 +6,7 @@ import type { LocalDatabase } from '../database/Database'
 import { gitCommitSchema, idSchema } from '../../shared/ipc/schemas'
 import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
 import { safeIpcMain } from './safeIpc'
+import { getAuthorizedConversation } from './conversationAccess'
 
 const run = promisify(execFile)
 const MAX_DIFF_CHARACTERS = 1_500_000
@@ -43,9 +44,7 @@ export function resolveSelectedGitFiles(currentFiles: Array<{ path: string; orig
 }
 
 function getWorkspace(database: LocalDatabase, id: string) {
-  const conversation = database.getConversation(id)
-  if (!conversation) throw new Error('Conversa não encontrada.')
-  return conversation.workspace
+  return getAuthorizedConversation(database, id).workspace
 }
 
 async function gitStatus(workspace: string) {

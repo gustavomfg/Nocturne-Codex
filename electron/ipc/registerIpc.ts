@@ -5,11 +5,10 @@ import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { z } from 'zod'
 import { CodexClient } from '../codex/CodexClient'
-import { LocalDatabase, type ConversationRow } from '../database/Database'
+import { LocalDatabase } from '../database/Database'
 import { Logger } from '../logging/Logger'
 import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
 import { agentModes, sanitizeSuggestionTitle } from '../../shared/suggestions'
-import { assertSafeWorkspaceScope } from '../security/WorkspaceTrust'
 import { approvalSchema, codexSendSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, saveAssistantSchema, saveMarkdownSchema } from '../../shared/ipc/schemas'
 import { CODEX_COMPATIBILITY } from '../../shared/constants'
 import { registerDataIpc } from './registerDataIpc'
@@ -18,6 +17,7 @@ import { registerCodexBridge } from './registerCodexBridge'
 import { registerWorkspaceIpc } from './registerWorkspaceIpc'
 import { registerKnowledgeIpc } from './registerKnowledgeIpc'
 import { safeIpcMain } from './safeIpc'
+import { getAuthorizedConversation, getAuthorizedWorkspace, getConversation } from './conversationAccess'
 
 const execFileAsync = promisify(execFile)
 
@@ -25,8 +25,8 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   const ipcMain = safeIpcMain(win)
   const disposeData = registerDataIpc(win, database, logger)
   const disposeGit = registerGitIpc(win, database)
-  const disposeWorkspace = registerWorkspaceIpc(win, database, { ensureWorkspace: ensureNocturneWorkspace, assertKnownWorkspace: (value) => assertKnownWorkspace(database, value), run })
-  const disposeKnowledge = registerKnowledgeIpc(win, database, logger, { workspace: (id) => getConversation(database, id).workspace, read: readWorkspaceContext, write: writeWorkspaceContext, recordDecision: recordSuggestionDecision })
+  const disposeWorkspace = registerWorkspaceIpc(win, database, { ensureWorkspace: ensureNocturneWorkspace, assertKnownWorkspace: (value) => getAuthorizedWorkspace(database, value), run })
+  const disposeKnowledge = registerKnowledgeIpc(win, database, logger, { workspace: (id) => getConversation(database, id).workspace, authorizedWorkspace: (id) => getAuthorizedConversation(database, id).workspace, read: readWorkspaceContext, write: writeWorkspaceContext, recordDecision: recordSuggestionDecision })
   ipcMain.handle('clipboard:readText', () => clipboard.readText().slice(0, 2_000_000))
   ipcMain.handle('clipboard:writeText', (_event, value: unknown) => { clipboard.writeText(z.string().max(2_000_000).parse(value)) })
   const approvalDetails = new Map<string, { command?: string; risk?: string }>()
@@ -35,7 +35,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   let readinessRequest: Promise<Record<string, unknown>> | null = null
 
   ipcMain.handle('files:attach', async (_event, value: unknown) => {
-    const conversation = getConversation(database, idSchema.parse(value))
+    const conversation = getAuthorizedConversation(database, idSchema.parse(value))
     const result = await dialog.showOpenDialog(win, {
       title: 'Anexar arquivos de texto', defaultPath: conversation.workspace, properties: ['openFile', 'multiSelections'],
       filters: [{ name: 'Arquivos do projeto', extensions: ['txt', 'md', 'json', 'js', 'jsx', 'ts', 'tsx', 'css', 'html', 'xml', 'yaml', 'yml', 'toml', 'py', 'rs', 'go', 'java', 'c', 'cpp', 'h', 'sh', 'sql', 'env', 'ini'] }, { name: 'Todos os arquivos', extensions: ['*'] }],
@@ -52,7 +52,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
 
   ipcMain.handle('files:open', async (_event, value: unknown) => {
     const data = fileActionSchema.parse(value)
-    const conversation = getConversation(database, data.conversationId)
+    const conversation = getAuthorizedConversation(database, data.conversationId)
     const filePath = resolveWorkspaceFile(data.filePath, conversation.workspace)
     if (!fs.existsSync(filePath)) throw new Error('Arquivo não encontrado.')
     if (data.action === 'folder') { shell.showItemInFolder(filePath); return }
@@ -62,7 +62,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
 
   ipcMain.handle('files:preview', async (_event, value: unknown) => {
     const data = filePreviewSchema.parse(value)
-    const conversation = getConversation(database, data.conversationId)
+    const conversation = getAuthorizedConversation(database, data.conversationId)
     const filePath = resolveWorkspaceFile(data.filePath, conversation.workspace)
     const stat = await fs.promises.stat(filePath).catch(() => null)
     if (!stat?.isFile()) throw new Error('Arquivo não encontrado.')
@@ -96,8 +96,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
 
   ipcMain.handle('codex:send', async (_event, value: unknown) => {
     const { conversationId, prompt, attachments, mode } = codexSendSchema.parse(value)
-    const conversation = getConversation(database, conversationId)
-    assertWorkspace(conversation)
+    const conversation = getAuthorizedConversation(database, conversationId)
     attachments.forEach((filePath) => assertInsideWorkspace(filePath, conversation.workspace))
 
     let threadId = conversation.codexThreadId
@@ -123,21 +122,21 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
   })
 
   ipcMain.handle('codex:resume', async (_event, value: unknown) => {
-    const conversation = getConversation(database, idSchema.parse(value))
+    const conversation = getAuthorizedConversation(database, idSchema.parse(value))
     if (!conversation.codexThreadId) return { resumed: false }
     await codex.resumeThread(conversation.codexThreadId, conversation.workspace, database.getSettings())
     return { resumed: true }
   })
 
   ipcMain.handle('codex:interrupt', async (_event, value: unknown) => {
-    const conversation = getConversation(database, idSchema.parse(value))
+    const conversation = getAuthorizedConversation(database, idSchema.parse(value))
     if (!conversation.codexThreadId) throw new Error('Esta conversa ainda não possui uma thread do Codex.')
     await codex.interrupt(conversation.codexThreadId)
   })
 
   ipcMain.handle('codex:save-assistant', (_event, value: unknown) => {
     const data = saveAssistantSchema.parse(value)
-    const conversation = getConversation(database, data.conversationId)
+    const conversation = getAuthorizedConversation(database, data.conversationId)
     const message = database.addMessage(data.conversationId, 'assistant', data.content, data.metadata)
     database.addArtifact(data.conversationId, conversation.workspace, 'markdown', `Resposta · ${new Date().toLocaleString()}`, null, data.content, { origin: 'Codex' })
     const metadata = data.metadata as { files?: Array<{ path?: string; kind?: string }>; diff?: string } | undefined
@@ -178,7 +177,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
 
   ipcMain.handle('documents:saveMarkdown', async (_event, value: unknown) => {
     const data = saveMarkdownSchema.parse(value)
-    const conversation = getConversation(database, data.conversationId)
+    const conversation = getAuthorizedConversation(database, data.conversationId)
     const result = await dialog.showSaveDialog(win, { title: 'Salvar documento Markdown', defaultPath: path.join(conversation.workspace, safeName(data.name, '.md')), filters: [{ name: 'Markdown', extensions: ['md'] }] })
     if (result.canceled || !result.filePath) return null
     assertInsideWorkspace(result.filePath, conversation.workspace)
@@ -189,7 +188,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
 
   ipcMain.handle('documents:export', async (_event, value: unknown) => {
     const data = exportDocumentSchema.parse(value)
-    const conversation = getConversation(database, data.conversationId)
+    const conversation = getAuthorizedConversation(database, data.conversationId)
     const available = await commandVersion('pandoc')
     if (!available) throw new Error('Pandoc não foi encontrado no PATH.')
     const result = await dialog.showSaveDialog(win, { title: `Exportar ${data.format.toUpperCase()}`, defaultPath: path.join(conversation.workspace, `documento.${data.format}`), filters: [{ name: data.format.toUpperCase(), extensions: [data.format] }] })
@@ -206,29 +205,6 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     disposeWorkspace()
     disposeGit()
     disposeData()
-  }
-}
-
-function getConversation(database: LocalDatabase, id: string) {
-  const conversation = database.getConversation(id)
-  if (!conversation) throw new Error('Conversa não encontrada.')
-  return conversation
-}
-
-function assertKnownWorkspace(database: LocalDatabase, value: string) {
-  const workspace = assertSafeWorkspaceScope(value)
-  const known = database.listWorkspaces().some((item) => {
-    if (!item.authorized) return false
-    try { return assertSafeWorkspaceScope(item.path) === workspace } catch { return false }
-  })
-  if (!known) throw new Error('Workspace não autorizado. Selecione-o pelo aplicativo antes de continuar.')
-  return workspace
-}
-
-function assertWorkspace(conversation: ConversationRow) {
-  const workspace = path.resolve(conversation.workspace)
-  if (!fs.existsSync(workspace) || !fs.statSync(workspace).isDirectory()) {
-    throw new Error('O workspace desta conversa não está mais disponível.')
   }
 }
 

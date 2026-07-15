@@ -35,12 +35,11 @@ Dados ficam em `app.getPath('userData')`; logs ficam em `app.getPath('logs')`. C
 src/
 ├── App.tsx                         # orquestração e integração dos domínios
 ├── domains/
-│   ├── agent/AgentPanel.tsx        # inspector, plano, atividade e artefatos
+│   ├── agent/                      # inspector, plano, atividade, artefatos e estilos locais
 │   ├── chat/ChatContent.tsx        # welcome, mensagens e Markdown
 │   ├── chat/Composer.tsx           # modos, anexos e envio
 │   ├── git/GitPanel.tsx            # status e commit confirmado
-│   ├── settings/Dialogs.tsx        # onboarding, memória e preview
-│   ├── settings/SettingsDialog.tsx # configurações e diagnóstico
+│   ├── settings/                   # configurações, diagnóstico, diálogos e estilos locais
 │   ├── suggestions/                # review, Project Health e proposta
 │   └── workspaces/Sidebar.tsx      # conversas, workspaces e perfil
 ├── shared/format.ts                # formatação e normalização do renderer
@@ -82,10 +81,11 @@ src/styles/
 ├── typography.css   # Geist, Geist Mono e regras tipográficas
 ├── motion.css       # durações, easing, transições e reduced motion
 ├── globals.css      # reset, foco, seleção e scrollbars
-└── components.css   # estilos visuais dos componentes do shell
+├── components.css           # shell e estilos compartilhados ainda não extraídos
+└── product-constraints.css  # pisos transversais de interação e responsividade
 ```
 
-Estilos altamente específicos podem permanecer junto ao domínio, como `domains/suggestions/suggestions.css`. `src/index.css` é apenas o ponto de entrada da fundação global. Novos valores globais devem ser tokens; novas animações devem usar o módulo central de motion.
+Estilos específicos permanecem junto ao domínio, como `domains/agent/agent.css`, `domains/settings/settings.css` e `domains/suggestions/suggestions.css`. A ordem desses arquivos é declarada centralmente em `App.tsx`, evitando que o carregamento lazy altere a cascata. `src/index.css` é apenas o ponto de entrada da fundação global; `styles/product-constraints.css` concentra pisos transversais de interação, tipografia e responsividade. Novos valores globais devem ser tokens e novas animações devem usar o módulo central de motion.
 
 ## Processo principal
 

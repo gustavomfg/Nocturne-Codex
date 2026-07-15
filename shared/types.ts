@@ -5,7 +5,7 @@ export type { AgentMode, Suggestion, SuggestionStatus } from './suggestions'
 
 export type Role = 'user' | 'assistant' | 'system'
 export interface Conversation { id: string; title: string; workspace: string; codexThreadId: string | null; createdAt: string; updatedAt: string }
-export interface Workspace { path: string; name: string; favorite: boolean; createdAt: string; lastOpenedAt: string }
+export interface Workspace { path: string; name: string; favorite: boolean; authorized: boolean; createdAt: string; lastOpenedAt: string }
 export interface Message { id: string; conversationId: string; role: Role; content: string; metadata: string | null; createdAt: string }
 export interface Approval { key: string; kind: 'command' | 'file'; title: string; detail: string; status: 'pending' | 'accepted' | 'declined' }
 export interface Activity { id: string; type: 'command' | 'file' | 'reasoning' | 'read' | 'error' | 'completion'; label: string; detail?: string; status: 'running' | 'completed' | 'failed' }

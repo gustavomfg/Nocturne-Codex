@@ -220,11 +220,15 @@ button {
 
 .title-block {
   align-items: center;
+  flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
   display: flex;
 }
 
 .title-block h1 {
+  flex: 0 1 auto;
+  min-width: 0;
   white-space: nowrap;
   text-overflow: ellipsis;
   margin: 0;
@@ -232,6 +236,8 @@ button {
 }
 
 .path-pill {
+  flex: 0 1 auto;
+  min-width: 0;
   color: #87858f;
   border: 1px solid #29282e;
   border-radius: 6px;
@@ -240,6 +246,17 @@ button {
   padding: 4px 7px;
   font-size: var(--font-small);
   display: flex;
+}
+
+.path-pill span {
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.path-pill svg {
+  flex: 0 0 auto;
 }
 
 .top-actions {
@@ -2605,7 +2622,7 @@ button {
 
 .settings-layout {
   flex: 1;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: 248px minmax(0, 1fr);
   min-height: 0;
   display: grid;
 }
@@ -4395,334 +4412,4 @@ button {
 .product-toast button:hover {
   color: #d9f0e4;
   background: #ffffff0f;
-}
-
-.settings-footer.confirm-discard {
-  background: #21181a;
-  border-top-color: #513237;
-}
-
-.settings-footer.confirm-discard > span {
-  color: #d7a2a8;
-  line-height: var(--leading-ui);
-  flex-direction: column;
-  display: flex;
-}
-
-.settings-footer.confirm-discard > span strong {
-  color: #f0c2c7;
-  font-size: var(--font-small);
-}
-
-.settings-footer.has-error > span, .memory-footer.has-error > small {
-  color: #e6a5ac;
-}
-
-.memory-footer.confirm-discard {
-  align-items: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md);
-  background: #21181a;
-  border: 1px solid #513237;
-  border-radius: var(--radius-md);
-}
-
-.memory-footer.confirm-discard > span {
-  color: #f0c2c7;
-  flex-direction: column;
-  gap: var(--spacing-2xs);
-  display: flex;
-}
-
-.memory-footer.confirm-discard > span strong {
-  font-size: var(--font-small);
-}
-
-.memory-footer.confirm-discard > span small {
-  color: #d7a2a8;
-  font-size: var(--font-caption);
-}
-
-.settings-footer .modal-actions .danger, .memory-footer .modal-actions .danger {
-  color: #fff;
-  background: #a44751;
-  border-color: #bd5964;
-}
-
-.readiness-summary {
-  gap: var(--spacing-2xs);
-  margin-bottom: var(--spacing-lg);
-  padding: var(--spacing-md);
-  border-radius: var(--radius-md);
-  border: 1px solid;
-  flex-direction: column;
-  display: flex;
-}
-
-.readiness-summary.pending {
-  color: #e4c28f;
-  background: #211a12;
-  border-color: #594426;
-}
-
-.readiness-summary.ready {
-  color: #a9d9bf;
-  background: #132019;
-  border-color: #294638;
-}
-
-.readiness-summary span {
-  font-size: var(--font-small);
-  font-weight: 650;
-}
-
-.readiness-summary small {
-  color: inherit;
-  opacity: .78;
-  font-size: var(--font-caption);
-}
-
-.onboarding-remediation {
-  gap: var(--spacing-sm);
-  margin: var(--spacing-sm) 0 var(--spacing-lg);
-  grid-template-columns: 1fr 1fr;
-  display: grid;
-}
-
-.onboarding-remediation button, .onboarding-workspace {
-  min-height: var(--control-md);
-  justify-content: center;
-  align-items: center;
-  gap: var(--spacing-xs);
-  color: #cbb9f3;
-  background: var(--color-surface-raised);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  display: flex;
-}
-
-.onboarding-remediation button:hover, .onboarding-workspace:hover {
-  background: var(--color-surface-hover);
-  border-color: var(--color-border-strong);
-}
-
-.activity-priority {
-  top: calc(var(--spacing-xl) * -1);
-  z-index: 4;
-  margin: calc(var(--spacing-xl) * -1) calc(var(--spacing-xl) * -1) var(--spacing-lg);
-  padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-sm);
-  background: linear-gradient(var(--color-panel) 86%, transparent);
-  position: sticky;
-}
-
-.current-operation {
-  align-items: center;
-  gap: var(--spacing-md);
-  min-height: 52px;
-  margin-bottom: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
-  color: var(--color-text-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-  background: #18171c;
-  display: flex;
-}
-
-.current-operation > span {
-  width: var(--control-sm);
-  height: var(--control-sm);
-  color: var(--color-success);
-  border-radius: var(--radius-sm);
-  background: #6fd1a014;
-  place-items: center;
-  display: grid;
-}
-
-.current-operation.running > span {
-  color: #b99ff6;
-  background: #9b7cf617;
-}
-
-.current-operation.failed > span {
-  color: var(--color-danger);
-  background: #ee7f8917;
-}
-
-.current-operation.running svg {
-  animation: 1.4s linear infinite spin;
-}
-
-.current-operation > div {
-  flex-direction: column;
-  min-width: 0;
-  display: flex;
-}
-
-.current-operation small {
-  color: var(--color-text-muted);
-  font-size: var(--font-caption);
-}
-
-.current-operation strong {
-  font-size: var(--font-small);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-.activity-priority section {
-  max-height: min(410px, 52vh);
-  padding: var(--spacing-sm);
-  border-radius: var(--radius-md);
-  background: #17131d;
-  border: 1px solid #4b3a5e;
-  overflow: auto;
-}
-
-.activity-priority section h3 {
-  align-items: center;
-  gap: var(--spacing-sm);
-  margin: 0 0 var(--spacing-sm);
-  color: #dcc8f4;
-  font-size: var(--font-small);
-  display: flex;
-}
-
-.activity-priority section h3 span {
-  min-width: 22px;
-  height: 22px;
-  font-size: var(--font-caption);
-  background: #39284b;
-  border-radius: 999px;
-  place-items: center;
-  display: inline-grid;
-}
-
-.activity-priority .approval-card:last-child {
-  margin-bottom: 0;
-}
-
-.activity-section {
-  margin-top: var(--spacing-md);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-
-.activity-section > summary {
-  align-items: center;
-  gap: var(--spacing-sm);
-  min-height: 44px;
-  padding: 0 var(--spacing-md);
-  color: var(--color-text-secondary);
-  font-size: var(--font-small);
-  cursor: pointer;
-  font-weight: 600;
-  list-style: none;
-  display: flex;
-}
-
-.activity-section > summary::-webkit-details-marker {
-  display: none;
-}
-
-.activity-section > summary:after {
-  content: "+";
-  color: var(--color-text-muted);
-  font-size: var(--font-title);
-  margin-left: auto;
-  font-weight: 400;
-}
-
-.activity-section[open] > summary {
-  background: var(--color-surface-raised);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.activity-section[open] > summary:after {
-  content: "−";
-}
-
-.activity-section > summary span {
-  color: var(--color-text-muted);
-  margin-left: auto;
-}
-
-.activity-section > summary span + * {
-  margin-left: 0;
-}
-
-.activity-section .files-panel, .activity-section .diff-panel, .activity-section .git-panel, .activity-section .document-panel {
-  box-shadow: none;
-  border: 0;
-  border-radius: 0;
-  margin-top: 0;
-}
-
-.activity-section > .approval-card {
-  margin: var(--spacing-md);
-}
-
-/* Canonical interaction and type floors: compact visuals must remain readable
-   and expose a real 32px pointer target. */
-.changed-file > button:not(:nth-child(2)), .artifact-delete, .commit-row > button, .preview-dialog header button, .settings-close, .workspace-favorite, .delete-button, .attachment-list button, .search-box > button {
-  min-width: var(--control-sm);
-  min-height: var(--control-sm);
-}
-
-.conversation-copy strong, .workspace-card strong, .profile strong, .artifact-main strong, .timeline-item strong, .current-operation strong {
-  font-size: var(--font-small);
-}
-
-.conversation-copy small, .workspace-card small, .profile small, .artifact-main small, .date-divider, .assistant-name span, .settings-navigation small {
-  font-size: var(--font-caption);
-}
-
-@media (width <= 520px) {
-  .topbar {
-    gap: var(--spacing-xs);
-  }
-
-  .title-block {
-    flex: 1;
-  }
-
-  .title-block h1 {
-    max-width: 26vw;
-  }
-
-  .path-pill {
-    display: none;
-  }
-
-  .top-actions {
-    flex: none;
-  }
-
-  .top-actions .top-action-secondary {
-    display: none;
-  }
-
-  .connection {
-    border-radius: 999px;
-  }
-
-  .connection > span {
-    display: none;
-  }
-
-  .connection-symbol {
-    display: grid;
-    place-items: center;
-  }
-
-  .connection-symbol.busy svg {
-    animation: 1.3s linear infinite spin;
-  }
-
-  .onboarding-remediation {
-    grid-template-columns: 1fr;
-  }
 }

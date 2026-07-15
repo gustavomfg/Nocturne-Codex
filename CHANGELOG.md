@@ -38,7 +38,7 @@
 
 ### Aprimoramentos posteriores da linha 0.7
 
-- backups restauram workspaces como não autorizados, rejeitam raízes amplas e não promovem executáveis importados;
+- backups restauram workspaces como não autorizados, preservam somente o histórico até uma reautorização explícita e bloqueiam memória, Git, arquivos, documentos e Codex;
 - registros automáticos de sugestões são neutralizados antes de entrar na memória persistente;
 - preferências locais carregam sem aguardar diagnósticos externos, agora paralelos, explícitos e temporariamente armazenados;
 - estados compactos do Codex e controles dos painéis laterais permanecem legíveis e sem sobreposição em janelas estreitas;
@@ -46,7 +46,10 @@
 - cascata CSS remove declarações sombreadas e passa a rejeitar novas duplicações equivalentes;
 - releases estáveis recebem gate protegido para assinatura, notarização e verificação por plataforma;
 - smoke opt-in valida o contrato de um Codex CLI real em workspace temporário e produz somente relatório sanitizado;
-- suíte ampliada para 65 testes unitários e de integração e 16 cenários determinísticos de renderer.
+- pushes no `master` recebem validação de fonte, enquanto o contrato real do Codex passa a ser verificado semanalmente e após mudanças de compatibilidade;
+- estilos de Agent e Settings são extraídos por domínio, com ordem canônica, restrições transversais próprias e auditoria automatizada;
+- configurações estabilizam a geometria de navegação e controles durante hover, foco e clique, eliminando flick e variações de scrollbar;
+- suíte ampliada para 65 testes unitários e de integração e 20 cenários determinísticos de renderer.
 
 ### Known Issues
 

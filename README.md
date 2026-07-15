@@ -115,7 +115,7 @@ Nocturne Codex shows the current branch, modified files, working and staged diff
 
 ### Diagnostics and recovery
 
-Structured, rotating logs record application, renderer, App Server, IPC, workspace, Git, export, and persistence failures without intentionally logging full file contents. The settings screen exposes process state, executable path, PID, version, last failure, log access, diagnostic copying, and App Server restart. Before a backup restoration replaces local data, Nocturne creates a permission-restricted SQLite recovery snapshot and retains a bounded history in the application data directory.
+Structured, rotating logs record application, renderer, App Server, IPC, workspace, Git, export, and persistence failures without intentionally logging full file contents. The settings screen exposes process state, executable path, PID, version, last failure, log access, diagnostic copying, and App Server restart. Before a backup restoration replaces local data, Nocturne creates a permission-restricted SQLite recovery snapshot and retains a bounded history in the application data directory. Restored conversations remain readable, but their workspaces must be selected again before filesystem, Git, document, memory, or Codex operations are enabled.
 
 ### Secure Electron architecture
 
@@ -181,6 +181,7 @@ Nocturne Codex reduces accidental authority; it does not claim to make arbitrary
 - Privileged operations are implemented in the Electron main process.
 - IPC payloads are validated before use.
 - File operations are confined to normalized workspace paths.
+- Restored workspaces are untrusted until the user explicitly selects the original folder again.
 - Review Mode forces a read-only sandbox.
 - Build operations follow the configured Codex sandbox and approval policy.
 - Sensitive and dangerous commands are classified and surfaced for approval.

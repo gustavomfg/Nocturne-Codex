@@ -15,10 +15,15 @@ interface Dependencies {
 
 export function registerWorkspaceIpc(win: BrowserWindow, database: LocalDatabase, dependencies: Dependencies) {
   const ipcMain = safeIpcMain(win)
-  ipcMain.handle('workspace:select', async () => {
-    const result = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], title: 'Selecionar workspace' })
+  ipcMain.handle('workspace:select', async (_event, value: unknown) => {
+    const expected = z.string().trim().min(1).max(4_000).optional().parse(value)
+    const expectedWorkspace = expected ? assertSafeWorkspaceScope(expected) : null
+    const result = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], title: expectedWorkspace ? 'Reautorizar workspace' : 'Selecionar workspace', ...(expectedWorkspace ? { defaultPath: expectedWorkspace } : {}) })
     if (result.canceled || !result.filePaths[0]) return null
-    const workspace = assertSafeWorkspaceScope(result.filePaths[0]); database.touchWorkspace(workspace); dependencies.ensureWorkspace(workspace); return workspace
+    const workspace = assertSafeWorkspaceScope(result.filePaths[0])
+    if (expectedWorkspace && workspace !== expectedWorkspace) throw new Error('Selecione a mesma pasta associada à conversa restaurada.')
+    const storedWorkspace = expected ?? workspace
+    database.touchWorkspace(storedWorkspace); dependencies.ensureWorkspace(workspace); return storedWorkspace
   })
   ipcMain.handle('workspace:validate', (_event, value: unknown) => { try { return assertSafeWorkspaceScope(z.string().min(1).parse(value)) } catch { return null } })
   ipcMain.handle('workspaces:list', () => database.listWorkspaces())

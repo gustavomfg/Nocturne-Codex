@@ -15,6 +15,8 @@ on:
       - tests/renderer/**
       - .github/workflows/package-validation.yml
   push:
+    branches:
+      - master
     tags:
       - 'v*'
 
@@ -66,6 +68,7 @@ jobs:
   package:
     name: Package and smoke (${{ matrix.os }})
     needs: [verify, renderer]
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

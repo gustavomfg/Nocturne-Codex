@@ -12,6 +12,9 @@ import { routeCodexEvent } from './domains/agent/routeCodexEvent'
 import { useBufferedCodexEvents } from './domains/agent/useBufferedCodexEvents'
 import { useConfirmDialog } from './shared/ConfirmDialog'
 import './styles/components.css'
+import './domains/settings/settings.css'
+import './domains/agent/agent.css'
+import './styles/product-constraints.css'
 
 const now = () => new Date().toISOString()
 const fakeId = () => crypto.randomUUID()
@@ -93,7 +96,7 @@ function App() {
         const readiness = await window.nocturne.settings.check()
         setSettings((current) => ({ ...current, ...readiness })); store.setStatus(readiness.serverStatus || useAppStore.getState().status)
       }).catch((error) => store.setError(errorMessage(error)))
-      if (conversations[0]) await openConversation(conversations[0].id, conversations)
+      if (conversations[0]) await openConversation(conversations[0].id, conversations, savedWorkspaces)
     }).catch((error) => store.setError(error.message))
     const offStatus = window.nocturne.codex.onStatus(({ status, error }) => { store.setStatus(status); if (status === 'completed' && activeTurnRef.current) store.setFinalizing(true); if (error) store.setError(error) })
     const offEvent = window.nocturne.codex.onEvent(handleCodexEvent)
@@ -175,7 +178,7 @@ function App() {
     else { store.setActive(null); store.setMessages([]); store.clearRun(); setGitInfo(null) }
   }
 
-  async function openConversation(id: string, conversations = store.conversations) {
+  async function openConversation(id: string, conversations = store.conversations, availableWorkspaces = workspaces) {
     if (interactionLocked() && id !== useAppStore.getState().activeId) { store.setError('Cancele ou aguarde a execução atual antes de trocar de conversa.'); return }
     const requestId = ++conversationRequestRef.current
     stickToBottomRef.current = true; setNewContent(false)
@@ -187,9 +190,25 @@ function App() {
     if (lastMetadata) restoreMetadata(lastMetadata)
     const conversation = conversations.find((item) => item.id === id)
     if (conversation) setWorkspace(conversation.workspace)
-    const [artifacts, savedMemory, suggestions] = await Promise.all([window.nocturne.artifacts.list(id), window.nocturne.memory.get(id), window.nocturne.suggestions.list(id)])
+    const [artifacts, suggestions] = await Promise.all([window.nocturne.artifacts.list(id), window.nocturne.suggestions.list(id)])
     if (requestId !== conversationRequestRef.current || useAppStore.getState().activeId !== id) return
-    store.setArtifacts(artifacts); store.setSuggestions(suggestions); setMemory(savedMemory); setPreview(null)
+    store.setArtifacts(artifacts); store.setSuggestions(suggestions); setPreview(null)
+    const workspaceEntry = conversation && availableWorkspaces.find((item) => item.path === conversation.workspace)
+    if (conversation && !workspaceEntry?.authorized) {
+      setMemory({ content: '', rules: '', updatedAt: '' }); setGitInfo(null)
+      const accepted = await confirmation.confirm({ title: 'Reautorizar workspace?', description: `Esta conversa veio de um backup. Para proteger seus arquivos, confirme novamente a pasta antes de usar memória, Git ou Codex.\n\n${conversation.workspace}`, confirmLabel: 'Selecionar pasta' })
+      if (requestId !== conversationRequestRef.current || useAppStore.getState().activeId !== id) return
+      if (!accepted) { store.setError('Workspace não autorizado. A conversa permanece disponível somente para leitura do histórico.'); return }
+      try {
+        const selected = await window.nocturne.workspace.select(conversation.workspace)
+        if (!selected) { store.setError('Reautorização cancelada. A conversa permanece disponível somente para leitura do histórico.'); return }
+        const refreshedWorkspaces = await window.nocturne.workspace.list()
+        setWorkspaces(refreshedWorkspaces); setWorkspace(selected)
+      } catch (error) { store.setError(errorMessage(error)); return }
+    }
+    const savedMemory = await window.nocturne.memory.get(id)
+    if (requestId !== conversationRequestRef.current || useAppStore.getState().activeId !== id) return
+    setMemory(savedMemory)
     try { await window.nocturne.codex.resume(id) } catch (error) { store.setError(`Não foi possível restaurar a thread: ${errorMessage(error)}`) }
     void refreshGit(id)
   }
@@ -402,7 +421,7 @@ function App() {
     <main className="main-panel">
       <header className="topbar">
         {!sidebarOpen && <button ref={sidebarTriggerRef} className="icon-button" aria-label="Abrir barra lateral" title="Abrir barra lateral" aria-controls="workspace-sidebar" aria-expanded={sidebarOpen} onClick={() => setSidebarVisibility(true)}><Menu size={18}/></button>}
-        <div className="title-block"><h1>{title}</h1>{pathLabel && <button className="path-pill" onClick={selectWorkspace}><Folder size={13}/>{pathLabel.split(/[/\\]/).pop()}<ChevronRight size={12}/></button>}</div>
+        <div className="title-block"><h1 title={title}>{title}</h1>{pathLabel && <button className="path-pill" title={pathLabel} onClick={selectWorkspace}><Folder size={13}/><span>{pathLabel.split(/[/\\]/).pop()}</span><ChevronRight size={12}/></button>}</div>
         <div className="top-actions">{gitInfo && <span className="branch-pill top-action-branch"><GitBranch size={12}/>{gitInfo.branch}</span>}{pathLabel && <><button className="icon-button top-action-workspace" aria-label="Abrir no VS Code" title="Abrir no VS Code" onClick={() => void openWorkspaceTool('editor')}><Code2 size={16}/></button><button className="icon-button top-action-workspace" aria-label="Abrir terminal" title="Abrir terminal" onClick={() => void openWorkspaceTool('terminal')}><Terminal size={16}/></button></>}<button className={`connection top-action-essential ${store.status}`} onClick={reconnect} aria-label={`Codex: ${statusText(store.status)}. Reconectar`} title="Reconectar ao App Server"><span/><i className={`connection-symbol ${connectionSymbol}`} data-symbol={connectionSymbol} aria-hidden="true">{connectionSymbol === 'ready' ? <Check size={16}/> : connectionSymbol === 'attention' ? <AlertTriangle size={15}/> : connectionSymbol === 'busy' ? <LoaderCircle size={16}/> : <X size={16}/>}</i>{statusText(store.status)}</button><button className={`icon-button top-action-essential ${memory.content ? 'has-memory' : ''}`} aria-label="Memória do workspace" onClick={() => store.activeId ? setMemoryOpen(true) : store.setError('Abra uma conversa para configurar a memória do workspace.')} title="Memória do workspace"><Brain size={17}/></button><button className="icon-button top-action-secondary" aria-label="Abrir configurações" title="Abrir configurações" onClick={() => setSettingsOpen(true)}><Settings size={17}/></button>{(!compactLayout || !rightOpen) && <button ref={inspectorTriggerRef} className={`icon-button top-action-essential ${rightOpen ? 'selected' : ''}`} aria-label={rightOpen ? 'Ocultar painel do agente' : 'Mostrar painel do agente'} title={rightOpen ? 'Ocultar painel do agente' : 'Mostrar painel do agente'} aria-controls="agent-inspector" aria-expanded={rightOpen} onClick={() => setInspectorVisibility(!rightOpen)}><PanelRight size={18}/></button>}</div>
       </header>
 
