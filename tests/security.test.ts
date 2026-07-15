@@ -27,6 +27,8 @@ describe('políticas de execução', () => {
     expect(workflow).toContain('npm run verify:release-assets -- release-assets')
     expect(workflow).toContain('gh release create "$RELEASE_TAG"')
     expect(workflow).toContain('tag !== \'v\'+v')
+    expect(workflow).not.toContain('${{ runner.os ==')
+    expect(workflow).toContain("matrix.os == 'macos-latest'")
   })
   it('mantém o atalho de editor integrado ao WebStorm', () => {
     const workspaceIpc = fs.readFileSync(path.join(process.cwd(), 'electron/ipc/registerWorkspaceIpc.ts'), 'utf8')
