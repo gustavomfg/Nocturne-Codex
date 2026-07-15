@@ -21,6 +21,13 @@ describe('políticas de execução', () => {
     expect(updater).toContain('if (!app.isPackaged || process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT)')
     expect(updater).toContain('updater.autoDownload = false')
   })
+  it('publica uma release estável somente após reunir e verificar as três plataformas', () => {
+    const workflow = fs.readFileSync(path.join(process.cwd(), '.github/workflows/stable-release.yml'), 'utf8')
+    expect(workflow).toContain('pattern: nocturne-signed-*')
+    expect(workflow).toContain('npm run verify:release-assets -- release-assets')
+    expect(workflow).toContain('gh release create "$RELEASE_TAG"')
+    expect(workflow).toContain('tag !== \'v\'+v')
+  })
   it('mantém o atalho de editor integrado ao WebStorm', () => {
     const workspaceIpc = fs.readFileSync(path.join(process.cwd(), 'electron/ipc/registerWorkspaceIpc.ts'), 'utf8')
     const topbar = fs.readFileSync(path.join(process.cwd(), 'src/domains/workspaces/WorkspaceTopbar.tsx'), 'utf8')

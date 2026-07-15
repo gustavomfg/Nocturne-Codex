@@ -25,7 +25,7 @@ O smoke test é ativado somente em um aplicativo empacotado que receba `NOCTURNE
 3. Exija sucesso do workflow nas três plataformas.
 4. Valide manualmente os artefatos da plataforma oficialmente suportada.
 5. Publique os pacotes junto ao `SHA256SUMS`, aos arquivos `latest*.yml` e aos `.blockmap` correspondentes. Sem esses metadados, o cliente não anuncia a atualização.
-6. Para uma versão estável, use manualmente o workflow `Stable signed artifacts`, protegido pelo ambiente `stable-release`. Ele recusa versões com sufixo de pré-release e só libera o gate quando assinatura, notarização e checksums forem verificados em todas as plataformas.
+6. Para uma versão estável, crie a tag correspondente à versão (`vX.Y.Z`) e execute manualmente o workflow `Stable signed artifacts`, informando essa tag. O ambiente protegido `stable-release` recusa pré-releases e tags divergentes. Depois de verificar assinatura, notarização, checksums e metadados das três plataformas, o gate cria ou atualiza o GitHub Release.
 
 ## Assinatura e proteção das chaves
 
@@ -36,6 +36,8 @@ O smoke test é ativado somente em um aplicativo empacotado que receba `NOCTURNE
 Configure no ambiente protegido os segredos `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`, `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD`, `GPG_PRIVATE_KEY` e `GPG_PASSPHRASE`. O workflow de validação comum continua deliberadamente sem acesso a eles.
 
 `npm run verify:signatures` executa `codesign`/Gatekeeper/stapler no macOS, Authenticode no Windows e checksum + GPG no Linux. Falha ou assinatura ausente interrompe a promoção estável.
+
+`npm run verify:release-assets -- <diretório>` valida no gate agregado a presença dos instaladores Linux, Windows e macOS, do ZIP exigido pelo atualizador no macOS, dos três manifests de atualização e dos checksums por plataforma. A publicação não acontece se qualquer item estiver ausente.
 
 Segredos de assinatura não devem ser disponibilizados em workflows de pull request, logs ou artefatos. Use ambientes protegidos, aprovação manual para releases estáveis e permissões mínimas. Registre data de emissão, expiração e responsável por cada identidade; em uma rotação, revogue a identidade anterior quando aplicável, substitua os segredos e valide um pacote de cada plataforma antes da publicação.
 

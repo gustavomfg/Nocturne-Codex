@@ -32,6 +32,7 @@
     "checksums": "node scripts/smoke-package.mjs --checksums",
     "verify:signatures": "node scripts/verify-package-signature.mjs --require",
     "verify:release-metadata": "node scripts/verify-release-metadata.mjs",
+    "verify:release-assets": "node scripts/verify-release-assets.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
