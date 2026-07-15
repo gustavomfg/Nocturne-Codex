@@ -32,7 +32,7 @@ export function registerWorkspaceIpc(win: BrowserWindow, database: LocalDatabase
   ipcMain.handle('workspace:openTool', async (_event, value: unknown) => {
     const data = workspaceToolSchema.parse(value); const workspace = dependencies.assertKnownWorkspace(data.workspace)
     if (!fs.existsSync(workspace)) throw new Error('Workspace não encontrado.')
-    if (data.tool === 'editor') { try { await dependencies.run('code', [workspace], workspace) } catch { throw new Error('Não foi possível abrir o VS Code. Verifique se o comando “code” está no PATH.') } return }
+    if (data.tool === 'editor') { try { await dependencies.run('webstorm', [workspace], workspace) } catch { throw new Error('Não foi possível abrir o WebStorm. Verifique se o comando “webstorm” está no PATH.') } return }
     const terminal = process.platform === 'win32' ? ['cmd', ['/K', 'cd', '/d', workspace]] as const : process.platform === 'darwin' ? ['open', ['-a', 'Terminal', workspace]] as const : ['x-terminal-emulator', ['--working-directory', workspace]] as const
     await new Promise<void>((resolve, reject) => {
       const child = spawn(terminal[0], [...terminal[1]], { cwd: workspace, detached: true, stdio: 'ignore' })

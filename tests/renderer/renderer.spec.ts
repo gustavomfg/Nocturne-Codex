@@ -13,6 +13,12 @@ test.describe('renderer do produto', () => {
     await installNocturneMock(page)
   })
 
+  test('expõe o atalho do workspace para o WebStorm', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await ready(page)
+    await expect(page.getByRole('button', { name: 'Abrir no WebStorm' })).toBeVisible()
+  })
+
   test('mantém somente um painel modal e restaura o foco', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await ready(page)

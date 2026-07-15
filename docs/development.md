@@ -4,6 +4,8 @@
 
 O desenvolvimento e os testes de contrato usam Codex CLI `0.144.1`; a versão mínima suportada é `0.144.0`. Ao atualizar o CLI, execute o smoke do pacote e registre a nova versão verificada em `shared/codex-compatibility.json` e `docs/codex-integration.md`.
 
+O WebStorm é a IDE adotada pelo projeto. Mantenha o launcher `webstorm` disponível no `PATH` para que o atalho de abertura do workspace funcione; a pasta `.idea` permanece local e não deve ser versionada.
+
 Use Node.js 24.18 ou superior dentro da linha Node 24 LTS, com npm 11. A faixa suportada está declarada no `package.json`, o `.nvmrc` fixa o runtime mínimo verificado e o CI valida tanto esse mínimo quanto a versão atual da linha Node 24.
 
 ```bash

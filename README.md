@@ -245,6 +245,7 @@ This fallback is intended for driver troubleshooting; keeping hardware accelerat
 
 ### Requirements
 
+- WebStorm is the adopted IDE; the workspace shortcut expects the `webstorm` launcher in `PATH`;
 - Node.js 24.18 or newer within the Node 24 LTS line;
 - npm 11 (the adopted version is declared in `package.json`);
 - a native build toolchain compatible with `better-sqlite3`;

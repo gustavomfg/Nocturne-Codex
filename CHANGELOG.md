@@ -55,7 +55,9 @@
 - SQLite recebe timeout de concorrência, modo síncrono apropriado ao WAL, verificação de integridade semanal e otimização segura no encerramento;
 - falhas ao abrir terminal são capturadas sem derrubar o processo principal, e estados do agente deixam de produzir transições tardias inválidas;
 - históricos extensos carregam as 100 mensagens mais recentes primeiro e preservam a posição de leitura ao buscar páginas anteriores;
-- suíte ampliada para 67 testes unitários e de integração e 21 cenários determinísticos de renderer, incluindo paginação e estresse de streaming e diff.
+- WebStorm passa a ser a IDE adotada, inclusive no atalho de abertura de workspace e na documentação de desenvolvimento;
+- Electron e PostCSS recebem atualizações patch compatíveis, sem vulnerabilidades conhecidas no audit;
+- suíte ampliada para 68 testes unitários e de integração e 22 cenários determinísticos de renderer, incluindo paginação, integração com WebStorm e estresse de streaming e diff.
 
 ### Known Issues
 

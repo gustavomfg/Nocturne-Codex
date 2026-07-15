@@ -13,6 +13,13 @@ describe('políticas de execução', () => {
     expect(builder).toMatch(/"runAsNode": false/)
     expect(builder).toMatch(/"onlyLoadAppFromAsar": true/)
   })
+  it('mantém o atalho de editor integrado ao WebStorm', () => {
+    const workspaceIpc = fs.readFileSync(path.join(process.cwd(), 'electron/ipc/registerWorkspaceIpc.ts'), 'utf8')
+    const app = fs.readFileSync(path.join(process.cwd(), 'src/App.tsx'), 'utf8')
+    expect(workspaceIpc).toContain("dependencies.run('webstorm', [workspace], workspace)")
+    expect(workspaceIpc).toContain('Não foi possível abrir o WebStorm.')
+    expect(app).toContain('aria-label="Abrir no WebStorm"')
+  })
   it.each(['sudo apt update', 'git reset --hard HEAD', 'git clean -fd', 'rm -rf build', 'npm run rebuild:native', 'npm run package'])('marca comando perigoso: %s', (command) => expect(assessCommand(command)).toMatchObject({ risk: 'dangerous', requiresApproval: true, blockedAutomatic: true }))
   it('não usa substring ingênua para classificar nomes de arquivo', () => expect(assessCommand(['cat', 'sudo-notes.md']).risk).toBe('safe'))
   it('bloqueia traversal e aceita arquivo interno', () => {
