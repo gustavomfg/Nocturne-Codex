@@ -74,6 +74,8 @@ Do not introduce text below 13 px. Use color, spacing, and weight to lower empha
 
 Global tokens live in `src/styles/tokens.css`. Component styles should consume these tokens instead of adding isolated values. Typography is defined in `src/styles/typography.css`, shared motion in `src/styles/motion.css`, and global browser/Electron defaults in `src/styles/globals.css`.
 
+The component cascade is composed by `src/styles/components.css` in a fixed order: shell and chat, inspector and Git surfaces, workflows and overlays, the consolidated product theme, then responsive and interaction polish. Keep new rules in the narrowest matching module and preserve this import order so late refinements remain intentional.
+
 ### Typography tokens
 
 - `--font-sans`, `--font-mono`

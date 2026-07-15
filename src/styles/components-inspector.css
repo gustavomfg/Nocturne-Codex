@@ -1,0 +1,403 @@
+.inspector {
+  border-left: 1px solid var(--line);
+  flex-direction: column;
+  flex: 0 0 320px;
+  display: flex;
+}
+
+.inspector-header {
+  border-bottom: 1px solid var(--line);
+  flex: 0 0 61px;
+  justify-content: space-between;
+  align-items: center;
+  height: 61px;
+  display: flex;
+}
+
+.inspector-header div {
+  align-items: center;
+  display: flex;
+}
+
+.inspector-header span {
+  border: 1px solid #27262c;
+  border-radius: 10px;
+}
+
+.inspector-scroll {
+  flex: 1;
+  overflow: auto;
+}
+
+.inspector-empty {
+  text-align: center;
+  margin-top: 40%;
+}
+
+.inspector-empty div {
+  color: #777184;
+  background: #18171c;
+  place-items: center;
+  margin: auto;
+  display: grid;
+}
+
+.approval-card {
+  border: 1px solid #473b61;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  padding: 11px;
+}
+
+.approval-card.accepted {
+  border-color: #315342;
+}
+
+.approval-card.declined {
+  border-color: #563338;
+}
+
+.approval-title {
+  align-items: center;
+  display: flex;
+}
+
+.approval-title span {
+  color: #ad91f2;
+}
+
+.approval-card pre, .timeline-item pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #9d9ba4;
+  background: #0f0f12;
+  max-height: 130px;
+  font: 450 var(--font-code)/1.55 var(--font-mono);
+  overflow: auto;
+}
+
+.approval-actions {
+  justify-content: flex-end;
+  display: flex;
+}
+
+.approval-actions button {
+  border: 1px solid #343239;
+  border-radius: 6px;
+  align-items: center;
+  display: flex;
+}
+
+.approval-actions .accept {
+  background: #7456cf;
+  border-color: #7456cf;
+}
+
+.approval-card > small {
+  margin-top: 8px;
+  display: block;
+}
+
+.timeline {
+  position: relative;
+}
+
+.timeline:before {
+  content: "";
+  width: 1px;
+  position: absolute;
+  top: 15px;
+  bottom: 15px;
+}
+
+.timeline-item {
+  display: flex;
+  position: relative;
+}
+
+.timeline-dot {
+  z-index: 1;
+  color: #8b8994;
+  border: 1px solid #2b2a31;
+  border-radius: 8px;
+  flex: 0 0 27px;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  display: grid;
+}
+
+.timeline-dot.running {
+  color: #aa8ef5;
+}
+
+.timeline-dot.running svg {
+  animation: 1.4s linear infinite spin;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.timeline-dot.completed {
+  color: #67bd91;
+}
+
+.timeline-item > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.timeline-item strong {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  display: block;
+  overflow: hidden;
+}
+
+.diff-panel {
+  border: 1px solid #28272d;
+  border-radius: 9px;
+  margin-top: 13px;
+  overflow: hidden;
+}
+
+.diff-title {
+  border-bottom: 1px solid #28272d;
+  align-items: center;
+  display: flex;
+}
+
+.diff-panel pre {
+  background: #0d0d10;
+  max-height: 300px;
+  margin: 0;
+  font: 450 var(--font-code)/1.55 var(--font-mono);
+  overflow: auto;
+}
+
+.diff-panel span {
+  display: block;
+}
+
+.diff-panel .added {
+  color: #75c99d;
+  background: #17312366;
+}
+
+.diff-panel .removed {
+  color: #e0808b;
+  background: #391a2066;
+}
+
+.workspace-mini {
+  text-align: left;
+  align-items: center;
+  width: 100%;
+  display: flex;
+}
+
+.workspace-mini span {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.workspace-mini:hover, .workspace-mini.active {
+  color: #b7a4e9;
+  background: #17171b;
+}
+
+.settings-button {
+  color: #6f6e78;
+  border-radius: 6px;
+  place-items: center;
+  display: grid;
+}
+
+.settings-button:hover {
+  color: #bbb;
+  background: #202026;
+}
+
+.branch-pill {
+  color: #85838d;
+  border: 1px solid #29282e;
+  border-radius: 10px;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  font-size: var(--font-small);
+  display: flex;
+}
+
+.attachment-list {
+  flex-wrap: wrap;
+  display: flex;
+}
+
+.attachment-list > span {
+  color: #b9accd;
+  background: #211c2b;
+  border: 1px solid #35313f;
+  border-radius: 6px;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  font-size: var(--font-caption);
+  display: flex;
+}
+
+.attachment-list button {
+  color: #7e7788;
+  place-items: center;
+  padding: 0;
+  display: grid;
+}
+
+.message-attachments {
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+  display: flex;
+}
+
+.message-attachments span {
+  color: #a99aba;
+  border: 1px solid #443a58;
+  border-radius: 5px;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 5px;
+  font-size: var(--font-caption);
+  display: flex;
+}
+
+.quick-actions {
+  gap: 5px;
+  max-width: 760px;
+  margin: 0 auto 6px;
+  display: flex;
+}
+
+.quick-actions button {
+  color: #74727c;
+  background: #111114;
+  border: 1px solid #28272d;
+  border-radius: 6px;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  font-size: var(--font-caption);
+  display: flex;
+}
+
+.files-panel, .git-panel, .document-panel {
+  background: #111114;
+  border: 1px solid #28272d;
+  border-radius: 9px;
+  margin-top: 13px;
+  overflow: hidden;
+}
+
+.diff-title > span {
+  color: #74727c;
+  margin-left: auto;
+}
+
+.changed-file {
+  border-top: 1px solid #1e1e23;
+  align-items: center;
+  display: flex;
+}
+
+.changed-file:first-of-type {
+  border-top: 0;
+}
+
+.changed-file > button:nth-child(2) {
+  text-align: left;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.changed-file > button:not(:nth-child(2)) {
+  color: #74727c;
+  place-items: center;
+  display: grid;
+}
+
+.file-kind {
+  background: #25232a;
+  border-radius: 4px;
+  place-items: center;
+  display: grid;
+}
+
+.file-kind.created {
+  color: #6dcc99;
+}
+
+.file-kind.modified {
+  color: #d5b76c;
+}
+
+.file-kind.deleted {
+  color: #df7d88;
+}
+
+.git-panel > pre {
+  white-space: pre-wrap;
+  max-height: 100px;
+  margin: 0;
+  font: 450 var(--font-code)/1.55 var(--font-mono);
+  overflow: auto;
+}
+
+.commit-row {
+  border-top: 1px solid #242329;
+  display: flex;
+}
+
+.commit-row input {
+  background: #0d0d10;
+  border: 1px solid #29282e;
+  border-radius: 5px;
+  outline: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.commit-row button {
+  background: #6f53c7;
+  border-radius: 5px;
+  place-items: center;
+  display: grid;
+}
+
+.commit-row button:disabled {
+  color: #5e5d66;
+  background: #29282e;
+}
+
+.export-actions {
+  grid-template-columns: repeat(4, 1fr);
+  display: grid;
+}
+
+.export-actions button {
+  color: #aaa8b1;
+  border: 1px solid #2c2b31;
+  border-radius: 5px;
+  padding: 5px 2px;
+}
+
+.export-actions button:hover {
+  color: #c1adfa;
+  border-color: #6d57a4;
+}
