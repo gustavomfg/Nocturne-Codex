@@ -13,6 +13,14 @@ describe('políticas de execução', () => {
     expect(builder).toMatch(/"runAsNode": false/)
     expect(builder).toMatch(/"onlyLoadAppFromAsar": true/)
   })
+  it('gera metadados de atualização pelo GitHub sem consultar o serviço em desenvolvimento', () => {
+    const builder = fs.readFileSync(path.join(process.cwd(), 'electron-builder.json5'), 'utf8')
+    const updater = fs.readFileSync(path.join(process.cwd(), 'electron/updates/UpdateService.ts'), 'utf8')
+    expect(builder).toContain('"provider": "github"')
+    expect(builder).toContain('"repo": "Nocturne-Codex"')
+    expect(updater).toContain('if (!app.isPackaged || process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT)')
+    expect(updater).toContain('updater.autoDownload = false')
+  })
   it('mantém o atalho de editor integrado ao WebStorm', () => {
     const workspaceIpc = fs.readFileSync(path.join(process.cwd(), 'electron/ipc/registerWorkspaceIpc.ts'), 'utf8')
     const topbar = fs.readFileSync(path.join(process.cwd(), 'src/domains/workspaces/WorkspaceTopbar.tsx'), 'utf8')

@@ -103,5 +103,7 @@ jobs:
             release/*/*.dmg
             release/*/*.exe
             release/*/*.zip
+            release/*/*.blockmap
+            release/*/latest*.yml
             release/*/SHA256SUMS
           if-no-files-found: error

@@ -24,7 +24,7 @@ O smoke test é ativado somente em um aplicativo empacotado que receba `NOCTURNE
 2. Confirme um `Codex CLI contract smoke` recente e bem-sucedido para a versão registrada em `shared/codex-compatibility.json`.
 3. Exija sucesso do workflow nas três plataformas.
 4. Valide manualmente os artefatos da plataforma oficialmente suportada.
-5. Publique os pacotes junto ao `SHA256SUMS` correspondente.
+5. Publique os pacotes junto ao `SHA256SUMS`, aos arquivos `latest*.yml` e aos `.blockmap` correspondentes. Sem esses metadados, o cliente não anuncia a atualização.
 6. Para uma versão estável, use manualmente o workflow `Stable signed artifacts`, protegido pelo ambiente `stable-release`. Ele recusa versões com sufixo de pré-release e só libera o gate quando assinatura, notarização e checksums forem verificados em todas as plataformas.
 
 ## Assinatura e proteção das chaves

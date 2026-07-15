@@ -57,6 +57,9 @@ jobs:
             release/*/*.tar.gz
             release/*/*.dmg
             release/*/*.exe
+            release/*/*.zip
+            release/*/*.blockmap
+            release/*/latest*.yml
             release/*/SHA256SUMS
             release/*/SHA256SUMS.sig
           if-no-files-found: error

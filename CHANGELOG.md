@@ -58,12 +58,13 @@
 - WebStorm passa a ser a IDE adotada, inclusive no atalho de abertura de workspace e na documentação de desenvolvimento;
 - Electron e PostCSS recebem atualizações patch compatíveis, sem vulnerabilidades conhecidas no audit;
 - suíte ampliada para 68 testes unitários e de integração e 22 cenários determinísticos de renderer, incluindo paginação, integração com WebStorm e estresse de streaming e diff.
+- atualizações passam a consultar GitHub Releases somente no aplicativo empacotado, exigem consentimento antes do download e preservam metadados de update por plataforma no pipeline.
 
 ### Known Issues
 
 - App Server ainda é experimental e depende da versão instalada do Codex CLI;
 - pacotes ainda não possuem assinatura de código;
-- atualizações automáticas ainda não foram implementadas;
+- atualizações dependem da publicação conjunta dos pacotes e metadados `latest*.yml` no GitHub Release;
 - exportação avançada depende de Pandoc;
 - suporte Beta empacotado e validado prioritariamente em Linux x64.
 

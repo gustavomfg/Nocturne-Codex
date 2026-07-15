@@ -6,6 +6,7 @@ import { CodexClient } from './codex/CodexClient'
 import { LocalDatabase } from './database/Database'
 import { registerIpc } from './ipc/registerIpc'
 import { Logger } from './logging/Logger'
+import { startUpdateService } from './updates/UpdateService'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const softwareRendering = process.env.NOCTURNE_DISABLE_GPU === '1' || process.argv.includes('--disable-gpu')
@@ -24,6 +25,7 @@ let database: LocalDatabase | null = null
 const codex = new CodexClient()
 let logger: Logger | null = null
 let disposeIpc: (() => void) | null = null
+let disposeUpdates: (() => void) | null = null
 
 process.on('uncaughtException', (error) => { logger?.error('app', 'uncaughtException no processo principal', error); console.error(error) })
 process.on('unhandledRejection', (reason) => { logger?.error('app', 'unhandledRejection no processo principal', reason); console.error(reason) })
@@ -133,10 +135,15 @@ app.on('second-instance', () => {
 })
 app.on('before-quit', () => {
   logger?.info('app', 'Encerrando aplicação')
+  disposeUpdates?.(); disposeUpdates = null
   disposeIpc?.(); disposeIpc = null
   codex.stop()
   database?.close(); database = null
 })
 app.on('child-process-gone', (_event, details) => logger?.error('app', 'Processo filho do Electron encerrado', details))
 if (!hasSingleInstanceLock) app.quit()
-else void app.whenReady().then(() => { initializeServices(); createWindow() })
+else void app.whenReady().then(() => {
+  initializeServices()
+  createWindow()
+  if (logger) disposeUpdates = startUpdateService(logger, () => win)
+})

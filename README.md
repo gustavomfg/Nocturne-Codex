@@ -315,7 +315,7 @@ The roadmap is deliberately subordinate to stability. Multi-agent execution, plu
 
 **Beta — active development.**
 
-The core local workflow is implemented and packaged for Linux x64, but the project still relies on an experimental App Server interface. Packages are not yet signed, automatic updates are not implemented, and compatibility may change with future Codex CLI releases.
+The core local workflow is implemented and packaged for Linux x64, but the project still relies on an experimental App Server interface. Packages are not yet signed. Packaged builds can check GitHub Releases for updates and ask before downloading; this requires each release to publish its platform package and generated `latest*.yml` metadata together. Compatibility may change with future Codex CLI releases.
 
 Project Health is an explained estimate derived from open suggestions, not a formal security or quality audit. AI suggestions can be incomplete or wrong and must be reviewed like any other proposed engineering change.
 
