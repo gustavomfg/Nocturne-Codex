@@ -14,6 +14,7 @@ interface AppState {
 }
 
 const { activities: MAX_ACTIVITIES, activityDetailCharacters: MAX_ACTIVITY_DETAIL, streamCharacters: MAX_STREAM_SIZE } = RENDERER_LIMITS
+const MAX_CHANGED_FILES = 300
 
 export const useAppStore = create<AppState>((set) => ({
   conversations: [], activeId: null, messages: [], status: 'disconnected', finalizing: false, streaming: '', diff: '', activities: [], approvals: [], files: [], artifacts: [], suggestions: [], plan: [], planExplanation: '', error: null,
@@ -24,7 +25,7 @@ export const useAppStore = create<AppState>((set) => ({
   upsertActivity: (activity) => set((state) => ({ activities: [...state.activities.filter((item) => item.id !== activity.id), { ...activity, detail: activity.detail?.slice(-MAX_ACTIVITY_DETAIL) }].slice(-MAX_ACTIVITIES) })),
   addApproval: (approval) => set((state) => ({ approvals: [...state.approvals.filter((item) => item.key !== approval.key), approval] })),
   resolveApproval: (key, status) => set((state) => ({ approvals: state.approvals.map((item) => item.key === key ? { ...item, status } : item) })),
-  setFiles: (files) => set({ files }), addFiles: (files) => set((state) => ({ files: [...state.files.filter((old) => !files.some((item) => item.path === old.path)), ...files] })),
+  setFiles: (files) => set({ files: files.slice(-MAX_CHANGED_FILES) }), addFiles: (files) => set((state) => ({ files: [...state.files.filter((old) => !files.some((item) => item.path === old.path)), ...files].slice(-MAX_CHANGED_FILES) })),
   setArtifacts: (artifacts) => set({ artifacts }), setSuggestions: (suggestions) => set({ suggestions }), setPlan: (plan, planExplanation = '') => set({ plan, planExplanation }),
   setError: (error) => set({ error }),
 }))

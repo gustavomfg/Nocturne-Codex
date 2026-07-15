@@ -22,6 +22,17 @@ describe('persistência SQLite', () => {
     expect(db.getWorkspaceMemory(workspace).content).toBe('decisão')
     expect(db.listArtifacts(conversation.id)[0].type).toBe('markdown'); db.close()
   })
+  it('pagina históricos extensos do mais recente para o mais antigo', () => {
+    const db = create(); const conversation = db.createConversation('/tmp/history')
+    for (let index = 0; index < 205; index += 1) db.addMessage(conversation.id, 'user', `Mensagem ${index}`)
+    const latest = db.listMessagePage(conversation.id)
+    const middle = db.listMessagePage(conversation.id, 100)
+    const oldest = db.listMessagePage(conversation.id, 200)
+    expect(latest.items.map((message) => message.content)).toEqual(Array.from({ length: 100 }, (_, index) => `Mensagem ${index + 105}`))
+    expect(middle.items).toHaveLength(100); expect(middle.hasMore).toBe(true)
+    expect(oldest.items.map((message) => message.content)).toEqual(Array.from({ length: 5 }, (_, index) => `Mensagem ${index}`))
+    expect(oldest.hasMore).toBe(false); db.close()
+  })
   it('consulta conversa diretamente e cria snapshot consistente do estado anterior', async () => {
     const db = create(); const conversation = db.createConversation('/tmp/snapshot'); db.addMessage(conversation.id, 'user', 'Antes da restauração')
     expect(db.getConversation(conversation.id)).toMatchObject({ id: conversation.id, workspace: '/tmp/snapshot' })

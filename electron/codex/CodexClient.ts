@@ -105,7 +105,7 @@ export class CodexClient extends EventEmitter {
     this.eventCount = 0
     this.responseBytes = 0
     await this.resumeThread(threadId, workspace, settings)
-    this.setStatus('running')
+    this.setStatus('planning')
     const result = await this.call('turn/start', {
       threadId,
       cwd: workspace,
@@ -218,7 +218,8 @@ export class CodexClient extends EventEmitter {
         this.setStatus('waiting-approval')
         this.emit('event', { method: message.method, params: { ...params, approvalKey: itemId } } satisfies CodexEvent)
       } else {
-        if (message.method === 'turn/plan/updated' && this.status === 'running') this.setStatus('planning')
+        // Atualizações tardias do plano são conteúdo, não uma regressão da fase
+        // de execução. O primeiro item iniciado promove planning → running.
         if (message.method === 'item/started' && this.status === 'planning') this.setStatus('running')
         if (message.method === 'turn/completed') {
           const threadId = String(params.threadId ?? '')

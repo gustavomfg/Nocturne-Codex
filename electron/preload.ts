@@ -22,6 +22,7 @@ export const nocturneApi: NocturneApi = {
     list: () => ipcRenderer.invoke(channels.conversations.list),
     create: (workspace: string) => ipcRenderer.invoke(channels.conversations.create, workspace),
     messages: (id: string) => ipcRenderer.invoke(channels.conversations.messages, id),
+    messagePage: (id: string, offset = 0, limit = 100) => ipcRenderer.invoke(channels.conversations.messagePage, { id, offset, limit }),
     delete: (id: string) => ipcRenderer.invoke(channels.conversations.delete, id),
   },
   codex: {

@@ -1,4 +1,5 @@
-import { FormEvent, Fragment, lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { FormEvent, Fragment, lazy, Suspense, useEffect, useRef, useState, type MutableRefObject, type RefObject } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { AlertTriangle, ArrowDown, Brain, Check, ChevronRight, Code2, Folder, GitBranch, LoaderCircle, Menu, PanelRight, Settings, Terminal, X } from 'lucide-react'
 import { useAppStore } from './store'
 import type { Activity, AgentMode, Artifact, Attachment, ChangedFile, CodexEvent, CodexSettings, FilePreview, GitInfo, PlanStep, Suggestion, SuggestionStatus, Workspace, WorkspaceMemory } from './types'
@@ -34,8 +35,26 @@ const MemoryDialog = lazy(() => import('./domains/settings/Dialogs').then((modul
 const OnboardingDialog = lazy(() => import('./domains/settings/Dialogs').then((module) => ({ default: module.OnboardingDialog })))
 const PreviewDialog = lazy(() => import('./domains/settings/Dialogs').then((module) => ({ default: module.PreviewDialog })))
 
+function StreamingResponse({ chatScrollRef, stickToBottomRef, onNewContent }: { chatScrollRef: RefObject<HTMLElement>; stickToBottomRef: MutableRefObject<boolean>; onNewContent(value: boolean): void }) {
+  const streaming = useAppStore((state) => state.streaming)
+  useEffect(() => {
+    const scroller = chatScrollRef.current
+    if (!scroller || !streaming) return
+    if (stickToBottomRef.current) {
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'auto' })
+      onNewContent(false)
+    } else onNewContent(true)
+  }, [chatScrollRef, onNewContent, stickToBottomRef, streaming])
+  return streaming ? <AssistantMessage content={streaming} streaming/> : null
+}
+
 function App() {
-  const store = useAppStore()
+  const store = useAppStore(useShallow((state) => ({
+    conversations: state.conversations, activeId: state.activeId, messages: state.messages, status: state.status, finalizing: state.finalizing, approvals: state.approvals, error: state.error,
+    setConversations: state.setConversations, setActive: state.setActive, setMessages: state.setMessages, addMessage: state.addMessage, setStatus: state.setStatus, setFinalizing: state.setFinalizing,
+    clearRun: state.clearRun, setDiff: state.setDiff, upsertActivity: state.upsertActivity, addApproval: state.addApproval, resolveApproval: state.resolveApproval, setError: state.setError,
+    setFiles: state.setFiles, setArtifacts: state.setArtifacts, setSuggestions: state.setSuggestions, setPlan: state.setPlan,
+  })))
   const confirmation = useConfirmDialog()
   const [workspace, setWorkspace] = useState('')
   const [prompt, setPrompt] = useState('')
@@ -54,6 +73,8 @@ function App() {
   const [onboardingOpen, setOnboardingOpen] = useState(() => localStorage.getItem('nocturne.onboarding.completed') !== 'true')
   const [agentMode, setAgentMode] = useState<AgentMode>('review')
   const [newContent, setNewContent] = useState(false)
+  const [historyHasMore, setHistoryHasMore] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const chatScrollRef = useRef<HTMLElement>(null)
@@ -68,8 +89,8 @@ function App() {
   const activeTurnRef = useRef<ActiveTurnContext | null>(null)
   const applyingSuggestionRef = useRef<string | null>(null)
   const conversationRequestRef = useRef(0)
+  const historyOffsetRef = useRef(0)
   const active = store.conversations.find((item) => item.id === store.activeId)
-  const documentContent = store.streaming || [...store.messages].reverse().find((item) => item.role === 'assistant')?.content || ''
   const filtered = store.conversations.filter((item) => item.title.toLowerCase().includes(search.toLowerCase()) && (!workspace || item.workspace === workspace))
   const finishTurn = useTurnLifecycle({ flushStream, activeTurnRef, refreshGit })
   const interactionLocked = () => { const state = useAppStore.getState(); return isBusy(state.status) || state.finalizing }
@@ -124,10 +145,10 @@ function App() {
     const scroller = chatScrollRef.current
     if (!scroller) return
     if (stickToBottomRef.current) {
-      scroller.scrollTo({ top: scroller.scrollHeight, behavior: store.streaming || window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
       setNewContent(false)
-    } else if (store.streaming) setNewContent(true)
-  }, [store.messages, store.streaming])
+    }
+  }, [store.messages])
   useEffect(() => () => { if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current) }, [])
   useEffect(() => { document.documentElement.dataset.theme = settings.theme || 'dark' }, [settings.theme])
   useEffect(() => {
@@ -167,7 +188,7 @@ function App() {
     if (!selected) selected = await window.nocturne.workspace.select() ?? ''
     if (!selected) return
     const conversation = await window.nocturne.conversations.create(selected)
-    await refresh(); store.setActive(conversation.id); store.setMessages([]); store.clearRun(); setWorkspace(selected)
+    await refresh(); store.setActive(conversation.id); store.setMessages([]); store.clearRun(); historyOffsetRef.current = 0; setHistoryHasMore(false); setWorkspace(selected)
   }
 
   async function chooseSavedWorkspace(selected: string) {
@@ -183,9 +204,10 @@ function App() {
     const requestId = ++conversationRequestRef.current
     stickToBottomRef.current = true; setNewContent(false)
     store.setActive(id); store.clearRun()
-    const messages = await window.nocturne.conversations.messages(id)
+    const page = await window.nocturne.conversations.messagePage(id)
+    const messages = page.items
     if (requestId !== conversationRequestRef.current || useAppStore.getState().activeId !== id) return
-    store.setMessages(messages)
+    store.setMessages(messages); historyOffsetRef.current = messages.length; setHistoryHasMore(page.hasMore)
     const lastMetadata = [...messages].reverse().find((message) => message.metadata)?.metadata
     if (lastMetadata) restoreMetadata(lastMetadata)
     const conversation = conversations.find((item) => item.id === id)
@@ -211,6 +233,26 @@ function App() {
     setMemory(savedMemory)
     try { await window.nocturne.codex.resume(id) } catch (error) { store.setError(`Não foi possível restaurar a thread: ${errorMessage(error)}`) }
     void refreshGit(id)
+  }
+
+  async function loadOlderMessages() {
+    const conversationId = useAppStore.getState().activeId
+    if (!conversationId || historyLoading || !historyHasMore) return
+    const scroller = chatScrollRef.current
+    const previousHeight = scroller?.scrollHeight ?? 0
+    setHistoryLoading(true)
+    try {
+      const page = await window.nocturne.conversations.messagePage(conversationId, historyOffsetRef.current)
+      if (useAppStore.getState().activeId !== conversationId) return
+      const current = useAppStore.getState().messages
+      const known = new Set(current.map((message) => message.id))
+      const older = page.items.filter((message) => !known.has(message.id))
+      store.setMessages([...older, ...current])
+      historyOffsetRef.current += page.items.length
+      setHistoryHasMore(page.hasMore)
+      window.requestAnimationFrame(() => { if (scroller) scroller.scrollTop += scroller.scrollHeight - previousHeight })
+    } catch (error) { store.setError(errorMessage(error)) }
+    finally { if (useAppStore.getState().activeId === conversationId) setHistoryLoading(false) }
   }
 
   async function send(event: FormEvent) {
@@ -321,7 +363,7 @@ function App() {
     const conversation = store.conversations.find((item) => item.id === id)
     if (!await confirmation.confirm({ title: 'Excluir conversa?', description: `“${conversation?.title || 'Esta conversa'}” e seu histórico local serão removidos. Esta ação não pode ser desfeita.`, confirmLabel: 'Excluir conversa', danger: true })) return
     await window.nocturne.conversations.delete(id)
-    if (store.activeId === id) { store.setActive(null); store.setMessages([]); store.setArtifacts([]); setPreview(null) }
+    if (store.activeId === id) { store.setActive(null); store.setMessages([]); store.setArtifacts([]); historyOffsetRef.current = 0; setHistoryHasMore(false); setPreview(null) }
     await refresh()
   }
 
@@ -427,8 +469,9 @@ function App() {
 
       <section ref={chatScrollRef} className="chat-scroll" onScroll={handleChatScroll}>
         {!store.activeId && !store.messages.length ? <div className="chat-content welcome-content"><Welcome onNew={createConversation} onWorkspace={selectWorkspace} onPrompt={preparePrompt}/>{store.error && <div className="error-card" role="alert" aria-live="assertive"><X size={16}/><span>{store.error}</span><button onClick={() => store.setError(null)}>Fechar</button></div>}</div> : <div className="chat-content">
+          {historyHasMore && <button className="load-history" disabled={historyLoading} onClick={() => void loadOlderMessages()}>{historyLoading ? 'Carregando histórico…' : 'Carregar mensagens anteriores'}</button>}
           {store.messages.map((message, index) => <Fragment key={message.id}>{(index === 0 || dayKey(store.messages[index - 1].createdAt) !== dayKey(message.createdAt)) && <div className="date-divider"><span>{dayLabel(message.createdAt)}</span></div>}<MessageBubble message={message}/></Fragment>) }
-          {store.streaming && <AssistantMessage content={store.streaming} streaming/>}
+          <StreamingResponse chatScrollRef={chatScrollRef} stickToBottomRef={stickToBottomRef} onNewContent={setNewContent}/>
           {store.error && <div className="error-card" role="alert" aria-live="assertive"><X size={16}/><span>{store.error}</span><button onClick={() => store.setError(null)}>Fechar</button></div>}
           <div ref={endRef}/>
         </div>}
@@ -439,7 +482,7 @@ function App() {
     </main>
     {compactLayout && rightOpen && <button tabIndex={-1} className="panel-backdrop inspector-backdrop" aria-label="Fechar painel do agente" onClick={() => setInspectorVisibility(false)}/>}
 
-    <Suspense fallback={null}><AgentPanel open={rightOpen} compact={compactLayout} triggerRef={inspectorTriggerRef} activities={store.activities} approvals={store.approvals} diff={store.diff} files={store.files} artifacts={store.artifacts} suggestions={store.suggestions} plan={store.plan} planExplanation={store.planExplanation} activeId={store.activeId} gitInfo={gitInfo} documentContent={documentContent} onClose={() => setInspectorVisibility(false)} onDecide={decide} onError={store.setError} onNotify={notify} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onSuggestionStatus={updateSuggestion} onSuggestionApply={applySuggestion} onPlanChange={(plan) => store.setPlan(plan, store.planExplanation)} onPlanExecute={(plan) => preparePrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`, 'build')}/></Suspense>
+    <Suspense fallback={null}><AgentPanel open={rightOpen} compact={compactLayout} triggerRef={inspectorTriggerRef} gitInfo={gitInfo} onClose={() => setInspectorVisibility(false)} onDecide={decide} onError={store.setError} onNotify={notify} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onSuggestionStatus={updateSuggestion} onSuggestionApply={applySuggestion} onPlanChange={(plan) => store.setPlan(plan, useAppStore.getState().planExplanation)} onPlanExecute={(plan) => preparePrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`, 'build')}/></Suspense>
     <Suspense fallback={null}>{settingsOpen && <SettingsDialog
       value={settings}
       status={store.status}

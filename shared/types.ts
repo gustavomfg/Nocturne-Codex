@@ -7,6 +7,7 @@ export type Role = 'user' | 'assistant' | 'system'
 export interface Conversation { id: string; title: string; workspace: string; codexThreadId: string | null; createdAt: string; updatedAt: string }
 export interface Workspace { path: string; name: string; favorite: boolean; authorized: boolean; createdAt: string; lastOpenedAt: string }
 export interface Message { id: string; conversationId: string; role: Role; content: string; metadata: string | null; createdAt: string }
+export interface MessagePage { items: Message[]; hasMore: boolean }
 export interface Approval { key: string; kind: 'command' | 'file'; title: string; detail: string; status: 'pending' | 'accepted' | 'declined' }
 export interface Activity { id: string; type: 'command' | 'file' | 'reasoning' | 'read' | 'error' | 'completion'; label: string; detail?: string; status: 'running' | 'completed' | 'failed' }
 export interface ChangedFile { path: string; kind: 'created' | 'modified' | 'deleted'; status: string }
@@ -17,7 +18,7 @@ export interface ProjectContext { name: string; stack: string[]; primaryLanguage
 export interface WorkspaceMemory { content: string; rules: string; project?: ProjectContext; updatedAt: string }
 export interface PlanStep { step: string; status: 'pending' | 'inProgress' | 'completed' }
 export interface GitChangedFile { path: string; status: string; originalPath?: string }
-export interface GitInfo { branch: string; status: string; diff: string; diffTruncated?: boolean; files: GitChangedFile[] }
+export interface GitInfo { branch: string; status: string; diff: string; diffTruncated?: boolean; filesTruncated?: boolean; files: GitChangedFile[] }
 export interface CodexSettings { model: string; sandbox: 'read-only' | 'workspace-write'; approvalPolicy: 'untrusted' | 'on-request'; codexPath?: string; codexVersion?: string; codexCompatible?: boolean; codexCompatibilityMessage?: string; pandocVersion?: string; serverStatus?: CodexStatus; diagnosticMode?: boolean; authStatus?: string; authenticated?: boolean; theme?: 'dark'; defaultAgentMode?: AgentMode }
 export interface CodexDiagnostics { executable: string; version?: string; pid: number | null; state: CodexStatus; lastFailure: string | null; logsPath: string }
 export interface CodexEvent { method: string; params: Record<string, unknown> }

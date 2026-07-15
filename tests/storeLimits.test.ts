@@ -3,7 +3,7 @@ import { useAppStore } from '../src/store'
 import { PERSISTENCE_LIMITS } from '../shared/constants'
 import { exportDocumentSchema, saveAssistantSchema, saveMarkdownSchema } from '../shared/ipc/schemas'
 
-beforeEach(() => useAppStore.setState({ streaming: '', activities: [] }))
+beforeEach(() => useAppStore.setState({ streaming: '', activities: [], files: [] }))
 
 describe('limites de estabilidade do renderer', () => {
   it('limita o buffer acumulado da resposta', () => {
@@ -16,6 +16,12 @@ describe('limites de estabilidade do renderer', () => {
     expect(activities).toHaveLength(300)
     expect(activities[0].id).toBe('50')
     expect(activities[activities.length - 1]?.detail).toHaveLength(64_000)
+  })
+  it('mantém somente os arquivos alterados mais recentes', () => {
+    useAppStore.getState().addFiles(Array.from({ length: 350 }, (_, index) => ({ path: `src/file-${index}.ts`, kind: 'modified' as const, status: 'M' })))
+    const files = useAppStore.getState().files
+    expect(files).toHaveLength(300)
+    expect(files[0].path).toBe('src/file-50.ts')
   })
 })
 

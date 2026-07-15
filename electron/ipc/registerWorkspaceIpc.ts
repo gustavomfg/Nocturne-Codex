@@ -34,11 +34,19 @@ export function registerWorkspaceIpc(win: BrowserWindow, database: LocalDatabase
     if (!fs.existsSync(workspace)) throw new Error('Workspace não encontrado.')
     if (data.tool === 'editor') { try { await dependencies.run('code', [workspace], workspace) } catch { throw new Error('Não foi possível abrir o VS Code. Verifique se o comando “code” está no PATH.') } return }
     const terminal = process.platform === 'win32' ? ['cmd', ['/K', 'cd', '/d', workspace]] as const : process.platform === 'darwin' ? ['open', ['-a', 'Terminal', workspace]] as const : ['x-terminal-emulator', ['--working-directory', workspace]] as const
-    const child = spawn(terminal[0], [...terminal[1]], { cwd: workspace, detached: true, stdio: 'ignore' }); child.unref()
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(terminal[0], [...terminal[1]], { cwd: workspace, detached: true, stdio: 'ignore' })
+      child.once('error', () => reject(new Error('Não foi possível abrir o terminal. Instale ou configure o terminal padrão do sistema.')))
+      child.once('spawn', () => { child.unref(); resolve() })
+    })
   })
   ipcMain.handle('conversations:list', () => database.listConversations())
   ipcMain.handle('conversations:create', (_event, value: unknown) => { const workspace = dependencies.assertKnownWorkspace(z.string().min(1).parse(value)); dependencies.ensureWorkspace(workspace); return database.createConversation(workspace) })
   ipcMain.handle('conversations:messages', (_event, value: unknown) => database.listMessages(idSchema.parse(value)))
+  ipcMain.handle('conversations:messagePage', (_event, value: unknown) => {
+    const data = z.object({ id: idSchema, offset: z.number().int().min(0).max(1_000_000), limit: z.number().int().min(1).max(200) }).strict().parse(value)
+    return database.listMessagePage(data.id, data.offset, data.limit)
+  })
   ipcMain.handle('conversations:delete', (_event, value: unknown) => database.deleteConversation(idSchema.parse(value)))
   return () => ipcMain.dispose()
 }

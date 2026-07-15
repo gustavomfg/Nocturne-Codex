@@ -49,7 +49,13 @@
 - pushes no `master` recebem validação de fonte, enquanto o contrato real do Codex passa a ser verificado semanalmente e após mudanças de compatibilidade;
 - estilos de Agent e Settings são extraídos por domínio, com ordem canônica, restrições transversais próprias e auditoria automatizada;
 - configurações estabilizam a geometria de navegação e controles durante hover, foco e clique, eliminando flick e variações de scrollbar;
-- suíte ampliada para 65 testes unitários e de integração e 20 cenários determinísticos de renderer.
+- aceleração gráfica volta a ser o caminho padrão, com fallback de software explícito para drivers incompatíveis;
+- streaming deixa de renderizar Markdown e de redesenhar a aplicação inteira a cada delta; histórico e inspetor passam a atualizar em fronteiras isoladas;
+- diffs, atividades, arquivos alterados e listas Git extensas usam renderização sob demanda e limites visíveis para preservar a responsividade;
+- SQLite recebe timeout de concorrência, modo síncrono apropriado ao WAL, verificação de integridade semanal e otimização segura no encerramento;
+- falhas ao abrir terminal são capturadas sem derrubar o processo principal, e estados do agente deixam de produzir transições tardias inválidas;
+- históricos extensos carregam as 100 mensagens mais recentes primeiro e preservam a posição de leitura ao buscar páginas anteriores;
+- suíte ampliada para 67 testes unitários e de integração e 21 cenários determinísticos de renderer, incluindo paginação e estresse de streaming e diff.
 
 ### Known Issues
 

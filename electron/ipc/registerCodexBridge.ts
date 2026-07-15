@@ -18,7 +18,11 @@ export function registerCodexBridge(win: BrowserWindow, codex: CodexClient, logg
   }
   const onStatus = (status: unknown) => push('codex:status', status)
   const onLog = (entry: unknown) => logger.debug('codex', 'Saída do App Server', entry)
-  const onDiagnostic = (entry: unknown) => logger.warn('codex', 'Diagnóstico do agente', entry)
+  const onDiagnostic = (entry: unknown) => {
+    const level = entry && typeof entry === 'object' ? (entry as { level?: unknown }).level : undefined
+    if (level === 'warn' || level === 'error') logger.warn('codex', 'Diagnóstico do agente', entry)
+    else logger.info('codex', 'Diagnóstico do agente', entry)
+  }
   codex.on('event', onEvent)
   codex.on('status', onStatus)
   codex.on('log', onLog)

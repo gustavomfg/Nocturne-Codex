@@ -99,6 +99,25 @@ test.describe('renderer do produto', () => {
     await expect(page.locator('.composer')).toBeVisible()
   })
 
+  test('mantém streaming e diffs extensos com DOM limitado', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await ready(page)
+    await page.evaluate(() => {
+      const bridge = (window as unknown as { __nocturneTest: { emitEvent(payload: unknown): void } }).__nocturneTest
+      bridge.emitEvent({ method: 'item/agentMessage/delta', params: { delta: '# Resposta em andamento\n' + 'texto '.repeat(20_000) } })
+      bridge.emitEvent({ method: 'turn/diff/updated', params: { diff: '+linha alterada\n'.repeat(30_000) } })
+    })
+    await expect(page.locator('.streaming-response')).toHaveCount(1)
+    await expect(page.locator('.streaming-response').locator('h1')).toHaveCount(0)
+    const proposed = page.getByText('Alterações propostas', { exact: true })
+    await expect(proposed).toBeVisible()
+    await expect(page.locator('.diff-panel')).toHaveCount(0)
+    await proposed.click()
+    await expect(page.locator('.diff-panel pre')).toHaveCount(1)
+    expect(await page.locator('.diff-panel pre').textContent()).toHaveLength(300_000)
+    await expect(page.locator('.diff-panel pre span')).toHaveCount(0)
+  })
+
   test('protege configurações editadas e fecha o diálogo com Escape', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await ready(page)

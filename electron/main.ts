@@ -8,7 +8,8 @@ import { registerIpc } from './ipc/registerIpc'
 import { Logger } from './logging/Logger'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-app.disableHardwareAcceleration()
+const softwareRendering = process.env.NOCTURNE_DISABLE_GPU === '1' || process.argv.includes('--disable-gpu')
+if (softwareRendering) app.disableHardwareAcceleration()
 process.env.APP_ROOT = path.join(__dirname, '..')
 process.env.NOCTURNE_APP_RUNNING = '1'
 export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
@@ -57,7 +58,7 @@ function createWindow() {
     if (!allowed) event.preventDefault()
   })
 
-  logger.info('app', 'Janela principal iniciada', { packaged: app.isPackaged })
+  logger.info('app', 'Janela principal iniciada', { packaged: app.isPackaged, renderer: softwareRendering ? 'software' : 'hardware' })
   disposeIpc = registerIpc(currentWindow, database, codex, logger)
   if (app.isPackaged && process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT) {
     const output = path.resolve(process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT)

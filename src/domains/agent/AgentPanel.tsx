@@ -1,19 +1,26 @@
 import { useEffect, useState, type KeyboardEvent, type RefObject } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { Activity as ActivityIcon, Check, Command, ExternalLink, Eye, FileCode2, FileDown, FolderOpen, GitBranch, ListChecks, LoaderCircle, PackageOpen, ShieldCheck, Sparkles, Trash2, X } from 'lucide-react'
-import type { Activity, Approval, Artifact, ChangedFile, GitInfo, PlanStep, Suggestion, SuggestionStatus } from '../../types'
+import type { Activity, Approval, Artifact, GitInfo, PlanStep, Suggestion, SuggestionStatus } from '../../types'
+import { useAppStore } from '../../store'
 import { errorMessage, relativeTime } from '../../shared/format'
 import { SuggestionsPanel } from '../suggestions/SuggestionsPanel'
 import { GitPanel } from '../git/GitPanel'
 import { useOffCanvasPanel } from '../../shared/useOffCanvasPanel'
 
 interface AgentPanelProps {
-  open: boolean; compact: boolean; triggerRef: RefObject<HTMLElement>; activities: Activity[]; approvals: Approval[]; diff: string; files: ChangedFile[]; artifacts: Artifact[]; suggestions: Suggestion[]; plan: PlanStep[]; planExplanation: string; activeId: string | null; gitInfo: GitInfo | null; documentContent: string;
+  open: boolean; compact: boolean; triggerRef: RefObject<HTMLElement>; gitInfo: GitInfo | null;
   onClose(): void; onDecide(key: string, accepted: boolean): void; onError(value: string): void; onNotify(value: string): void; onGitRefresh(): void; onArtifactsRefresh(): void; onPreview(filePath: string): void; onArtifact(artifact: Artifact): void; onDeleteArtifact(id: string): void; onSuggestionStatus(suggestion: Suggestion, status: SuggestionStatus): void; onSuggestionApply(suggestion: Suggestion): void; onPlanChange(plan: PlanStep[]): void; onPlanExecute(plan: PlanStep[]): void
 }
 
 const tabs = ['activity', 'plan', 'suggestions', 'artifacts'] as const
 
-export function AgentPanel({ open: isOpen, compact, triggerRef, activities, approvals, diff, files, artifacts, suggestions, plan, planExplanation, activeId, gitInfo, documentContent, onClose, onDecide, onError, onNotify, onGitRefresh, onArtifactsRefresh, onPreview, onArtifact, onDeleteArtifact, onSuggestionStatus, onSuggestionApply, onPlanChange, onPlanExecute }: AgentPanelProps) {
+export function AgentPanel({ open: isOpen, compact, triggerRef, gitInfo, onClose, onDecide, onError, onNotify, onGitRefresh, onArtifactsRefresh, onPreview, onArtifact, onDeleteArtifact, onSuggestionStatus, onSuggestionApply, onPlanChange, onPlanExecute }: AgentPanelProps) {
+  const { activities, approvals, diff, files, artifacts, suggestions, plan, planExplanation, activeId, documentContent } = useAppStore(useShallow((state) => ({
+    activities: state.activities, approvals: state.approvals, diff: state.diff, files: state.files, artifacts: state.artifacts, suggestions: state.suggestions,
+    plan: state.plan, planExplanation: state.planExplanation, activeId: state.activeId,
+    documentContent: [...state.messages].reverse().find((message) => message.role === 'assistant')?.content || '',
+  })))
   const [tab, setTab] = useState<'activity' | 'plan' | 'suggestions' | 'artifacts'>('activity')
   const [exporting, setExporting] = useState<string | null>(null)
   const inspectorRef = useOffCanvasPanel<HTMLElement>({ open: isOpen, modal: compact, onClose, triggerRef })
@@ -42,8 +49,8 @@ export function AgentPanel({ open: isOpen, compact, triggerRef, activities, appr
       {tab === 'activity' && <div id="agent-panel-activity" aria-labelledby="agent-tab-activity" className="tab-panel activity-panel" role="tabpanel">
         {(pendingApprovals.length > 0 || currentActivity) && <div className="activity-priority">{currentActivity && <div className={`current-operation ${currentActivity.status}`} role="status" aria-live="polite"><span>{currentActivity.status === 'running' ? <LoaderCircle size={15}/> : currentActivity.status === 'failed' ? <X size={15}/> : <Check size={15}/>}</span><div><small>Estado atual</small><strong>{currentActivity.label}</strong></div></div>}{pendingApprovals.length > 0 && <section aria-labelledby="pending-approvals-title"><h3 id="pending-approvals-title">Decisões pendentes <span>{pendingApprovals.length}</span></h3>{pendingApprovals.map((approval) => <ApprovalCard key={approval.key} approval={approval} onDecide={onDecide}/>)}</section>}</div>}
         <ActivityTimeline activities={activities}/>
-        {!!files.length && <details className="activity-section" open><summary><FileCode2 size={14}/>Arquivos alterados <span>{files.length}</span></summary><div className="files-panel">{files.map((file) => <div className="changed-file" key={file.path}><span className={`file-kind ${file.kind}`}>{file.kind[0].toUpperCase()}</span><button aria-label={`Visualizar ${file.path}`} onClick={() => onPreview(file.path)}>{file.path.split(/[/\\]/).pop()}</button><button aria-label={`Visualizar ${file.path}`} title="Visualizar" onClick={() => onPreview(file.path)}><Eye size={12}/></button><button aria-label={`Abrir ${file.path} no editor`} title="Abrir no editor" onClick={() => void open(file.path, 'editor')}><ExternalLink size={12}/></button><button aria-label={`Mostrar ${file.path} na pasta`} title="Mostrar na pasta" onClick={() => void open(file.path, 'folder')}><FolderOpen size={12}/></button></div>)}</div></details>}
-        {diff && <details className="activity-section"><summary><FileCode2 size={14}/>Alterações propostas</summary><div className="diff-panel"><pre>{diff.split('\n').map((line, index) => <span key={index} className={line.startsWith('+') ? 'added' : line.startsWith('-') ? 'removed' : ''}>{line}{'\n'}</span>)}</pre></div></details>}
+        {!!files.length && <details className="activity-section" open><summary><FileCode2 size={14}/>Arquivos alterados <span>{files.length}</span></summary><div className="files-panel">{files.slice(-300).map((file) => <div className="changed-file" key={file.path}><span className={`file-kind ${file.kind}`}>{file.kind[0].toUpperCase()}</span><button aria-label={`Visualizar ${file.path}`} onClick={() => onPreview(file.path)}>{file.path.split(/[/\\]/).pop()}</button><button aria-label={`Visualizar ${file.path}`} title="Visualizar" onClick={() => onPreview(file.path)}><Eye size={12}/></button><button aria-label={`Abrir ${file.path} no editor`} title="Abrir no editor" onClick={() => void open(file.path, 'editor')}><ExternalLink size={12}/></button><button aria-label={`Mostrar ${file.path} na pasta`} title="Mostrar na pasta" onClick={() => void open(file.path, 'folder')}><FolderOpen size={12}/></button></div>)}</div></details>}
+        {diff && <DiffSection diff={diff}/>}
         {gitInfo && <details className="activity-section"><summary><GitBranch size={14}/>Git e commit</summary><GitPanel activeId={activeId} gitInfo={gitInfo} onRefresh={onGitRefresh} onError={onError} onNotify={onNotify}/></details>}
         <details className="activity-section"><summary><FileDown size={14}/>Exportar resposta</summary><div className="document-panel"><div className="export-actions"><button disabled={Boolean(exporting)} aria-label="Exportar resposta em Markdown" onClick={() => void exportDocument('md')}>{exporting === 'md' ? '…' : 'MD'}</button><button disabled={Boolean(exporting)} aria-label="Exportar resposta em HTML" onClick={() => void exportDocument('html')}>{exporting === 'html' ? '…' : 'HTML'}</button><button disabled={Boolean(exporting)} aria-label="Exportar resposta em DOCX" onClick={() => void exportDocument('docx')}>{exporting === 'docx' ? '…' : 'DOCX'}</button><button disabled={Boolean(exporting)} aria-label="Exportar resposta em PDF" onClick={() => void exportDocument('pdf')}>{exporting === 'pdf' ? '…' : 'PDF'}</button></div></div></details>
         {!!resolvedApprovals.length && <details className="activity-section"><summary><ShieldCheck size={14}/>Histórico de decisões <span>{resolvedApprovals.length}</span></summary>{resolvedApprovals.map((approval) => <ApprovalCard key={approval.key} approval={approval} onDecide={onDecide}/>)}</details>}
@@ -69,7 +76,15 @@ function PlanPanel({ plan, explanation, onChange, onExecute }: { plan: PlanStep[
 
 function ActivityTimeline({ activities }: { activities: Activity[] }) {
   const [details, setDetails] = useState(false)
-  return <><div className="activity-detail-toggle"><button onClick={() => setDetails(!details)}>{details ? 'Ocultar detalhes técnicos' : 'Ver detalhes técnicos'}</button></div><div className="timeline">{activities.map((item) => <div className="timeline-item" key={item.id}><span className={`timeline-dot ${item.status}`}>{item.status === 'running' ? <LoaderCircle size={13}/> : item.type === 'command' ? <Command size={12}/> : item.type === 'file' ? <FileCode2 size={12}/> : <Sparkles size={12}/>}</span><div><strong>{item.label}</strong>{details && item.detail && <pre>{item.detail.slice(0, 1400)}</pre>}</div></div>)}</div></>
+  const visible = activities.slice(-120)
+  return <><div className="activity-detail-toggle"><button onClick={() => setDetails(!details)}>{details ? 'Ocultar detalhes técnicos' : 'Ver detalhes técnicos'}</button></div>{activities.length > visible.length && <small className="activity-limit-note">Mostrando as {visible.length} atividades mais recentes.</small>}<div className="timeline">{visible.map((item) => <div className="timeline-item" key={item.id}><span className={`timeline-dot ${item.status}`}>{item.status === 'running' ? <LoaderCircle size={13}/> : item.type === 'command' ? <Command size={12}/> : item.type === 'file' ? <FileCode2 size={12}/> : <Sparkles size={12}/>}</span><div><strong>{item.label}</strong>{details && item.detail && <pre>{item.detail.slice(0, 1400)}</pre>}</div></div>)}</div></>
+}
+
+function DiffSection({ diff }: { diff: string }) {
+  const [open, setOpen] = useState(false)
+  const limit = 300_000
+  const truncated = diff.length > limit
+  return <details className="activity-section" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}><summary><FileCode2 size={14}/>Alterações propostas</summary>{open && <div className="diff-panel">{truncated && <small>Diff extenso: exibindo os {limit.toLocaleString('pt-BR')} caracteres mais recentes.</small>}<pre>{truncated ? diff.slice(-limit) : diff}</pre></div>}</details>
 }
 
 function ArtifactsPanel({ artifacts, onOpen, onDelete }: { artifacts: Artifact[]; onOpen(artifact: Artifact): void; onDelete(id: string): void }) {

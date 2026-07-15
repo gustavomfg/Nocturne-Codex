@@ -1,13 +1,16 @@
 import { useRef, type MutableRefObject } from 'react'
 import type { AgentMode } from '../../types'
 import { useAppStore } from '../../store'
+import { useShallow } from 'zustand/react/shallow'
 
 export interface ActiveTurnContext { conversationId: string; mode: AgentMode; suggestionId: string | null }
 
 export function useTurnLifecycle({ flushStream, activeTurnRef, refreshGit }: { flushStream(): void; activeTurnRef: MutableRefObject<ActiveTurnContext | null>; refreshGit(conversationId: string): void }) {
   const processingTurnsRef = useRef(new Set<string>())
   const persistedTurnsRef = useRef(new Set<string>())
-  const store = useAppStore()
+  const store = useAppStore(useShallow((state) => ({
+    setFinalizing: state.setFinalizing, setError: state.setError, upsertActivity: state.upsertActivity, setSuggestions: state.setSuggestions, addMessage: state.addMessage, setArtifacts: state.setArtifacts,
+  })))
 
   return async (params: Record<string, unknown>) => {
     flushStream()

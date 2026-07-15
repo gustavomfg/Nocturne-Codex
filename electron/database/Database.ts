@@ -45,13 +45,15 @@ export class LocalDatabase {
     this.db = new Database(this.databasePath)
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('foreign_keys = ON')
-    const integrity = this.db.pragma('quick_check', { simple: true }) as string
-    if (integrity !== 'ok') throw new Error(`Banco de dados corrompido (${integrity}). Preserve o arquivo e restaure um backup.`)
+    this.db.pragma('busy_timeout = 5000')
+    this.db.pragma('synchronous = NORMAL')
+    this.db.pragma('temp_store = MEMORY')
     const schemaVersion = this.db.pragma('user_version', { simple: true }) as number
     if (schemaVersion < 5 && fs.existsSync(this.databasePath)) {
       fs.copyFileSync(this.databasePath, `${this.databasePath}.backup-${Date.now()}`)
     }
     migrateDatabase(this.db, schemaVersion)
+    this.runScheduledIntegrityCheck()
     this.cleanupOrphans()
   }
 
@@ -113,7 +115,7 @@ export class LocalDatabase {
   setWorkspaceFavorite(workspace: string, favorite: boolean) { this.db.prepare('UPDATE workspaces SET favorite=? WHERE path=?').run(favorite ? 1 : 0, workspace) }
 
   getSettings(): Record<string, string> {
-    const rows = this.db.prepare('SELECT key,value FROM settings').all() as Array<{ key: string; value: string }>
+    const rows = this.db.prepare("SELECT key,value FROM settings WHERE key NOT LIKE 'maintenance.%'").all() as Array<{ key: string; value: string }>
     const settings = Object.fromEntries(rows.map((row) => [row.key, row.value]))
     if (settings.approvalPolicy !== 'untrusted') settings.approvalPolicy = 'on-request'
     settings.theme = 'dark'
@@ -212,6 +214,16 @@ export class LocalDatabase {
     this.db.exec(`DELETE FROM messages WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM artifacts WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM suggestions WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM suggestion_decisions WHERE suggestion_id NOT IN (SELECT id FROM suggestions);`)
   }
 
+  private runScheduledIntegrityCheck() {
+    const key = 'maintenance.lastQuickCheck'
+    const row = this.db.prepare('SELECT value FROM settings WHERE key=?').get(key) as { value: string } | undefined
+    const lastCheck = Date.parse(row?.value ?? '')
+    if (Number.isFinite(lastCheck) && Date.now() - lastCheck < 7 * 24 * 60 * 60 * 1_000) return
+    const integrity = this.db.pragma('quick_check', { simple: true }) as string
+    if (integrity !== 'ok') throw new Error(`Banco de dados corrompido (${integrity}). Preserve o arquivo e restaure um backup.`)
+    this.db.prepare(`INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(key, new Date().toISOString())
+  }
+
   renameFromPrompt(id: string, prompt: string) {
     const title = prompt.replace(/\s+/g, ' ').trim().slice(0, 52) || 'Nova conversa'
     this.db.prepare('UPDATE conversations SET title=?, updated_at=? WHERE id=?').run(title, new Date().toISOString(), id)
@@ -221,7 +233,13 @@ export class LocalDatabase {
 
   listMessages(conversationId: string): MessageRow[] {
     return this.db.prepare(`SELECT id, conversation_id conversationId, role, content, metadata,
-      created_at createdAt FROM messages WHERE conversation_id=? ORDER BY created_at`).all(conversationId) as MessageRow[]
+      created_at createdAt FROM messages WHERE conversation_id=? ORDER BY created_at, rowid`).all(conversationId) as MessageRow[]
+  }
+
+  listMessagePage(conversationId: string, offset = 0, limit = 100) {
+    const rows = this.db.prepare(`SELECT id, conversation_id conversationId, role, content, metadata, created_at createdAt
+      FROM messages WHERE conversation_id=? ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?`).all(conversationId, limit + 1, offset) as MessageRow[]
+    return { items: rows.slice(0, limit).reverse(), hasMore: rows.length > limit }
   }
 
   addMessage(conversationId: string, role: MessageRow['role'], content: string, metadata?: unknown) {
@@ -232,5 +250,10 @@ export class LocalDatabase {
     return row
   }
 
-  close() { this.db.close() }
+  close() {
+    if (!this.db.open) return
+    this.db.pragma('optimize')
+    this.db.pragma('wal_checkpoint(PASSIVE)')
+    this.db.close()
+  }
 }

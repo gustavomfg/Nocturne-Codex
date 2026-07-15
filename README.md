@@ -231,6 +231,14 @@ chmod +x Nocturne.Codex-Linux-0.7.0-beta.AppImage
 
 A `.tar.gz` archive is also produced for the Beta release.
 
+Hardware acceleration is enabled by default for smooth scrolling, dialogs, and panel transitions. If a Linux graphics driver renders a blank or corrupted window, start the application once with the software-rendering fallback:
+
+```bash
+NOCTURNE_DISABLE_GPU=1 ./Nocturne.Codex-Linux-0.7.0-beta.AppImage
+```
+
+This fallback is intended for driver troubleshooting; keeping hardware acceleration enabled provides the best interface performance on supported systems.
+
 ---
 
 ## Development

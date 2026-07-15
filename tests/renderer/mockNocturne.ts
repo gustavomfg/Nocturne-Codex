@@ -22,6 +22,10 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
           { id: 'message-1', conversationId: conversation.id, role: 'user', content: 'Deixe a experiência mais fluida e previsível.', metadata: null, createdAt: now },
           { id: 'message-2', conversationId: conversation.id, role: 'assistant', content: 'A interface foi analisada. Os fluxos prioritários estão organizados e prontos para validação.', metadata: null, createdAt: now },
         ],
+        messagePage: async () => ({ items: empty ? [] : [
+          { id: 'message-1', conversationId: conversation.id, role: 'user', content: 'Deixe a experiência mais fluida e previsível.', metadata: null, createdAt: now },
+          { id: 'message-2', conversationId: conversation.id, role: 'assistant', content: 'A interface foi analisada. Os fluxos prioritários estão organizados e prontos para validação.', metadata: null, createdAt: now },
+        ], hasMore: false }),
         delete: noop,
       },
       codex: {
