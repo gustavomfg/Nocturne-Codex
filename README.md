@@ -201,7 +201,7 @@ Review [docs/security.md](docs/security.md) and [SECURITY.md](SECURITY.md) befor
 
 - Linux x64 for the currently packaged Beta builds;
 - Codex CLI installed and authenticated;
-- Codex CLI 0.144.0 or newer with `app-server --stdio` (verified version: 0.144.1);
+- Codex CLI 0.144.0 or newer with `app-server --stdio` (verified versions: 0.144.1 and 0.144.5);
 - Git for repository status, diff, and commit workflows;
 - Pandoc only if HTML, DOCX, or PDF export is required.
 

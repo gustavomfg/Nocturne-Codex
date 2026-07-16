@@ -8,10 +8,13 @@ const executable = process.env.CODEX_PATH || 'codex'
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-codex-contract-'))
 const reportPath = path.resolve(process.env.CODEX_SMOKE_REPORT || 'test-results/codex-contract-smoke.json')
 const compatibility = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'shared/codex-compatibility.json'), 'utf8'))
-const report = { ok: false, version: '', verifiedVersion: false, initialize: false, configRead: false, threadStart: false, turnStart: false, interrupt: false, approvalsObserved: 0, approvalsDeclined: 0, notifications: 0 }
+const report = { ok: false, version: '', verifiedVersion: false, initialize: false, configRead: false, threadStart: false, turnStart: false, turnCompleted: false, agentResponse: false, interrupt: false, approvalsObserved: 0, approvalsDeclined: 0, notifications: 0 }
 let child
 let nextId = 1
 const pending = new Map()
+const turnWaiters = new Map()
+const itemWaiters = new Map()
+let responseText = ''
 
 try {
   report.version = execFileSync(executable, ['--version'], { encoding: 'utf8', timeout: 5_000 }).trim().slice(0, 100)
@@ -34,11 +37,24 @@ try {
   const threadId = created?.thread?.id
   if (!threadId) throw new Error('thread/start não retornou um identificador.')
   report.threadStart = true
+  const completion = waitForTurnCompletion(threadId)
   const started = await call('turn/start', { threadId, cwd: root, runtimeWorkspaceRoots: [root], approvalPolicy: 'on-request', approvalsReviewer: 'user', sandboxPolicy: { type: 'readOnly', networkAccess: false }, input: [{ type: 'text', text: 'Responda apenas READY. Não use ferramentas.', text_elements: [] }] })
   const turnId = started?.turn?.id
   if (!turnId) throw new Error('turn/start não retornou um identificador.')
   report.turnStart = true
-  await call('turn/interrupt', { threadId, turnId })
+  await completion
+  report.turnCompleted = true
+  report.agentResponse = /\bREADY\b/i.test(responseText)
+  if (!report.agentResponse) throw new Error('O turno concluiu sem a resposta de contrato esperada.')
+  const interruptThread = await call('thread/start', { cwd: root, runtimeWorkspaceRoots: [root], approvalPolicy: 'on-request', approvalsReviewer: 'user', sandbox: 'read-only', ephemeral: true })
+  const interruptThreadId = interruptThread?.thread?.id
+  if (!interruptThreadId) throw new Error('A thread de cancelamento não retornou um identificador.')
+  const itemStarted = waitForItemStarted(interruptThreadId)
+  const interruptible = await call('turn/start', { threadId: interruptThreadId, cwd: root, runtimeWorkspaceRoots: [root], approvalPolicy: 'on-request', approvalsReviewer: 'user', sandboxPolicy: { type: 'readOnly', networkAccess: false }, input: [{ type: 'text', text: 'Use a ferramenta de terminal para executar exatamente: sleep 30', text_elements: [] }] })
+  const interruptibleTurnId = interruptible?.turn?.id
+  if (!interruptibleTurnId) throw new Error('O segundo turn/start não retornou um identificador.')
+  await itemStarted
+  await call('turn/interrupt', { threadId: interruptThreadId, turnId: interruptibleTurnId })
   report.interrupt = true
   report.ok = true
 } finally {
@@ -56,7 +72,7 @@ function call(method, params) {
   const id = nextId++
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => { pending.delete(id); reject(new Error(`Tempo esgotado em ${method}.`)) }, 60_000)
-    pending.set(id, { resolve, reject, timer })
+    pending.set(id, { resolve, reject, timer, method })
     child.stdin.write(`${JSON.stringify({ id, method, params })}\n`)
   })
 }
@@ -73,12 +89,31 @@ function handleLine(line) {
     if (!request) return
     clearTimeout(request.timer)
     pending.delete(message.id)
-    if (message.error) request.reject(new Error(`Método recusado pelo App Server: ${message.error.code ?? 'erro'}`))
+    if (message.error) request.reject(new Error(`${request.method} recusado pelo App Server: ${message.error.code ?? 'erro'}`))
     else request.resolve(message.result)
     return
   }
   if (!message?.method) return
   report.notifications += 1
+  if (message.method === 'item/agentMessage/delta') responseText = `${responseText}${String(message.params?.delta ?? '')}`.slice(-10_000)
+  if (message.method === 'turn/completed') {
+    const threadId = String(message.params?.threadId ?? '')
+    const waiter = turnWaiters.get(threadId)
+    if (waiter) {
+      clearTimeout(waiter.timer)
+      turnWaiters.delete(threadId)
+      waiter.resolve()
+    }
+  }
+  if (message.method === 'item/started') {
+    const threadId = String(message.params?.threadId ?? '')
+    const waiter = itemWaiters.get(threadId)
+    if (waiter) {
+      clearTimeout(waiter.timer)
+      itemWaiters.delete(threadId)
+      waiter.resolve()
+    }
+  }
   if ('id' in message && new Set(['item/commandExecution/requestApproval', 'item/fileChange/requestApproval', 'item/tool/requestUserInput']).has(message.method)) {
     report.approvalsObserved += 1
     child.stdin.write(`${JSON.stringify({ id: message.id, result: { decision: 'decline' } })}\n`)
@@ -91,4 +126,22 @@ function handleLine(line) {
 function rejectPending(message) {
   for (const request of pending.values()) { clearTimeout(request.timer); request.reject(new Error(message)) }
   pending.clear()
+  for (const waiter of turnWaiters.values()) { clearTimeout(waiter.timer); waiter.reject(new Error(message)) }
+  turnWaiters.clear()
+  for (const waiter of itemWaiters.values()) { clearTimeout(waiter.timer); waiter.reject(new Error(message)) }
+  itemWaiters.clear()
+}
+
+function waitForTurnCompletion(threadId) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { turnWaiters.delete(threadId); reject(new Error('Tempo esgotado aguardando turn/completed.')) }, 60_000)
+    turnWaiters.set(threadId, { resolve, reject, timer })
+  })
+}
+
+function waitForItemStarted(threadId) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { itemWaiters.delete(threadId); reject(new Error('Tempo esgotado aguardando item/started para o cancelamento.')) }, 60_000)
+    itemWaiters.set(threadId, { resolve, reject, timer })
+  })
 }

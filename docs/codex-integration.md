@@ -3,7 +3,7 @@
 ## Matriz de compatibilidade
 
 - Versão mínima: Codex CLI `0.144.0`.
-- Versões verificadas: `0.144.1`.
+- Versões verificadas: `0.144.1` e `0.144.5`.
 - Requisito de protocolo: suporte a `app-server --stdio` e à API experimental utilizada pelos fluxos `initialize`, `thread/*`, `turn/*` e aprovações.
 
 O onboarding valida a versão instalada antes de indicar que a integração está pronta. Versões mais novas podem funcionar, mas entram como compatíveis ainda não verificadas até passarem pelo smoke de contrato.
