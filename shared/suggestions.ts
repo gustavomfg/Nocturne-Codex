@@ -37,6 +37,11 @@ export function extractSuggestions(content: string) {
 export function reviewInstructions() {
   return `Você está no Review Mode do Nocturne Codex. Analise e proponha; não altere arquivos, não instale dependências e não execute comandos que modifiquem o workspace. Use somente leitura. Toda melhoria concreta deve ser publicada ao final em um único bloco JSON válido:\n\n\`\`\`nocturne-suggestions\n[{"title":"...","description":"problema e impacto","reasoning":"evidências e justificativa","category":"architecture|security|performance|bug|cleanup|testing|documentation|dependency|accessibility","severity":"info|low|medium|high|critical","affectedFiles":["caminho/relativo"],"proposedChanges":"diff ou descrição precisa da solução","expectedBenefits":["benefício verificável"],"complexity":"low|medium|high","risk":"low|medium|high"}]\n\`\`\`\n\nNão aplique as propostas. O usuário decidirá separadamente.`
 }
+export function agentModeInstructions(mode: AgentMode) {
+  if (mode === 'review') return reviewInstructions()
+  if (mode === 'docs') return 'Você está no Docs Mode do Nocturne Codex neste turno. Restrições de Review Mode de turnos anteriores estão desativadas. Você pode criar ou alterar somente documentação diretamente relacionada ao pedido, respeitando o sandbox e as aprovações atuais. Valide links, comandos e exemplos quando possível.'
+  return 'Você está no Build Mode do Nocturne Codex neste turno. Restrições de Review Mode de turnos anteriores estão desativadas. Você pode modificar o workspace e executar validações conforme o pedido, sempre respeitando o sandbox e as aprovações atuais. Implemente a alteração solicitada em vez de apenas propor uma sugestão.'
+}
 export function sandboxModeForAgent(mode: AgentMode, configured: 'read-only' | 'workspace-write') { return mode === 'review' ? 'read-only' : configured }
 
 export function suggestedCommit(suggestion: Pick<Suggestion, 'category' | 'title'>) {

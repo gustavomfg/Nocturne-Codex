@@ -154,6 +154,33 @@ describe('CodexClient', () => {
     await expect(nextTurn).resolves.toMatchObject({ turn: { id: 'turn-2' } })
   })
 
+  it('sobrescreve as restrições de Review ao trocar para Build na mesma thread', async () => {
+    const { client, process } = await readyClient()
+    await createThread(client, process)
+
+    const reviewTurn = client.sendTurn('thread-1', '/workspace', 'Revise o projeto', { sandbox: 'workspace-write' }, [], '', 'review')
+    await waitForRequest(process, 'turn/start')
+    const reviewRequest = process.pendingRequest('turn/start')
+    expect(reviewRequest?.params).toMatchObject({
+      sandboxPolicy: { type: 'readOnly' },
+      additionalContext: { 'nocturne.review-mode': { value: expect.stringContaining('Review Mode') } },
+    })
+    process.respond('turn/start', { turn: { id: 'turn-review' } })
+    await reviewTurn
+    process.emit('message', { method: 'turn/completed', params: { threadId: 'thread-1' } })
+
+    const buildTurn = client.sendTurn('thread-1', '/workspace', 'Aplique a alteração', { sandbox: 'workspace-write' }, [], '', 'build')
+    await waitForRequest(process, 'turn/start')
+    const buildRequest = process.pendingRequest('turn/start')
+    expect(buildRequest?.params).toMatchObject({
+      sandboxPolicy: { type: 'workspaceWrite' },
+      additionalContext: { 'nocturne.review-mode': { value: expect.stringContaining('Restrições de Review Mode de turnos anteriores estão desativadas') } },
+    })
+    expect(JSON.stringify(buildRequest?.params)).toContain('Implemente a alteração solicitada')
+    process.respond('turn/start', { turn: { id: 'turn-build' } })
+    await buildTurn
+  })
+
   it('rejeita pendências na queda e reconecta com backoff', async () => {
     vi.useFakeTimers()
     const { client, process } = await readyClient()

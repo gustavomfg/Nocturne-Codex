@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { CodexProcess } from './CodexProcess'
 import type { CodexEvent, CodexStatus, RpcId, RpcMessage, RpcResponse } from './protocol'
 import { AgentStateMachine } from '../../shared/agentState'
-import { reviewInstructions, sandboxModeForAgent, type AgentMode } from '../../shared/suggestions'
+import { agentModeInstructions, sandboxModeForAgent, type AgentMode } from '../../shared/suggestions'
 import packageMetadata from '../../package.json'
 
 const APPROVAL_METHODS = new Set(['item/commandExecution/requestApproval', 'item/fileChange/requestApproval'])
@@ -116,8 +116,8 @@ export class CodexClient extends EventEmitter {
       sandboxPolicy: toSandboxPolicy(sandboxModeForAgent(mode, settings.sandbox === 'read-only' ? 'read-only' : 'workspace-write'), workspace),
       additionalContext: {
         ...(memory ? { 'nocturne.workspace-memory': { value: workspaceMemoryInstructions(memory), kind: 'application' } } : {}),
-        ...(mode === 'review' ? { 'nocturne.review-mode': { value: reviewInstructions(), kind: 'application' } } : {}),
-        ...(mode === 'docs' ? { 'nocturne.docs-mode': { value: 'Priorize documentação clara e verificável. Só altere arquivos de documentação diretamente relacionados ao pedido.', kind: 'application' } } : {}),
+        // A chave legada é sobrescrita em todo turno para liberar threads que antes estavam em Review.
+        'nocturne.review-mode': { value: agentModeInstructions(mode), kind: 'application' },
       },
       input: [
         { type: 'text', text: prompt, text_elements: [] },
