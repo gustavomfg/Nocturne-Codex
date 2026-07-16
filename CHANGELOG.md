@@ -61,6 +61,7 @@
 - atualizações passam a consultar GitHub Releases somente no aplicativo empacotado, exigem consentimento antes do download e preservam metadados de update por plataforma no pipeline.
 - o gate estável passa a exigir uma tag coerente, agregar e verificar os artefatos assinados das três plataformas e só então publicar ou atualizar o GitHub Release.
 - a troca de Review para Build na mesma conversa agora substitui explicitamente as restrições do turno anterior, permitindo aplicar alterações sem recriar a thread.
+- a topbar passa a responder à largura real do painel central e mantém o acionador do inspector fora da barra lateral durante conversas roláveis.
 
 ### Known Issues
 

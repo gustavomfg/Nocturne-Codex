@@ -105,6 +105,31 @@ test.describe('renderer do produto', () => {
     await expect(page.locator('.composer')).toBeVisible()
   })
 
+  test('mantém o acionador do inspector fora do painel quando a conversa passa a rolar', async ({ page }) => {
+    await page.setViewportSize({ width: 1000, height: 760 })
+    await ready(page)
+    const trigger = page.getByRole('button', { name: 'Ocultar painel do agente' })
+    const inspector = page.locator('#agent-inspector')
+    await expect(inspector).toHaveClass(/open/)
+    await page.waitForTimeout(300)
+    const before = await trigger.boundingBox()
+
+    await page.evaluate(() => {
+      const bridge = (window as unknown as { __nocturneTest: { emitEvent(payload: unknown): void; emitStatus(payload: unknown): void } }).__nocturneTest
+      bridge.emitStatus({ status: 'waiting-approval' })
+      bridge.emitEvent({ method: 'item/agentMessage/delta', params: { delta: 'Conteúdo em andamento.\n'.repeat(2_000) } })
+    })
+
+    await expect.poll(() => page.locator('.chat-scroll').evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
+    await expect(page.getByRole('button', { name: /Codex:/ })).toHaveCSS('width', '32px')
+    const [after, inspectorBox] = await Promise.all([trigger.boundingBox(), inspector.boundingBox()])
+    expect(before).not.toBeNull()
+    expect(after).not.toBeNull()
+    expect(inspectorBox).not.toBeNull()
+    expect(Math.abs((after?.x ?? 0) - (before?.x ?? 0))).toBeLessThan(1)
+    expect((after?.x ?? 0) + (after?.width ?? 0)).toBeLessThan(inspectorBox?.x ?? 0)
+  })
+
   test('mantém streaming e diffs extensos com DOM limitado', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await ready(page)

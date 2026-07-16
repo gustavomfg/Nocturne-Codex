@@ -324,6 +324,35 @@
 
 .main-panel {
   background: radial-gradient(circle at 50% 4%, #36274c38 0, transparent 31%), var(--color-canvas);
+  container-type: inline-size;
+}
+
+@container (width <= 520px) {
+  .top-actions {
+    flex: none;
+  }
+
+  .top-actions .top-action-branch, .top-actions .top-action-workspace {
+    display: none;
+  }
+
+  .connection {
+    width: var(--control-sm);
+    min-width: var(--control-sm);
+    max-width: var(--control-sm);
+    height: var(--control-sm);
+    min-height: var(--control-sm);
+    padding: 0;
+    justify-content: center;
+    align-self: center;
+    gap: 0;
+    overflow: hidden;
+    font-size: 0;
+  }
+
+  .connection > span {
+    flex: 0 0 7px;
+  }
 }
 
 .composer-wrap {
