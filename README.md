@@ -229,7 +229,7 @@ chmod +x Nocturne.Codex-Linux-0.8.0-beta.AppImage
 ./Nocturne.Codex-Linux-0.8.0-beta.AppImage
 ```
 
-A `.tar.gz` archive is also produced for Linux. Windows uses the NSIS setup and macOS uses the signed DMG; the macOS ZIP is published for automatic updates.
+A `.tar.gz` archive is also produced for Linux. Windows uses the NSIS setup and macOS uses a DMG; the macOS ZIP is published for automatic updates. Beta artifacts are unsigned previews and may trigger operating-system warnings. Stable releases require Authenticode, Developer ID, and notarization.
 
 Hardware acceleration is enabled by default for smooth scrolling, dialogs, and panel transitions. If a Linux graphics driver renders a blank or corrupted window, start the application once with the software-rendering fallback:
 
