@@ -5,10 +5,9 @@ import type { Logger } from '../logging/Logger'
 const CHECK_DELAY_MS = 15_000
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1_000
 
-export function startUpdateService(logger: Logger, getWindow: () => BrowserWindow | null): () => void {
+export function startUpdateService(logger: Logger, getWindow: () => BrowserWindow | null, updater: AppUpdater = getAutoUpdater()): () => void {
   if (!app.isPackaged || process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT) return () => undefined
 
-  const updater = getAutoUpdater()
   updater.autoDownload = false
   updater.autoInstallOnAppQuit = true
   updater.logger = {
@@ -18,8 +17,21 @@ export function startUpdateService(logger: Logger, getWindow: () => BrowserWindo
     error: (message) => logger.error('update', String(message)),
   }
 
-  const check = () => updater.checkForUpdates().catch((error) => logger.warn('update', 'Não foi possível consultar atualizações.', error))
+  let disposed = false
+  let checking = false
+  let promptingDownload = false
+  let downloadRequested = false
+  let promptingInstall = false
+  const check = () => {
+    if (disposed || checking) return
+    checking = true
+    void updater.checkForUpdates()
+      .catch((error) => logger.warn('update', 'Não foi possível consultar atualizações.', error))
+      .finally(() => { checking = false })
+  }
   const onAvailable = (info: UpdateInfo) => {
+    if (disposed || promptingDownload || downloadRequested) return
+    promptingDownload = true
     void showMessage(getWindow(), {
       type: 'info',
       title: 'Atualização disponível',
@@ -30,12 +42,19 @@ export function startUpdateService(logger: Logger, getWindow: () => BrowserWindo
       cancelId: 1,
       noLink: true,
     }).then(({ response }) => {
-      if (response === 0) return updater.downloadUpdate()
-      return undefined
+      if (disposed || response !== 0) return undefined
+      downloadRequested = true
+      return updater.downloadUpdate().catch((error) => {
+        downloadRequested = false
+        logger.warn('update', 'Não foi possível baixar a atualização.', error)
+      })
     }).catch((error) => logger.warn('update', 'Não foi possível iniciar o download da atualização.', error))
+      .finally(() => { promptingDownload = false })
   }
   const onProgress = (progress: ProgressInfo) => logger.debug('update', 'Download da atualização em andamento.', { percent: Math.round(progress.percent) })
   const onDownloaded = (info: UpdateInfo) => {
+    if (disposed || promptingInstall) return
+    promptingInstall = true
     void showMessage(getWindow(), {
       type: 'info',
       title: 'Atualização pronta',
@@ -45,8 +64,9 @@ export function startUpdateService(logger: Logger, getWindow: () => BrowserWindo
       defaultId: 0,
       cancelId: 1,
       noLink: true,
-    }).then(({ response }) => { if (response === 0) updater.quitAndInstall() })
+    }).then(({ response }) => { if (!disposed && response === 0) updater.quitAndInstall() })
       .catch((error) => logger.warn('update', 'Não foi possível exibir a confirmação da atualização.', error))
+      .finally(() => { promptingInstall = false })
   }
   const onError = (error: Error) => logger.warn('update', 'Falha no serviço de atualização.', error)
 
@@ -58,6 +78,7 @@ export function startUpdateService(logger: Logger, getWindow: () => BrowserWindo
   const recurringCheck = setInterval(check, CHECK_INTERVAL_MS)
 
   return () => {
+    disposed = true
     clearTimeout(initialCheck)
     clearInterval(recurringCheck)
     updater.removeListener('update-available', onAvailable)
