@@ -203,7 +203,7 @@ export class LocalDatabase {
         const signature = `${table}:${keys.join(',')}`
         let statement = statements.get(signature)
         if (!statement) {
-          statement = this.db.prepare(`INSERT OR IGNORE INTO ${table} (${keys.join(',')}) VALUES (${keys.map((key) => `@${key}`).join(',')})`)
+          statement = this.db.prepare(`INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map((key) => `@${key}`).join(',')})`)
           statements.set(signature, statement)
         }
         statement.run(row)

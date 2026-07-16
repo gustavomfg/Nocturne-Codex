@@ -31,6 +31,10 @@ describe('schema de backup', () => {
     expect(() => backupSchema.parse({ ...data, messages: [message] })).toThrow(/Conversa referenciada não existe/)
     expect(() => backupSchema.parse({ ...data, conversations: [{ ...conversation, workspace: '/tmp/unknown' }] })).toThrow(/Workspace referenciado não existe/)
   })
+  it('rejeita identificadores duplicados antes da restauração', () => {
+    const data = valid()
+    expect(() => backupSchema.parse({ ...data, conversations: [conversation, conversation] })).toThrow(/duplicados/)
+  })
 
   it('rejeita UUIDs, enums e JSON serializado inválidos', () => {
     const data = valid()

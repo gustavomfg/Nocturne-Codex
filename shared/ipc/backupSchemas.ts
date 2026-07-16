@@ -22,6 +22,16 @@ export const backupSchema = z.object({ schemaVersion: z.number().int().min(1).ma
   const conversations = new Set(data.conversations.map((item) => item.id))
   const workspaces = new Set(data.workspaces.map((item) => item.path))
   const suggestions = new Set(data.suggestions.map((item) => item.id))
+  const uniqueCollections = [
+    ['workspaces', data.workspaces.map((item) => item.path)],
+    ['conversations', data.conversations.map((item) => item.id)],
+    ['messages', data.messages.map((item) => item.id)],
+    ['artifacts', data.artifacts.map((item) => item.id)],
+    ['memories', data.memories.map((item) => item.workspace)],
+    ['suggestions', data.suggestions.map((item) => item.id)],
+    ['suggestionDecisions', data.suggestionDecisions.map((item) => item.id)],
+  ] as const
+  for (const [collection, values] of uniqueCollections) if (new Set(values).size !== values.length) context.addIssue({ code: 'custom', path: [collection], message: 'O backup contém identificadores duplicados.' })
   for (const [index, item] of data.conversations.entries()) if (!workspaces.has(item.workspace)) context.addIssue({ code: 'custom', path: ['conversations', index, 'workspace'], message: 'Workspace referenciado não existe no backup.' })
   for (const [index, item] of data.messages.entries()) if (!conversations.has(item.conversation_id)) context.addIssue({ code: 'custom', path: ['messages', index, 'conversation_id'], message: 'Conversa referenciada não existe no backup.' })
   for (const [index, item] of data.artifacts.entries()) { if (!conversations.has(item.conversation_id)) context.addIssue({ code: 'custom', path: ['artifacts', index, 'conversation_id'], message: 'Conversa referenciada não existe no backup.' }); if (!workspaces.has(item.workspace)) context.addIssue({ code: 'custom', path: ['artifacts', index, 'workspace'], message: 'Workspace referenciado não existe no backup.' }) }

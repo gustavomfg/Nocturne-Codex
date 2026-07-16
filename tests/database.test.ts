@@ -83,6 +83,32 @@ describe('persistência SQLite', () => {
     expect(indexes.map((item) => item.name)).toEqual(expect.arrayContaining(['idx_conversations_updated', 'idx_workspaces_recent', 'idx_artifacts_file', 'idx_suggestion_decisions_suggestion']))
     sqlite.close()
   })
+  it('migra o banco real da linha 0.7 sem perder conversas', () => {
+    const db = create(); const conversation = db.createConversation('/tmp/from-0.7'); db.addMessage(conversation.id, 'user', 'Preservar'); db.close()
+    const directory = directories[directories.length - 1]
+    const file = path.join(directory, 'nocturne.db')
+    const previous = new Sqlite(file)
+    previous.exec('DROP INDEX idx_conversations_updated; DROP INDEX idx_workspaces_recent; DROP INDEX idx_artifacts_file; DROP INDEX idx_suggestion_decisions_suggestion; PRAGMA user_version = 6;')
+    previous.close()
+    const migrated = new LocalDatabase(directory)
+    expect(migrated.listMessages(conversation.id)[0].content).toBe('Preservar')
+    migrated.close()
+    const verified = new Sqlite(file, { readonly: true })
+    expect(verified.pragma('user_version', { simple: true })).toBe(7)
+    verified.close()
+  })
+  it('reverte integralmente uma restauração inválida', () => {
+    const db = create(); const existing = db.createConversation('/tmp/existing'); db.addMessage(existing.id, 'user', 'Estado anterior')
+    const now = new Date().toISOString()
+    expect(() => db.importData({
+      workspaces: [{ path: '/tmp/import', name: 'import', favorite: 0, authorized: 0, created_at: now, last_opened_at: now }],
+      conversations: [{ id: '00000000-0000-4000-8000-000000000001', workspace: '/tmp/import', created_at: now, updated_at: now }],
+      messages: [], artifacts: [], memories: [], suggestions: [], suggestionDecisions: [],
+    })).toThrow()
+    expect(db.listConversations().map((item) => item.id)).toContain(existing.id)
+    expect(db.listMessages(existing.id)[0].content).toBe('Estado anterior')
+    db.close()
+  })
   it('atualiza um snapshot v4 adicionando somente as colunas da v5', () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-test-')); directories.push(directory)
     const file = path.join(directory, 'nocturne.db'); const legacy = new Sqlite(file)
