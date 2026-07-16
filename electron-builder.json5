@@ -3,6 +3,8 @@
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   "appId": "com.nocturne.codex",
   "asar": true,
+  "compression": "maximum",
+  "electronLanguages": ["en-US", "pt-BR"],
   "electronFuses": {
     "runAsNode": false,
     "enableNodeOptionsEnvironmentVariable": false,

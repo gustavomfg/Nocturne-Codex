@@ -13,6 +13,11 @@ describe('políticas de execução', () => {
     expect(builder).toMatch(/"runAsNode": false/)
     expect(builder).toMatch(/"onlyLoadAppFromAsar": true/)
   })
+  it('mantém apenas os locales suportados e usa compressão de release', () => {
+    const builder = fs.readFileSync(path.join(process.cwd(), 'electron-builder.json5'), 'utf8')
+    expect(builder).toContain('"compression": "maximum"')
+    expect(builder).toContain('"electronLanguages": ["en-US", "pt-BR"]')
+  })
   it('gera metadados de atualização pelo GitHub sem consultar o serviço em desenvolvimento', () => {
     const builder = fs.readFileSync(path.join(process.cwd(), 'electron-builder.json5'), 'utf8')
     const updater = fs.readFileSync(path.join(process.cwd(), 'electron/updates/UpdateService.ts'), 'utf8')

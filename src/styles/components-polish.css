@@ -753,9 +753,17 @@
   scroll-behavior: smooth;
 }
 
-.timeline-item, .artifact-card, .suggestion-card {
+.timeline-item, .artifact-card, .suggestion-card, .assistant-row, .user-row {
   content-visibility: auto;
   contain-intrinsic-size: auto 52px;
+}
+
+.assistant-row {
+  contain-intrinsic-size: auto 180px;
+}
+
+.user-row {
+  contain-intrinsic-size: auto 88px;
 }
 
 .assistant-row {
