@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.8.0 — 2026-07-16
+
+### Estabilidade e compatibilidade
+
+- Codex CLI `0.144.5` homologado com initialize, configuração, thread efêmera, resposta real e cancelamento durante atividade;
+- troca natural entre Build, Review e Docs preservada na mesma conversa, sem herdar restrições do modo anterior;
+- atualizador protegido contra consultas, diálogos, downloads e instalações duplicadas, com retry após falha e cleanup determinístico;
+- restaurações inválidas agora revertem integralmente, rejeitam identificadores duplicados e preservam o banco anterior;
+- migração SQLite 6 → 7 testada com dados da linha 0.7 e novos índices para navegação e relacionamentos;
+- contexto do workspace usa I/O assíncrono, gravações atômicas e permissões restritas.
+
+### Performance e distribuição
+
+- importação de backups reutiliza statements preparados e possui orçamento automatizado com 25 mil mensagens;
+- mensagens fora da viewport usam renderização sob demanda nativa do navegador;
+- pacote conserva somente locales `pt-BR` e `en-US`, reduzindo em aproximadamente 45 MB a instalação Linux descompactada;
+- Vite atualizado para `8.1.5` e rebuild nativo alinhado ao fluxo oficial do electron-builder;
+- release estável repete toda a suíte, valida workflows, exige smoke do Codex do mesmo commit e testa cada pacote assinado antes da publicação.
+
+### Qualidade
+
+- 80 testes unitários e de integração;
+- 23 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints;
+- typecheck, ESLint, design system, build de produção, pacote Linux real e audit npm sem vulnerabilidades aprovados.
+
+### Limitações conhecidas
+
+- a interface App Server permanece experimental e novas versões do Codex CLI precisam de homologação explícita;
+- exportações DOCX e PDF dependem de uma instalação local do Pandoc;
+- a publicação estável depende das identidades externas de assinatura Apple, Windows e GPG configuradas no ambiente protegido.
+
 ## 0.7.0-beta — 2026-07-14
 
 ### Produto e experiência

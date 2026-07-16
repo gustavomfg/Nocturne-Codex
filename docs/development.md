@@ -10,7 +10,7 @@ Use Node.js 24.18 ou superior dentro da linha Node 24 LTS, com npm 11. A faixa s
 
 ```bash
 npm ci
-npm rebuild better-sqlite3
+npm run rebuild:native
 npm run typecheck
 npm run lint
 npm test

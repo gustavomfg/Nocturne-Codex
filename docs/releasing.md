@@ -2,8 +2,8 @@
 
 ## Plataformas
 
-- Linux x64 é a plataforma oficialmente suportada durante a Beta.
-- Windows x64 e macOS são construídos e submetidos ao smoke test, mas permanecem experimentais até haver validação manual e assinatura próprias de cada plataforma.
+- Linux x64, Windows x64 e macOS possuem artefatos próprios. Uma release estável só é promovida depois de empacotamento, smoke, assinatura e verificação nas três plataformas.
+- Linux x64 continua sendo a plataforma de validação manual primária; suporte de uma plataforma não deve ser anunciado se seu job assinado não tiver passado para a tag publicada.
 
 ## Validação automatizada
 

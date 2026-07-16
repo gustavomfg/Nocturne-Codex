@@ -4,7 +4,7 @@
 
 Nocturne Codex is a local desktop engineering workspace for working with the Codex CLI and App Server. It brings project context, persistent conversations, agent activity, review, planning, approvals, artifacts, and Git awareness into one place—without moving engineering decisions away from the developer.
 
-The project is currently available as **v0.7.0-beta** for Linux x64 and remains under active development.
+The current release target is **v0.8.0**, promoted only through the signed, cross-platform release gate.
 
 > Nocturne Codex is an independent open source project. It is not an official OpenAI product and is not affiliated with OpenAI.
 
@@ -199,7 +199,7 @@ Review [docs/security.md](docs/security.md) and [SECURITY.md](SECURITY.md) befor
 
 ### Requirements
 
-- Linux x64 for the currently packaged Beta builds;
+- Linux x64, Windows x64, or macOS for the packaged v0.8.0 builds;
 - Codex CLI installed and authenticated;
 - Codex CLI 0.144.0 or newer with `app-server --stdio` (verified versions: 0.144.1 and 0.144.5);
 - Git for repository status, diff, and commit workflows;
@@ -222,19 +222,19 @@ Nocturne Codex starts and supervises the App Server automatically. It does not b
 
 ### Linux AppImage
 
-Download the AppImage from the [v0.7.0-beta release](https://github.com/gustavomfg/Nocturne-Codex/releases/tag/v0.7.0-beta), then:
+Download the AppImage from the [v0.8.0 release](https://github.com/gustavomfg/Nocturne-Codex/releases/tag/v0.8.0), then:
 
 ```bash
-chmod +x Nocturne.Codex-Linux-0.7.0-beta.AppImage
-./Nocturne.Codex-Linux-0.7.0-beta.AppImage
+chmod +x Nocturne.Codex-Linux-0.8.0.AppImage
+./Nocturne.Codex-Linux-0.8.0.AppImage
 ```
 
-A `.tar.gz` archive is also produced for the Beta release.
+A `.tar.gz` archive is also produced for Linux. Windows uses the NSIS setup and macOS uses the signed DMG; the macOS ZIP is published for automatic updates.
 
 Hardware acceleration is enabled by default for smooth scrolling, dialogs, and panel transitions. If a Linux graphics driver renders a blank or corrupted window, start the application once with the software-rendering fallback:
 
 ```bash
-NOCTURNE_DISABLE_GPU=1 ./Nocturne.Codex-Linux-0.7.0-beta.AppImage
+NOCTURNE_DISABLE_GPU=1 ./Nocturne.Codex-Linux-0.8.0.AppImage
 ```
 
 This fallback is intended for driver troubleshooting; keeping hardware acceleration enabled provides the best interface performance on supported systems.
@@ -267,7 +267,7 @@ npm run test        # unit and integration tests using Electron's Node runtime
 npm run test:watch  # watch mode with the same native ABI
 npm run test:renderer # browser interaction and visual regression tests
 npm run build       # renderer, main, and preload production builds
-npm run package     # Linux AppImage and tar.gz
+npm run package     # package the current operating system target
 npm run smoke:package          # packaged runtime, preload, SQLite, sandbox, and permissions
 npm run smoke:codex            # opt-in contract smoke against an authenticated real Codex CLI
 npm run verify:signatures      # require platform signatures/notarization for stable artifacts
@@ -313,13 +313,13 @@ The roadmap is deliberately subordinate to stability. Multi-agent execution, plu
 
 ## Status
 
-**Beta — active development.**
+**v0.8.0 — stability release.**
 
-The core local workflow is implemented and packaged for Linux x64, but the project still relies on an experimental App Server interface. Packages are not yet signed. Packaged builds can check GitHub Releases for updates and ask before downloading; this requires each release to publish its platform package and generated `latest*.yml` metadata together. Compatibility may change with future Codex CLI releases.
+The core local workflow is implemented for Linux, Windows, and macOS. Stable publication requires signed packages, notarization on macOS, a successful real Codex contract smoke for the exact release commit, and the generated `latest*.yml` metadata used by consent-based updates. The App Server interface remains experimental, so compatibility is maintained through an explicit verified-version matrix.
 
 Project Health is an explained estimate derived from open suggestions, not a formal security or quality audit. AI suggestions can be incomplete or wrong and must be reviewed like any other proposed engineering change.
 
-Known issues and release changes are tracked in [CHANGELOG.md](CHANGELOG.md). The complete notes for this build are available in [docs/releases/v0.7.0-beta.md](docs/releases/v0.7.0-beta.md).
+Known issues and release changes are tracked in [CHANGELOG.md](CHANGELOG.md). The complete notes for this build are available in [docs/releases/v0.8.0.md](docs/releases/v0.8.0.md).
 
 ---
 
