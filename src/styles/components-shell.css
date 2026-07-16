@@ -261,8 +261,13 @@ button {
 
 .top-actions {
   align-items: center;
+  flex: 0 0 auto;
   margin-left: auto;
   display: flex;
+}
+
+.top-actions > * {
+  flex: 0 0 auto;
 }
 
 .connection {

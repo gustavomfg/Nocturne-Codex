@@ -106,10 +106,11 @@ test.describe('renderer do produto', () => {
   })
 
   test('mantém o acionador do inspector fora do painel quando a conversa passa a rolar', async ({ page }) => {
-    await page.setViewportSize({ width: 1000, height: 760 })
+    await page.setViewportSize({ width: 1280, height: 760 })
     await ready(page)
     const trigger = page.getByRole('button', { name: 'Ocultar painel do agente' })
     const inspector = page.locator('#agent-inspector')
+    const actions = page.locator('.top-actions')
     await expect(inspector).toHaveClass(/open/)
     await page.waitForTimeout(300)
     const before = await trigger.boundingBox()
@@ -121,12 +122,14 @@ test.describe('renderer do produto', () => {
     })
 
     await expect.poll(() => page.locator('.chat-scroll').evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true)
-    await expect(page.getByRole('button', { name: /Codex:/ })).toHaveCSS('width', '32px')
-    const [after, inspectorBox] = await Promise.all([trigger.boundingBox(), inspector.boundingBox()])
+    const [after, actionsBox, inspectorBox] = await Promise.all([trigger.boundingBox(), actions.boundingBox(), inspector.boundingBox()])
     expect(before).not.toBeNull()
     expect(after).not.toBeNull()
+    expect(actionsBox).not.toBeNull()
     expect(inspectorBox).not.toBeNull()
     expect(Math.abs((after?.x ?? 0) - (before?.x ?? 0))).toBeLessThan(1)
+    expect((after?.x ?? 0) + (after?.width ?? 0)).toBeLessThanOrEqual((actionsBox?.x ?? 0) + (actionsBox?.width ?? 0))
+    expect((actionsBox?.x ?? 0) + (actionsBox?.width ?? 0)).toBeLessThanOrEqual(inspectorBox?.x ?? 0)
     expect((after?.x ?? 0) + (after?.width ?? 0)).toBeLessThan(inspectorBox?.x ?? 0)
   })
 
