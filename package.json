@@ -1,7 +1,7 @@
 {
   "name": "nocturne-codex",
   "private": true,
-  "version": "0.8.0",
+  "version": "0.8.0-beta",
   "description": "Cliente desktop local e independente para desenvolvimento assistido pelo Codex CLI.",
   "desktopName": "Nocturne Codex",
   "license": "MIT",

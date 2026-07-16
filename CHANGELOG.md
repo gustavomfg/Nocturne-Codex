@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.8.0 — 2026-07-16
+## 0.8.0-beta — 2026-07-16
 
 ### Estabilidade e compatibilidade
 

@@ -4,7 +4,7 @@
 
 Nocturne Codex is a local desktop engineering workspace for working with the Codex CLI and App Server. It brings project context, persistent conversations, agent activity, review, planning, approvals, artifacts, and Git awareness into one place—without moving engineering decisions away from the developer.
 
-The current release target is **v0.8.0**, promoted only through the signed, cross-platform release gate.
+The current release target is **v0.8.0-beta**, a cross-platform preview that is not promoted as a stable release.
 
 > Nocturne Codex is an independent open source project. It is not an official OpenAI product and is not affiliated with OpenAI.
 
@@ -199,7 +199,7 @@ Review [docs/security.md](docs/security.md) and [SECURITY.md](SECURITY.md) befor
 
 ### Requirements
 
-- Linux x64, Windows x64, or macOS for the packaged v0.8.0 builds;
+- Linux x64, Windows x64, or macOS for the packaged v0.8.0-beta builds;
 - Codex CLI installed and authenticated;
 - Codex CLI 0.144.0 or newer with `app-server --stdio` (verified versions: 0.144.1 and 0.144.5);
 - Git for repository status, diff, and commit workflows;
@@ -222,11 +222,11 @@ Nocturne Codex starts and supervises the App Server automatically. It does not b
 
 ### Linux AppImage
 
-Download the AppImage from the [v0.8.0 release](https://github.com/gustavomfg/Nocturne-Codex/releases/tag/v0.8.0), then:
+Download the AppImage from the [v0.8.0-beta release](https://github.com/gustavomfg/Nocturne-Codex/releases/tag/v0.8.0-beta), then:
 
 ```bash
-chmod +x Nocturne.Codex-Linux-0.8.0.AppImage
-./Nocturne.Codex-Linux-0.8.0.AppImage
+chmod +x Nocturne.Codex-Linux-0.8.0-beta.AppImage
+./Nocturne.Codex-Linux-0.8.0-beta.AppImage
 ```
 
 A `.tar.gz` archive is also produced for Linux. Windows uses the NSIS setup and macOS uses the signed DMG; the macOS ZIP is published for automatic updates.
@@ -234,7 +234,7 @@ A `.tar.gz` archive is also produced for Linux. Windows uses the NSIS setup and 
 Hardware acceleration is enabled by default for smooth scrolling, dialogs, and panel transitions. If a Linux graphics driver renders a blank or corrupted window, start the application once with the software-rendering fallback:
 
 ```bash
-NOCTURNE_DISABLE_GPU=1 ./Nocturne.Codex-Linux-0.8.0.AppImage
+NOCTURNE_DISABLE_GPU=1 ./Nocturne.Codex-Linux-0.8.0-beta.AppImage
 ```
 
 This fallback is intended for driver troubleshooting; keeping hardware acceleration enabled provides the best interface performance on supported systems.
@@ -313,13 +313,13 @@ The roadmap is deliberately subordinate to stability. Multi-agent execution, plu
 
 ## Status
 
-**v0.8.0 — stability release.**
+**v0.8.0-beta — stability preview.**
 
-The core local workflow is implemented for Linux, Windows, and macOS. Stable publication requires signed packages, notarization on macOS, a successful real Codex contract smoke for the exact release commit, and the generated `latest*.yml` metadata used by consent-based updates. The App Server interface remains experimental, so compatibility is maintained through an explicit verified-version matrix.
+The core local workflow is implemented for Linux, Windows, and macOS. This beta is intended for product validation and is not presented as a stable release. A future stable publication requires signed packages, notarization on macOS, a successful real Codex contract smoke for the exact release commit, and the generated `latest*.yml` metadata used by consent-based updates. The App Server interface remains experimental, so compatibility is maintained through an explicit verified-version matrix.
 
 Project Health is an explained estimate derived from open suggestions, not a formal security or quality audit. AI suggestions can be incomplete or wrong and must be reviewed like any other proposed engineering change.
 
-Known issues and release changes are tracked in [CHANGELOG.md](CHANGELOG.md). The complete notes for this build are available in [docs/releases/v0.8.0.md](docs/releases/v0.8.0.md).
+Known issues and release changes are tracked in [CHANGELOG.md](CHANGELOG.md). The complete notes for this build are available in [docs/releases/v0.8.0-beta.md](docs/releases/v0.8.0-beta.md).
 
 ---
 
