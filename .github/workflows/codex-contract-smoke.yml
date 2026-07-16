@@ -14,7 +14,7 @@ on:
 
 concurrency:
   group: codex-contract-smoke
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read

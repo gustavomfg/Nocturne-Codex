@@ -7,13 +7,56 @@ on:
         description: Existing stable tag to build and publish (for example v1.0.0)
         required: true
         type: string
+      codex_smoke_run_id:
+        description: Successful Codex contract smoke run ID for the exact release commit
+        required: true
+        type: string
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  source-gate:
+    name: Verify release source and Codex contract
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      CODEX_SMOKE_RUN_ID: ${{ inputs.codex_smoke_run_id }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release_tag }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - name: Require a stable version and matching tag
+        shell: bash
+        run: |
+          node -e "const v=require('./package.json').version;const tag=process.env.RELEASE_TAG;if(v.includes('-'))throw new Error('Stable signing requires a version without a prerelease suffix: '+v);if(tag !== 'v'+v)throw new Error('Tag '+tag+' does not match package version v'+v)"
+      - name: Require a successful Codex smoke for this commit
+        shell: bash
+        run: |
+          expected_sha="$(git rev-parse HEAD)"
+          run_sha="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CODEX_SMOKE_RUN_ID" --jq .head_sha)"
+          conclusion="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CODEX_SMOKE_RUN_ID" --jq .conclusion)"
+          workflow_path="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CODEX_SMOKE_RUN_ID" --jq .path)"
+          test "$run_sha" = "$expected_sha"
+          test "$conclusion" = success
+          test "$workflow_path" = .github/workflows/codex-contract-smoke.yml
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run verify:release-metadata
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:renderer
+
   signed-package:
     name: Sign and verify (${{ matrix.os }})
+    needs: source-gate
     environment: stable-release
     runs-on: ${{ matrix.os }}
     strategy:
@@ -49,6 +92,12 @@ jobs:
         shell: bash
         run: echo "$GPG_PRIVATE_KEY" | gpg --batch --import
       - run: npm run package -- --publish never
+      - name: Smoke test signed package (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run smoke:package
+      - name: Smoke test signed package
+        if: runner.os != 'Linux'
+        run: npm run smoke:package
       - run: npm run checksums
       - name: Sign Linux checksums
         if: runner.os == 'Linux'

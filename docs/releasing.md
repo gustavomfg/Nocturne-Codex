@@ -21,15 +21,15 @@ O smoke test é ativado somente em um aplicativo empacotado que receba `NOCTURNE
 ## Publicação
 
 1. Confirme worktree, versão e CHANGELOG.
-2. Confirme um `Codex CLI contract smoke` recente e bem-sucedido para a versão registrada em `shared/codex-compatibility.json`.
+2. Execute `Codex CLI contract smoke` no commit exato da tag e guarde o ID da execução bem-sucedida. O workflow estável exige esse ID e rejeita resultados de outro commit.
 3. Exija sucesso do workflow nas três plataformas.
 4. Valide manualmente os artefatos da plataforma oficialmente suportada.
 5. Publique os pacotes junto ao `SHA256SUMS`, aos arquivos `latest*.yml` e aos `.blockmap` correspondentes. Sem esses metadados, o cliente não anuncia a atualização.
-6. Para uma versão estável, crie a tag correspondente à versão (`vX.Y.Z`) e execute manualmente o workflow `Stable signed artifacts`, informando essa tag. O ambiente protegido `stable-release` recusa pré-releases e tags divergentes. Depois de verificar assinatura, notarização, checksums e metadados das três plataformas, o gate cria ou atualiza o GitHub Release.
+6. Para uma versão estável, crie a tag correspondente à versão (`vX.Y.Z`) e execute manualmente o workflow `Stable signed artifacts`, informando a tag e o ID do smoke do Codex. O ambiente protegido `stable-release` recusa pré-releases, tags divergentes e um smoke pertencente a outro commit. O próprio workflow repete typecheck, lint, testes unitários, renderer e metadata antes de assinar. Depois de verificar também os pacotes, notarização, checksums e metadados das três plataformas, o gate cria ou atualiza o GitHub Release.
 
 ## Assinatura e proteção das chaves
 
-- macOS: forneça o certificado Developer ID por `CSC_LINK`/`CSC_KEY_PASSWORD` e as credenciais de notarização aceitas pelo Electron Builder (`APPLE_API_KEY`, `APPLE_API_KEY_ID` e `APPLE_API_ISSUER`).
+- macOS: forneça o certificado Developer ID por `MAC_CSC_LINK`/`MAC_CSC_KEY_PASSWORD` e as credenciais de notarização usadas pelo workflow (`APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` e `APPLE_TEAM_ID`).
 - Windows: forneça um certificado Authenticode por `WIN_CSC_LINK`/`WIN_CSC_KEY_PASSWORD`, preferencialmente armazenado em cofre ou serviço de assinatura da organização.
 - Linux: publique `SHA256SUMS` e, quando houver uma identidade oficial do projeto, assine também o arquivo de checksums com uma chave dedicada à release.
 
