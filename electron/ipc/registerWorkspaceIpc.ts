@@ -8,7 +8,7 @@ import { safeIpcMain } from './safeIpc'
 import { assertSafeWorkspaceScope } from '../security/WorkspaceTrust'
 
 interface Dependencies {
-  ensureWorkspace(workspace: string): void
+  ensureWorkspace(workspace: string): Promise<void>
   assertKnownWorkspace(value: string): string
   run(command: string, args: string[], cwd: string): Promise<unknown>
 }
@@ -23,7 +23,7 @@ export function registerWorkspaceIpc(win: BrowserWindow, database: LocalDatabase
     const workspace = assertSafeWorkspaceScope(result.filePaths[0])
     if (expectedWorkspace && workspace !== expectedWorkspace) throw new Error('Selecione a mesma pasta associada à conversa restaurada.')
     const storedWorkspace = expected ?? workspace
-    database.touchWorkspace(storedWorkspace); dependencies.ensureWorkspace(workspace); return storedWorkspace
+    database.touchWorkspace(storedWorkspace); await dependencies.ensureWorkspace(workspace); return storedWorkspace
   })
   ipcMain.handle('workspace:validate', (_event, value: unknown) => { try { return assertSafeWorkspaceScope(z.string().min(1).parse(value)) } catch { return null } })
   ipcMain.handle('workspaces:list', () => database.listWorkspaces())
@@ -41,7 +41,7 @@ export function registerWorkspaceIpc(win: BrowserWindow, database: LocalDatabase
     })
   })
   ipcMain.handle('conversations:list', () => database.listConversations())
-  ipcMain.handle('conversations:create', (_event, value: unknown) => { const workspace = dependencies.assertKnownWorkspace(z.string().min(1).parse(value)); dependencies.ensureWorkspace(workspace); return database.createConversation(workspace) })
+  ipcMain.handle('conversations:create', async (_event, value: unknown) => { const workspace = dependencies.assertKnownWorkspace(z.string().min(1).parse(value)); await dependencies.ensureWorkspace(workspace); return database.createConversation(workspace) })
   ipcMain.handle('conversations:messages', (_event, value: unknown) => database.listMessages(idSchema.parse(value)))
   ipcMain.handle('conversations:messagePage', (_event, value: unknown) => {
     const data = z.object({ id: idSchema, offset: z.number().int().min(0).max(1_000_000), limit: z.number().int().min(1).max(200) }).strict().parse(value)

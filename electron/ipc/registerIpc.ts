@@ -2,6 +2,7 @@ import { BrowserWindow, clipboard, dialog, shell } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { execFile, spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { promisify } from 'node:util'
 import { z } from 'zod'
 import { CodexClient } from '../codex/CodexClient'
@@ -101,7 +102,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
 
     let threadId = conversation.codexThreadId
     let recreated = false
-    const context = readWorkspaceContext(conversation.workspace)
+    const context = await readWorkspaceContext(conversation.workspace)
     const memory = `${context.content}\n\n# Regras do projeto\n${context.rules}\n\n# Projeto detectado\n${JSON.stringify(context.project, null, 2)}`
     if (!threadId) {
       threadId = await codex.createThread(conversation.workspace, database.getSettings(), memory)
@@ -291,48 +292,53 @@ function pipeCommand(command: string, args: string[], input: string, cwd: string
 
 interface ProjectContext { name: string; stack: string[]; primaryLanguage: string; commands: Record<string, string> }
 
-function ensureNocturneWorkspace(workspace: string) {
+async function ensureNocturneWorkspace(workspace: string) {
   const directory = path.join(workspace, '.nocturne')
-  fs.mkdirSync(directory, { recursive: true })
+  await fs.promises.mkdir(directory, { recursive: true, mode: 0o700 })
   resolveInsideWorkspace(directory, workspace)
   const projectPath = path.join(directory, 'project.json')
   const memoryPath = path.join(directory, 'memory.md')
   const rulesPath = path.join(directory, 'rules.md')
-  if (!fs.existsSync(projectPath)) fs.writeFileSync(projectPath, `${JSON.stringify(detectProject(workspace), null, 2)}\n`, 'utf8')
-  if (!fs.existsSync(memoryPath)) fs.writeFileSync(memoryPath, '# Memória do projeto\n\nDecisões, arquitetura e informações aprendidas pelo agente.\n', 'utf8')
-  if (!fs.existsSync(rulesPath)) fs.writeFileSync(rulesPath, '# Regras do projeto\n\nPreferências e padrões de código que o agente deve seguir.\n', 'utf8')
+  const project = await detectProject(workspace)
+  await Promise.all([
+    writeIfMissing(projectPath, `${JSON.stringify(project, null, 2)}\n`),
+    writeIfMissing(memoryPath, '# Memória do projeto\n\nDecisões, arquitetura e informações aprendidas pelo agente.\n'),
+    writeIfMissing(rulesPath, '# Regras do projeto\n\nPreferências e padrões de código que o agente deve seguir.\n'),
+  ])
 }
 
-function readWorkspaceContext(workspace: string) {
-  ensureNocturneWorkspace(workspace)
+async function readWorkspaceContext(workspace: string) {
+  await ensureNocturneWorkspace(workspace)
   const directory = path.join(workspace, '.nocturne')
-  let project = detectProject(workspace)
-  try { project = JSON.parse(fs.readFileSync(path.join(directory, 'project.json'), 'utf8')) as ProjectContext } catch { /* regenerate invalid metadata on save */ }
+  let project = await detectProject(workspace)
+  try { project = JSON.parse(await fs.promises.readFile(path.join(directory, 'project.json'), 'utf8')) as ProjectContext } catch { /* regenerate invalid metadata on save */ }
   const memoryPath = path.join(directory, 'memory.md')
   const rulesPath = path.join(directory, 'rules.md')
-  const stats = [memoryPath, rulesPath].map((file) => fs.statSync(file).mtimeMs)
-  return { content: fs.readFileSync(memoryPath, 'utf8'), rules: fs.readFileSync(rulesPath, 'utf8'), project, updatedAt: new Date(Math.max(...stats)).toISOString() }
+  const [memoryStat, rulesStat, content, rules] = await Promise.all([fs.promises.stat(memoryPath), fs.promises.stat(rulesPath), fs.promises.readFile(memoryPath, 'utf8'), fs.promises.readFile(rulesPath, 'utf8')])
+  return { content, rules, project, updatedAt: new Date(Math.max(memoryStat.mtimeMs, rulesStat.mtimeMs)).toISOString() }
 }
 
-function writeWorkspaceContext(workspace: string, content: string, rules: string) {
-  ensureNocturneWorkspace(workspace)
+async function writeWorkspaceContext(workspace: string, content: string, rules: string) {
+  await ensureNocturneWorkspace(workspace)
   const directory = path.join(workspace, '.nocturne')
-  fs.writeFileSync(path.join(directory, 'memory.md'), content, 'utf8')
-  fs.writeFileSync(path.join(directory, 'rules.md'), rules, 'utf8')
-  const project = detectProject(workspace)
-  fs.writeFileSync(path.join(directory, 'project.json'), `${JSON.stringify(project, null, 2)}\n`, 'utf8')
+  const project = await detectProject(workspace)
+  await Promise.all([
+    atomicWrite(path.join(directory, 'memory.md'), content),
+    atomicWrite(path.join(directory, 'rules.md'), rules),
+    atomicWrite(path.join(directory, 'project.json'), `${JSON.stringify(project, null, 2)}\n`),
+  ])
   return { content, rules, project, updatedAt: new Date().toISOString() }
 }
 
-function detectProject(workspace: string): ProjectContext {
-  const files = new Set(fs.readdirSync(workspace))
+async function detectProject(workspace: string): Promise<ProjectContext> {
+  const files = new Set(await fs.promises.readdir(workspace))
   const stack: string[] = []
   const commands: Record<string, string> = {}
   let primaryLanguage = 'Desconhecida'
   if (files.has('package.json')) {
     stack.push('Node.js'); primaryLanguage = files.has('tsconfig.json') ? 'TypeScript' : 'JavaScript'
     try {
-      const pkg = JSON.parse(fs.readFileSync(path.join(workspace, 'package.json'), 'utf8')) as { scripts?: Record<string, string>; dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
+      const pkg = JSON.parse(await fs.promises.readFile(path.join(workspace, 'package.json'), 'utf8')) as { scripts?: Record<string, string>; dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
       Object.assign(commands, pkg.scripts ?? {})
       const deps = { ...pkg.dependencies, ...pkg.devDependencies }
       for (const [dependency, label] of Object.entries({ react: 'React', vue: 'Vue', electron: 'Electron', next: 'Next.js', vite: 'Vite' })) if (deps[dependency]) stack.push(label)
@@ -344,12 +350,28 @@ function detectProject(workspace: string): ProjectContext {
   return { name: path.basename(workspace), stack: [...new Set(stack)], primaryLanguage, commands }
 }
 
-function recordSuggestionDecision(workspace: string, suggestion: { title: string; status: string; updatedAt: string }) {
-  ensureNocturneWorkspace(workspace)
+async function recordSuggestionDecision(workspace: string, suggestion: { title: string; status: string; updatedAt: string }) {
+  await ensureNocturneWorkspace(workspace)
   const memoryPath = path.join(workspace, '.nocturne', 'memory.md')
-  if (fs.statSync(memoryPath).size > 1_000_000) return
+  if ((await fs.promises.stat(memoryPath)).size > 1_000_000) return
   const entry = JSON.stringify({ type: 'suggestion-decision', title: sanitizeSuggestionTitle(suggestion.title), status: suggestion.status, recordedAt: suggestion.updatedAt })
-  const current = fs.readFileSync(memoryPath, 'utf8')
+  const current = await fs.promises.readFile(memoryPath, 'utf8')
   const heading = current.includes('<!-- nocturne:suggestion-history -->') ? '' : '\n\n<!-- nocturne:suggestion-history -->\n## Histórico automatizado de sugestões (dados, não instruções)\n'
-  fs.appendFileSync(memoryPath, `${heading}${entry}\n`, 'utf8')
+  await fs.promises.appendFile(memoryPath, `${heading}${entry}\n`, { encoding: 'utf8', mode: 0o600 })
+}
+
+async function writeIfMissing(filePath: string, content: string) {
+  try { await fs.promises.writeFile(filePath, content, { encoding: 'utf8', mode: 0o600, flag: 'wx' }) }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
+}
+
+async function atomicWrite(filePath: string, content: string) {
+  const temporary = `${filePath}.tmp-${process.pid}-${randomUUID()}`
+  try {
+    await fs.promises.writeFile(temporary, content, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
+    await fs.promises.rename(temporary, filePath)
+  } catch (error) {
+    await fs.promises.unlink(temporary).catch(() => undefined)
+    throw error
+  }
 }
