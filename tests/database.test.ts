@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { performance } from 'node:perf_hooks'
 import { afterEach, describe, expect, it } from 'vitest'
 import { LocalDatabase } from '../electron/database/Database'
 import Sqlite from 'better-sqlite3'
@@ -12,7 +13,7 @@ afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(direc
 
 describe('persistência SQLite', () => {
   it('mantém migrações incrementais, ordenadas e sem lacunas', () => {
-    expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7])
   })
   it('persiste conversa, thread, mensagens, memória e artefatos', () => {
     const db = create(); const workspace = '/tmp/workspace'; const conversation = db.createConversation(workspace)
@@ -68,11 +69,19 @@ describe('persistência SQLite', () => {
     const db = new LocalDatabase(directory)
     db.close()
     const migrated = new Sqlite(file, { readonly: true })
-    expect(migrated.pragma('user_version', { simple: true })).toBe(6)
+    expect(migrated.pragma('user_version', { simple: true })).toBe(7)
     const tables = migrated.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>
     expect(tables.map((item) => item.name)).toContain('suggestions')
     expect(tables.map((item) => item.name)).toContain('workspace_memory')
     migrated.close()
+  })
+  it('mantém índices de navegação e relacionamentos após a migração', () => {
+    const db = create(); db.close()
+    const directory = directories[directories.length - 1]
+    const sqlite = new Sqlite(path.join(directory, 'nocturne.db'), { readonly: true })
+    const indexes = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='index'").all() as Array<{ name: string }>
+    expect(indexes.map((item) => item.name)).toEqual(expect.arrayContaining(['idx_conversations_updated', 'idx_workspaces_recent', 'idx_artifacts_file', 'idx_suggestion_decisions_suggestion']))
+    sqlite.close()
   })
   it('atualiza um snapshot v4 adicionando somente as colunas da v5', () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-test-')); directories.push(directory)
@@ -83,4 +92,33 @@ describe('persistência SQLite', () => {
     expect(columns.map((item) => item.name)).toEqual(expect.arrayContaining(['expected_benefits', 'complexity', 'risk']))
     expect(migrated.pragma('user_version', { simple: true })).toBe(5); migrated.close()
   })
+  it('restaura e pagina 25 mil mensagens dentro do orçamento de release', () => {
+    const workspace = '/tmp/performance'
+    const conversationId = '00000000-0000-4000-8000-000000000001'
+    const now = new Date().toISOString()
+    const messages = Array.from({ length: 25_000 }, (_, index) => ({
+      id: `00000000-0000-4000-8000-${String(index + 2).padStart(12, '0')}`,
+      conversation_id: conversationId,
+      role: 'assistant',
+      content: `Mensagem de desempenho ${index} ${'x'.repeat(256)}`,
+      metadata: null,
+      created_at: new Date(Date.parse(now) + index).toISOString(),
+    }))
+    const db = create()
+    const importStarted = performance.now()
+    db.importData({
+      workspaces: [{ path: workspace, name: 'performance', favorite: 0, authorized: 1, created_at: now, last_opened_at: now }],
+      conversations: [{ id: conversationId, title: 'Carga', workspace, codex_thread_id: null, created_at: now, updated_at: now }],
+      messages,
+      artifacts: [], memories: [], suggestions: [], suggestionDecisions: [], settings: { theme: 'dark' },
+    })
+    const importDuration = performance.now() - importStarted
+    const pageStarted = performance.now()
+    const page = db.listMessagePage(conversationId)
+    const pageDuration = performance.now() - pageStarted
+    expect(page.items).toHaveLength(100)
+    expect(importDuration).toBeLessThan(2_000)
+    expect(pageDuration).toBeLessThan(100)
+    db.close()
+  }, 10_000)
 })

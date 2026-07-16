@@ -36,6 +36,12 @@ export const migrations: Migration[] = [
   { version: 6, up: (db) => {
     if (!hasColumn(db, 'workspaces', 'authorized')) db.exec('ALTER TABLE workspaces ADD COLUMN authorized INTEGER NOT NULL DEFAULT 1')
   } },
+  { version: 7, up: (db) => db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_conversations_updated ON conversations(updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_workspaces_recent ON workspaces(favorite DESC, last_opened_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_artifacts_file ON artifacts(conversation_id, file_path, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_suggestion_decisions_suggestion ON suggestion_decisions(suggestion_id, created_at);
+  `) },
 ]
 
 export function migrateDatabase(db: Database.Database, currentVersion: number) {

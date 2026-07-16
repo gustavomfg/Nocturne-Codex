@@ -219,7 +219,7 @@ describe.sequential('fronteiras Electron E2E', () => {
     electron.dialogs.save.push({ canceled: false, filePath: backupPath })
     await expect(api.data.export()).resolves.toBe(backupPath)
     const backup = JSON.parse(fs.readFileSync(backupPath, 'utf8')) as { schemaVersion: number; conversations: Array<Record<string, unknown>>; workspaces: Array<Record<string, unknown>>; messages: unknown[]; artifacts: Array<Record<string, unknown>>; memories: Array<Record<string, unknown>>; suggestions: Array<Record<string, unknown>>; settings: Record<string, string> }
-    expect(backup.schemaVersion).toBe(6)
+    expect(backup.schemaVersion).toBe(7)
     expect(backup.conversations.length).toBeGreaterThan(0)
     expect(backup.messages.length).toBeGreaterThan(0)
     const manipulated = structuredClone(backup)

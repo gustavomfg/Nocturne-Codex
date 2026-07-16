@@ -187,10 +187,11 @@ export class LocalDatabase {
   }
 
   exportData() {
-    return { schemaVersion: 6, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), suggestions: this.db.prepare('SELECT * FROM suggestions').all(), suggestionDecisions: this.db.prepare('SELECT * FROM suggestion_decisions').all(), settings: this.getSettings() }
+    return { schemaVersion: 7, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), suggestions: this.db.prepare('SELECT * FROM suggestions').all(), suggestionDecisions: this.db.prepare('SELECT * FROM suggestion_decisions').all(), settings: this.getSettings() }
   }
 
   importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[]; suggestions?: unknown[]; suggestionDecisions?: unknown[]; settings?: Record<string, string> }) {
+    const statements = new Map<string, Database.Statement>()
     const insert = (table: string, rows: unknown[]) => {
       const allowed = importColumns[table]
       if (!allowed) throw new Error(`Tabela de importação não permitida: ${table}.`)
@@ -199,7 +200,13 @@ export class LocalDatabase {
         const row = raw as Record<string, unknown>
         const keys = Object.keys(row).filter((key) => allowed.has(key))
         if (!keys.length) continue
-        this.db.prepare(`INSERT OR IGNORE INTO ${table} (${keys.join(',')}) VALUES (${keys.map((key) => `@${key}`).join(',')})`).run(row)
+        const signature = `${table}:${keys.join(',')}`
+        let statement = statements.get(signature)
+        if (!statement) {
+          statement = this.db.prepare(`INSERT OR IGNORE INTO ${table} (${keys.join(',')}) VALUES (${keys.map((key) => `@${key}`).join(',')})`)
+          statements.set(signature, statement)
+        }
+        statement.run(row)
       }
     }
     this.db.transaction(() => {
