@@ -97,6 +97,7 @@ Estilos específicos permanecem junto ao domínio, como `domains/agent/agent.css
 - `electron/preload.ts`: adaptação mínima entre contratos e `ipcRenderer`.
 
 O renderer nunca recebe credenciais e não executa comandos diretamente.
+Novas janelas são sempre negadas e tentativas de navegação externa iniciadas pelo renderer, inclusive por subframes, são bloqueadas no processo principal.
 
 ## Evolução
 

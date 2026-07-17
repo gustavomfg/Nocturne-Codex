@@ -107,7 +107,7 @@ Detected stack information, useful commands, architectural decisions, and projec
 
 ### Artifacts
 
-Responses, reports, diffs, files, images, Markdown, configuration, and exported documents can be retained as conversation artifacts. Text, Markdown, code, and supported images have an internal preview; safe HTTP and HTTPS links open in the system browser, while local and unsafe protocols remain blocked. Files can also be opened in the system editor or containing folder.
+Responses, reports, diffs, files, images, Markdown, configuration, and exported documents can be retained as conversation artifacts. Text, Markdown, code, and supported images have an internal preview; safe HTTPS links open in the system browser, while HTTP, local, and unsafe protocols remain blocked. Files can also be opened in the system editor or containing folder.
 
 ### Git integration
 

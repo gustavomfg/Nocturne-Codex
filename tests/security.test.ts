@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { assessCommand, resolveInsideWorkspace } from '../electron/security/ExecutionPolicy'
+import { redactLogText, redactLogValue } from '../electron/logging/Logger'
 
 describe('políticas de execução', () => {
   it('mantém permissões web negadas e fuses essenciais no pacote', () => {
@@ -25,6 +26,27 @@ describe('políticas de execução', () => {
     expect(builder).toContain('"repo": "Nocturne-Codex"')
     expect(updater).toContain('if (!app.isPackaged || process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT)')
     expect(updater).toContain('updater.autoDownload = false')
+  })
+  it('exercita bloqueios de janela e navegação no smoke empacotado', () => {
+    const main = fs.readFileSync(path.join(process.cwd(), 'electron/main.ts'), 'utf8')
+    expect(main).toContain("window.open('about:blank', '_blank')")
+    expect(main).toContain("on('will-frame-navigate'")
+    expect(main).toContain("link.href = 'https://example.invalid/nocturne-package-smoke'")
+    expect(main).toContain('finalUrl === originalUrl')
+    expect(main).not.toContain('const navigation = { externalWindowsDenied: true, unexpectedNavigationBlocked: true }')
+  })
+  it('remove credenciais completas de strings e objetos de log', () => {
+    for (const value of [
+      'Authorization: Bearer segredo-super-secreto',
+      'authorization=Basic YWxhZGRpbjpvcGVuc2VzYW1l',
+      'token="valor com espaços"',
+      '{"api_key":"chave-json","ok":true}',
+    ]) {
+      const redacted = redactLogText(value)
+      expect(redacted).toContain('[REDACTED]')
+      expect(redacted).not.toMatch(/segredo-super-secreto|YWxhZGRpb|valor com espaços|chave-json/)
+    }
+    expect(redactLogValue({ authorization: 'Bearer segredo', nested: { password: 'senha', safe: 'ok' } })).toEqual({ nested: { safe: 'ok' } })
   })
   it('publica uma release estável somente após reunir e verificar as três plataformas', () => {
     const workflow = fs.readFileSync(path.join(process.cwd(), '.github/workflows/stable-release.yml'), 'utf8')

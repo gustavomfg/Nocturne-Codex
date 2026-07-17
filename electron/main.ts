@@ -59,6 +59,9 @@ function createWindow() {
     const allowed = url === rendererUrl
     if (!allowed) event.preventDefault()
   })
+  currentWindow.webContents.on('will-frame-navigate', (event) => {
+    if (event.url !== rendererUrl) event.preventDefault()
+  })
 
   logger.info('app', 'Janela principal iniciada', { packaged: app.isPackaged, renderer: softwareRendering ? 'software' : 'hardware' })
   disposeIpc = registerIpc(currentWindow, database, codex, logger)
@@ -107,16 +110,27 @@ async function runPackageSmoke(output: string) {
     const preload = await win?.webContents.executeJavaScript(`(async () => {
       const api = window.nocturne
       const geolocation = await navigator.permissions.query({ name: 'geolocation' }).then((result) => result.state).catch(() => 'denied')
-      return { available: Boolean(api), settings: typeof api?.settings?.get === 'function', channels: api ? Object.keys(api).sort() : [], geolocation }
-    })()` ) as { available: boolean; settings: boolean; channels: string[]; geolocation: PermissionState } | undefined
+      const externalWindowsDenied = window.open('about:blank', '_blank') === null
+      return { available: Boolean(api), settings: typeof api?.settings?.get === 'function', channels: api ? Object.keys(api).sort() : [], geolocation, externalWindowsDenied }
+    })()` ) as { available: boolean; settings: boolean; channels: string[]; geolocation: PermissionState; externalWindowsDenied: boolean } | undefined
+    const originalUrl = win?.webContents.getURL()
+    await win?.webContents.executeJavaScript(`(() => {
+      const link = document.createElement('a')
+      link.href = 'https://example.invalid/nocturne-package-smoke'
+      document.body.append(link)
+      link.click()
+      link.remove()
+    })()`)
+    await new Promise((resolve) => setTimeout(resolve, 50))
     const smokeWorkspace = app.getPath('userData')
     const conversation = database?.createConversation(smokeWorkspace)
     if (conversation) database?.addMessage(conversation.id, 'user', 'package-smoke')
     const sqlite = Boolean(conversation && database?.listMessages(conversation.id)[0]?.content === 'package-smoke')
     const preferences = (win?.webContents as Electron.WebContents & { getLastWebPreferences(): Electron.WebPreferences } | undefined)?.getLastWebPreferences()
     const security = { contextIsolation: preferences?.contextIsolation === true, nodeIntegration: preferences?.nodeIntegration === false, sandbox: preferences?.sandbox === true }
-    const navigation = { externalWindowsDenied: true, unexpectedNavigationBlocked: true }
-    const ok = Boolean(preload?.available && preload.settings && preload.geolocation === 'denied' && sqlite && Object.values(security).every(Boolean))
+    const finalUrl = win?.webContents.getURL()
+    const navigation = { externalWindowsDenied: preload?.externalWindowsDenied === true, unexpectedNavigationBlocked: Boolean(originalUrl && finalUrl === originalUrl), originalUrl, finalUrl }
+    const ok = Boolean(preload?.available && preload.settings && preload.geolocation === 'denied' && sqlite && Object.values(security).every(Boolean) && navigation && Object.values(navigation).every(Boolean))
     fs.writeFileSync(output, `${JSON.stringify({ ok, packaged: app.isPackaged, preload, sqlite, security, navigation })}\n`, { encoding: 'utf8', mode: 0o600 })
     app.quit()
   } catch (error) {

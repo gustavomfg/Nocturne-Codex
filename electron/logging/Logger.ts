@@ -18,7 +18,7 @@ export class Logger {
   error(category: LogCategory, message: string, error?: unknown) { this.write('error', category, message, serializeError(error)) }
   get path() { return this.directory }
   private write(level: LogLevel, category: LogCategory, message: string, data?: unknown) {
-    const entry = { timestamp: new Date().toISOString(), level, category, message: redact(message), data: redactValue(data) }
+    const entry = { timestamp: new Date().toISOString(), level, category, message: redactLogText(message), data: redactLogValue(data) }
     this.writes = this.writes.then(async () => { await this.rotate(); await fs.promises.appendFile(this.file, `${JSON.stringify(entry)}\n`, { encoding: 'utf8', mode: 0o600 }) }).catch((error) => console.error('Falha ao gravar log do Nocturne:', error))
   }
   flush() { return this.writes }
@@ -33,10 +33,13 @@ export class Logger {
 }
 
 function serializeError(error: unknown) { return error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : error }
-function redact(value: string) { return value.replace(/(token|authorization|api[_-]?key|password)(\s*[=:]\s*)\S+/gi, '$1$2[REDACTED]').slice(0, 8_000) }
-function redactValue(value: unknown): unknown {
-  if (typeof value === 'string') return redact(value)
-  if (Array.isArray(value)) return value.map(redactValue)
-  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value as Record<string, unknown>).filter(([key]) => !/token|authorization|api.?key|password/i.test(key)).map(([key, item]) => [key, redactValue(item)]))
+export function redactLogText(value: string) {
+  const jsonRedacted = value.replace(/(["'](?:token|authorization|api[_-]?key|password)["']\s*:\s*)(["'])(.*?)\2/gi, (_match, prefix: string, quote: string) => `${prefix}${quote}[REDACTED]${quote}`)
+  return jsonRedacted.replace(/\b(token|authorization|api[_-]?key|password)(\s*[=:]\s*)(?:(?:bearer|basic)\s+)?(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi, '$1$2[REDACTED]').slice(0, 8_000)
+}
+export function redactLogValue(value: unknown): unknown {
+  if (typeof value === 'string') return redactLogText(value)
+  if (Array.isArray(value)) return value.map(redactLogValue)
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value as Record<string, unknown>).filter(([key]) => !/token|authorization|api[_-]?key|password/i.test(key)).map(([key, item]) => [key, redactLogValue(item)]))
   return value
 }
