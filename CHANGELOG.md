@@ -20,6 +20,7 @@
 
 - importação de backups reutiliza statements preparados e possui orçamento automatizado com 25 mil mensagens;
 - mensagens fora da viewport usam renderização sob demanda nativa do navegador;
+- conversas, artefatos e sugestões passam a usar páginas limitadas com carregamento explícito de históricos anteriores;
 - pacote conserva somente locales `pt-BR` e `en-US`, reduzindo em aproximadamente 45 MB a instalação Linux descompactada;
 - Vite atualizado para `8.1.5` e rebuild nativo alinhado ao fluxo oficial do electron-builder;
 - release estável repete toda a suíte, valida workflows, exige smoke do Codex do mesmo commit e testa cada pacote assinado antes da publicação.

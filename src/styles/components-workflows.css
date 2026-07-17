@@ -444,6 +444,18 @@
   border-radius: 5px;
 }
 
+.collection-load-more {
+  min-height: var(--control-sm);
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+}
+
+.collection-load-more:hover:not(:disabled) { background: var(--color-surface-hover); color: var(--color-text); }
+.collection-load-more:disabled { opacity: .6; cursor: progress; }
+
 .plan-actions {
   display: flex;
 }

@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { IPC_CHANNELS as channels } from '../shared/ipc/channels'
 import type { CodexEvent, CodexStatus } from '../shared/types'
 import type { NocturneApi } from '../shared/ipc/contracts'
+import { COLLECTION_PAGE_LIMITS } from '../shared/constants'
 
 const on = <T>(channel: string, listener: (payload: T) => void) => {
   const handler = (_event: Electron.IpcRendererEvent, payload: T) => listener(payload)
@@ -20,6 +21,7 @@ export const nocturneApi: NocturneApi = {
   },
   conversations: {
     list: () => ipcRenderer.invoke(channels.conversations.list),
+    page: (offset = 0, limit = COLLECTION_PAGE_LIMITS.conversations) => ipcRenderer.invoke(channels.conversations.page, { offset, limit }),
     create: (workspace: string) => ipcRenderer.invoke(channels.conversations.create, workspace),
     messages: (id: string) => ipcRenderer.invoke(channels.conversations.messages, id),
     messagePage: (id: string, offset = 0, limit = 100) => ipcRenderer.invoke(channels.conversations.messagePage, { id, offset, limit }),
@@ -43,8 +45,8 @@ export const nocturneApi: NocturneApi = {
     preview: (conversationId: string, filePath: string) => ipcRenderer.invoke(channels.files.preview, { conversationId, filePath }),
   },
   memory: { get: (conversationId: string) => ipcRenderer.invoke(channels.memory.get, conversationId), set: (conversationId: string, content: string, rules: string) => ipcRenderer.invoke(channels.memory.set, { conversationId, content, rules }) },
-  artifacts: { list: (conversationId: string) => ipcRenderer.invoke(channels.artifacts.list, conversationId), delete: (conversationId: string, artifactId: string) => ipcRenderer.invoke(channels.artifacts.delete, { conversationId, artifactId }) },
-  suggestions: { list: (conversationId: string) => ipcRenderer.invoke(channels.suggestions.list, conversationId), create: (conversationId: string, content: string) => ipcRenderer.invoke(channels.suggestions.create, { conversationId, content }), status: (conversationId: string, suggestionId: string, status: string, result?: string) => ipcRenderer.invoke(channels.suggestions.status, { conversationId, suggestionId, status, result }) },
+  artifacts: { list: (conversationId: string) => ipcRenderer.invoke(channels.artifacts.list, conversationId), page: (conversationId: string, offset = 0, limit = COLLECTION_PAGE_LIMITS.artifacts) => ipcRenderer.invoke(channels.artifacts.page, { conversationId, offset, limit }), delete: (conversationId: string, artifactId: string) => ipcRenderer.invoke(channels.artifacts.delete, { conversationId, artifactId }) },
+  suggestions: { list: (conversationId: string) => ipcRenderer.invoke(channels.suggestions.list, conversationId), page: (conversationId: string, offset = 0, limit = COLLECTION_PAGE_LIMITS.suggestions) => ipcRenderer.invoke(channels.suggestions.page, { conversationId, offset, limit }), create: (conversationId: string, content: string) => ipcRenderer.invoke(channels.suggestions.create, { conversationId, content }), status: (conversationId: string, suggestionId: string, status: string, result?: string) => ipcRenderer.invoke(channels.suggestions.status, { conversationId, suggestionId, status, result }) },
   data: { export: () => ipcRenderer.invoke(channels.data.export), import: () => ipcRenderer.invoke(channels.data.import) },
   diagnostics: { openLogs: () => ipcRenderer.invoke(channels.diagnostics.openLogs), copy: () => ipcRenderer.invoke(channels.diagnostics.copy), rendererError: (value: unknown) => ipcRenderer.invoke(channels.diagnostics.rendererError, value), rendererStats: (value: unknown) => ipcRenderer.invoke(channels.diagnostics.rendererStats, value) },
   settings: { get: () => ipcRenderer.invoke(channels.settings.get), check: () => ipcRenderer.invoke(channels.settings.check), set: (settings: unknown) => ipcRenderer.invoke(channels.settings.set, settings) },

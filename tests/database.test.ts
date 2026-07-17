@@ -36,6 +36,18 @@ describe('persistência SQLite', () => {
     expect(oldest.items.map((message) => message.content)).toEqual(Array.from({ length: 5 }, (_, index) => `Mensagem ${index}`))
     expect(oldest.hasMore).toBe(false); db.close()
   })
+  it('pagina conversas, artefatos e sugestões sem materializar a coleção completa', () => {
+    const db = create(); const workspace = '/tmp/collections'
+    const conversations = Array.from({ length: 4 }, () => db.createConversation(workspace))
+    for (let index = 0; index < 4; index += 1) db.addArtifact(conversations[0].id, workspace, 'markdown', `Artefato ${index}`)
+    const suggestion = { title: 'Paginar', description: 'Coleção', reasoning: 'Limite', category: 'performance' as const, severity: 'medium' as const, affectedFiles: [], proposedChanges: 'page', expectedBenefits: [], complexity: 'low' as const, risk: 'low' as const }
+    for (let index = 0; index < 4; index += 1) db.addSuggestion(conversations[0].id, workspace, { ...suggestion, title: `Sugestão ${index}` })
+    expect(db.listConversationPage(0, 2)).toMatchObject({ hasMore: true, items: { length: 2 } })
+    expect(db.listConversationPage(2, 2)).toMatchObject({ hasMore: false, items: { length: 2 } })
+    expect(db.listArtifactPage(conversations[0].id, 0, 2)).toMatchObject({ hasMore: true, items: { length: 2 } })
+    expect(db.listSuggestionPage(conversations[0].id, 2, 2)).toMatchObject({ hasMore: false, items: { length: 2 } })
+    db.close()
+  })
   it('consulta conversa diretamente e cria snapshot consistente do estado anterior', async () => {
     const db = create(); const conversation = db.createConversation('/tmp/snapshot'); db.addMessage(conversation.id, 'user', 'Antes da restauração')
     expect(db.getConversation(conversation.id)).toMatchObject({ id: conversation.id, workspace: '/tmp/snapshot' })

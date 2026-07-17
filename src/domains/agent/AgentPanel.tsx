@@ -10,12 +10,13 @@ import { useOffCanvasPanel } from '../../shared/useOffCanvasPanel'
 
 interface AgentPanelProps {
   open: boolean; compact: boolean; triggerRef: RefObject<HTMLElement | null>; gitInfo: GitInfo | null;
-  onClose(): void; onDecide(key: string, accepted: boolean): void; onError(value: string): void; onNotify(value: string): void; onGitRefresh(): void; onArtifactsRefresh(): void; onPreview(filePath: string): void; onArtifact(artifact: Artifact): void; onDeleteArtifact(id: string): void; onSuggestionStatus(suggestion: Suggestion, status: SuggestionStatus): void; onSuggestionApply(suggestion: Suggestion): void; onPlanChange(plan: PlanStep[]): void; onPlanExecute(plan: PlanStep[]): void
+  artifactsHaveMore: boolean; suggestionsHaveMore: boolean; loadingCollection: 'conversations' | 'artifacts' | 'suggestions' | null;
+  onClose(): void; onDecide(key: string, accepted: boolean): void; onError(value: string): void; onNotify(value: string): void; onGitRefresh(): void; onArtifactsRefresh(): void; onLoadMoreArtifacts(): void; onLoadMoreSuggestions(): void; onPreview(filePath: string): void; onArtifact(artifact: Artifact): void; onDeleteArtifact(id: string): void; onSuggestionStatus(suggestion: Suggestion, status: SuggestionStatus): void; onSuggestionApply(suggestion: Suggestion): void; onPlanChange(plan: PlanStep[]): void; onPlanExecute(plan: PlanStep[]): void
 }
 
 const tabs = ['activity', 'plan', 'suggestions', 'artifacts'] as const
 
-export function AgentPanel({ open: isOpen, compact, triggerRef, gitInfo, onClose, onDecide, onError, onNotify, onGitRefresh, onArtifactsRefresh, onPreview, onArtifact, onDeleteArtifact, onSuggestionStatus, onSuggestionApply, onPlanChange, onPlanExecute }: AgentPanelProps) {
+export function AgentPanel({ open: isOpen, compact, triggerRef, gitInfo, artifactsHaveMore, suggestionsHaveMore, loadingCollection, onClose, onDecide, onError, onNotify, onGitRefresh, onArtifactsRefresh, onLoadMoreArtifacts, onLoadMoreSuggestions, onPreview, onArtifact, onDeleteArtifact, onSuggestionStatus, onSuggestionApply, onPlanChange, onPlanExecute }: AgentPanelProps) {
   const { activities, approvals, diff, files, artifacts, suggestions, plan, planExplanation, activeId, documentContent } = useAppStore(useShallow((state) => ({
     activities: state.activities, approvals: state.approvals, diff: state.diff, files: state.files, artifacts: state.artifacts, suggestions: state.suggestions,
     plan: state.plan, planExplanation: state.planExplanation, activeId: state.activeId,
@@ -57,8 +58,8 @@ export function AgentPanel({ open: isOpen, compact, triggerRef, gitInfo, onClose
         {!activities.length && !approvals.length && !diff && <div className="inspector-empty"><div><ActivityIcon size={22}/></div><p>A atividade do agente aparecerá aqui.</p><small>Comandos, arquivos e aprovações em tempo real.</small></div>}
       </div>}
       {tab === 'plan' && <div id="agent-panel-plan" aria-labelledby="agent-tab-plan" role="tabpanel"><PlanPanel plan={plan} explanation={planExplanation} onChange={onPlanChange} onExecute={onPlanExecute}/></div>}
-      {tab === 'suggestions' && <div id="agent-panel-suggestions" aria-labelledby="agent-tab-suggestions" role="tabpanel"><SuggestionsPanel suggestions={suggestions} onStatus={onSuggestionStatus} onApply={onSuggestionApply} onOpenFile={onPreview} onNotify={onNotify}/></div>}
-      {tab === 'artifacts' && <div id="agent-panel-artifacts" aria-labelledby="agent-tab-artifacts" role="tabpanel"><ArtifactsPanel artifacts={artifacts} onOpen={onArtifact} onDelete={onDeleteArtifact}/></div>}
+      {tab === 'suggestions' && <div id="agent-panel-suggestions" aria-labelledby="agent-tab-suggestions" role="tabpanel"><SuggestionsPanel suggestions={suggestions} hasMore={suggestionsHaveMore} loadingMore={loadingCollection === 'suggestions'} onLoadMore={onLoadMoreSuggestions} onStatus={onSuggestionStatus} onApply={onSuggestionApply} onOpenFile={onPreview} onNotify={onNotify}/></div>}
+      {tab === 'artifacts' && <div id="agent-panel-artifacts" aria-labelledby="agent-tab-artifacts" role="tabpanel"><ArtifactsPanel artifacts={artifacts} hasMore={artifactsHaveMore} loadingMore={loadingCollection === 'artifacts'} onLoadMore={onLoadMoreArtifacts} onOpen={onArtifact} onDelete={onDeleteArtifact}/></div>}
     </div>
   </aside>
 }
@@ -87,7 +88,7 @@ function DiffSection({ diff }: { diff: string }) {
   return <details className="activity-section" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}><summary><FileCode2 size={14}/>Alterações propostas</summary>{open && <div className="diff-panel">{truncated && <small>Diff extenso: exibindo os {limit.toLocaleString('pt-BR')} caracteres mais recentes.</small>}<pre>{truncated ? diff.slice(-limit) : diff}</pre></div>}</details>
 }
 
-function ArtifactsPanel({ artifacts, onOpen, onDelete }: { artifacts: Artifact[]; onOpen(artifact: Artifact): void; onDelete(id: string): void }) {
+function ArtifactsPanel({ artifacts, hasMore, loadingMore, onLoadMore, onOpen, onDelete }: { artifacts: Artifact[]; hasMore: boolean; loadingMore: boolean; onLoadMore(): void; onOpen(artifact: Artifact): void; onDelete(id: string): void }) {
   if (!artifacts.length) return <div className="inspector-empty"><div><PackageOpen size={22}/></div><p>Nenhum artefato ainda.</p><small>Respostas, diffs e arquivos produzidos pelo agente serão preservados aqui.</small></div>
-  return <div className="artifact-list">{artifacts.map((artifact) => <div className="artifact-card" key={artifact.id}><button className="artifact-main" onClick={() => onOpen(artifact)}><span className={`artifact-icon ${artifact.type}`}>{artifact.type === 'file' ? <FileCode2 size={15}/> : artifact.type === 'diff' ? <GitBranch size={15}/> : <FileDown size={15}/>}</span><span><strong>{artifact.title}</strong><small>{artifact.type} · {relativeTime(artifact.updatedAt)}</small></span><Eye size={13}/></button><button className="artifact-delete" aria-label={`Remover artefato ${artifact.title}`} title="Remover do painel" onClick={() => onDelete(artifact.id)}><Trash2 size={12}/></button></div>)}</div>
+  return <div className="artifact-list">{artifacts.map((artifact) => <div className="artifact-card" key={artifact.id}><button className="artifact-main" onClick={() => onOpen(artifact)}><span className={`artifact-icon ${artifact.type}`}>{artifact.type === 'file' ? <FileCode2 size={15}/> : artifact.type === 'diff' ? <GitBranch size={15}/> : <FileDown size={15}/>}</span><span><strong>{artifact.title}</strong><small>{artifact.type} · {relativeTime(artifact.updatedAt)}</small></span><Eye size={13}/></button><button className="artifact-delete" aria-label={`Remover artefato ${artifact.title}`} title="Remover do painel" onClick={() => onDelete(artifact.id)}><Trash2 size={12}/></button></div>)}{hasMore && <button className="collection-load-more" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? 'Carregando…' : 'Carregar artefatos anteriores'}</button>}</div>
 }

@@ -17,6 +17,7 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       workspace: { select: async (expected?: string) => { selectedExpected = expected; authorized = true; return workspace }, validate: async () => true, list: async () => [{ path: workspace, name: 'nocturne-codex', favorite: true, authorized, createdAt: now, lastOpenedAt: now }], remove: noop, favorite: noop, openTool: noop },
       conversations: {
         list: async () => empty ? [] : [conversation],
+        page: async () => ({ items: empty ? [] : [conversation], hasMore: false }),
         create: async () => conversation,
         messages: async () => empty ? [] : [
           { id: 'message-1', conversationId: conversation.id, role: 'user', content: 'Deixe a experiência mais fluida e previsível.', metadata: null, createdAt: now },
@@ -36,8 +37,8 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       },
       files: { attach: async () => [], open: noop, preview: async (_id: string, filePath: string) => ({ kind: 'text', name: filePath.split('/').pop(), filePath, mime: 'text/plain', content: 'conteúdo', size: 8 }) },
       memory: { get: async () => { memoryReads += 1; return { content: '', rules: '', updatedAt: '' } }, set: async (_id: string, content: string, rules: string) => ({ content, rules, updatedAt: now }) },
-      artifacts: { list: async () => [], delete: noop },
-      suggestions: { list: async () => [], create: async (_id: string, content: string) => ({ suggestions: [], content }), status: noop },
+      artifacts: { list: async () => [], page: async () => ({ items: [], hasMore: false }), delete: noop },
+      suggestions: { list: async () => [], page: async () => ({ items: [], hasMore: false }), create: async (_id: string, content: string) => ({ suggestions: [], content }), status: noop },
       data: { export: async () => '/tmp/backup.json', import: async () => true },
       diagnostics: { openLogs: noop, copy: async () => 'diagnóstico', rendererError: noop, rendererStats: noop },
       settings: { get: async () => ({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', theme: 'dark', defaultAgentMode: 'review', codexVersion: 'codex-cli 0.144.1', codexCompatible: true, authenticated: true, authStatus: 'Autenticado', serverStatus: 'ready' }), check: async () => ({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', theme: 'dark', defaultAgentMode: 'review', codexVersion: 'codex-cli 0.144.1', codexCompatible: true, authenticated: true, authStatus: 'Autenticado', serverStatus: 'ready' }), set: async (value: unknown) => value },

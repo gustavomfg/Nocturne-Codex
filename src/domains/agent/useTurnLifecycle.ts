@@ -31,18 +31,18 @@ export function useTurnLifecycle({ flushStream, activeTurnRef, refreshGit }: { f
       if (context.mode === 'review') {
         const extracted = await window.nocturne.suggestions.create(context.conversationId, assistantContent)
         assistantContent = extracted.content || assistantContent
-        if (useAppStore.getState().activeId === context.conversationId) store.setSuggestions(await window.nocturne.suggestions.list(context.conversationId))
+        if (useAppStore.getState().activeId === context.conversationId) store.setSuggestions((await window.nocturne.suggestions.page(context.conversationId)).items)
       }
       const activitySnapshot = current.activities.slice(-100).map((activity) => ({ ...activity, detail: activity.detail?.slice(-4_000) }))
       const saved = await window.nocturne.codex.saveAssistant(context.conversationId, assistantContent, { diff: current.diff.slice(-500_000), activities: activitySnapshot, files: current.files.slice(-300), plan: current.plan.slice(-100), planExplanation: current.planExplanation.slice(-20_000) })
       if (useAppStore.getState().activeId === context.conversationId) store.addMessage(saved)
       useAppStore.setState({ streaming: '' })
-      if (useAppStore.getState().activeId === context.conversationId) store.setArtifacts(await window.nocturne.artifacts.list(context.conversationId))
+      if (useAppStore.getState().activeId === context.conversationId) store.setArtifacts((await window.nocturne.artifacts.page(context.conversationId)).items)
     }
     if (context.suggestionId) {
       const changedInApprovedScope = hasAppliedSuggestionChanges(context.suggestionFiles, useAppStore.getState().files.map((file) => file.path))
       if (!error && changedInApprovedScope) await window.nocturne.suggestions.status(context.conversationId, context.suggestionId, 'applied', 'Turno concluído com alterações observadas no escopo aprovado; consulte a resposta do agente para os resultados de validação.')
-      if (useAppStore.getState().activeId === context.conversationId) store.setSuggestions(await window.nocturne.suggestions.list(context.conversationId))
+      if (useAppStore.getState().activeId === context.conversationId) store.setSuggestions((await window.nocturne.suggestions.page(context.conversationId)).items)
     }
       refreshGit(context.conversationId)
       persistedTurnsRef.current.add(completionKey)

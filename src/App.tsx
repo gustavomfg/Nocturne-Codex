@@ -16,6 +16,7 @@ import { useConfirmDialog } from './shared/ConfirmDialog'
 import { useResponsivePanels } from './shared/useResponsivePanels'
 import { AppOverlays } from './domains/settings/AppOverlays'
 import { loadSettingsDialog } from './domains/settings/loadSettingsDialog'
+import { usePagedCollections } from './domains/collections/usePagedCollections'
 import './styles/components.css'
 import './domains/settings/settings.css'
 import './domains/agent/agent.css'
@@ -67,14 +68,16 @@ function App() {
   const active = store.conversations.find((item) => item.id === store.activeId)
   const filtered = store.conversations.filter((item) => item.title.toLowerCase().includes(search.toLowerCase()) && (!workspace || item.workspace === workspace))
   const finishTurn = useTurnLifecycle({ flushStream, activeTurnRef, refreshGit })
+  const collections = usePagedCollections(store.setError)
   const interactionLocked = () => { const state = useAppStore.getState(); return isBusy(state.status) || state.finalizing }
 
-  const refresh = async () => store.setConversations(await window.nocturne.conversations.list())
+  const refresh = collections.refreshConversations
 
   useEffect(() => {
-    void Promise.all([window.nocturne.conversations.list(), window.nocturne.workspace.list(), window.nocturne.settings.get()]).then(async ([conversations, savedWorkspaces, savedSettings]) => {
+    void Promise.all([window.nocturne.conversations.page(), window.nocturne.workspace.list(), window.nocturne.settings.get()]).then(async ([conversationPage, savedWorkspaces, savedSettings]) => {
+      const conversations = conversationPage.items
       const normalized = { ...savedSettings, model: savedSettings.model || '', sandbox: savedSettings.sandbox || 'workspace-write', approvalPolicy: savedSettings.approvalPolicy === 'untrusted' ? 'untrusted' : 'on-request', theme: 'dark', defaultAgentMode: savedSettings.defaultAgentMode || 'review' } as CodexSettings
-      store.setConversations(conversations); store.setStatus(normalized.serverStatus || 'disconnected'); setWorkspaces(savedWorkspaces); setSettings(normalized); setAgentMode(normalized.defaultAgentMode || 'review')
+      store.setConversations(conversations); void collections.initializeConversationHasMore(conversationPage.hasMore); store.setStatus(normalized.serverStatus || 'disconnected'); setWorkspaces(savedWorkspaces); setSettings(normalized); setAgentMode(normalized.defaultAgentMode || 'review')
       void window.nocturne.codex.start().then(async () => {
         const readiness = await window.nocturne.settings.check()
         setSettings((current) => ({ ...current, ...readiness })); store.setStatus(readiness.serverStatus || useAppStore.getState().status)
@@ -159,9 +162,9 @@ function App() {
     if (lastMetadata) restoreMetadata(lastMetadata)
     const conversation = conversations.find((item) => item.id === id)
     if (conversation) setWorkspace(conversation.workspace)
-    const [artifacts, suggestions] = await Promise.all([window.nocturne.artifacts.list(id), window.nocturne.suggestions.list(id)])
+    await collections.loadConversationCollections(id)
     if (requestId !== conversationRequestRef.current || useAppStore.getState().activeId !== id) return
-    store.setArtifacts(artifacts); store.setSuggestions(suggestions); setPreview(null)
+    setPreview(null)
     const workspaceEntry = conversation && availableWorkspaces.find((item) => item.path === conversation.workspace)
     if (conversation && !workspaceEntry?.authorized) {
       setMemory({ content: '', rules: '', updatedAt: '' }); setGitInfo(null)
@@ -286,7 +289,7 @@ function App() {
   async function persistSuggestionStatus(suggestion: Suggestion, status: SuggestionStatus) {
     if (!store.activeId) throw new Error('Abra a conversa da sugestão antes de registrar a decisão.')
     await window.nocturne.suggestions.status(store.activeId, suggestion.id, status)
-    store.setSuggestions(await window.nocturne.suggestions.list(store.activeId))
+    await collections.refreshSuggestions(store.activeId)
   }
 
   async function updateSuggestion(suggestion: Suggestion, status: SuggestionStatus) {
@@ -363,7 +366,7 @@ function App() {
     store.setArtifacts(previous.filter((artifact) => artifact.id !== artifactId))
     try {
       await window.nocturne.artifacts.delete(conversationId, artifactId)
-      if (useAppStore.getState().activeId === conversationId) store.setArtifacts(await window.nocturne.artifacts.list(conversationId))
+      if (useAppStore.getState().activeId === conversationId) await collections.refreshArtifacts(conversationId)
       if (preview) setPreview(null)
     } catch (error) {
       if (useAppStore.getState().activeId === conversationId) store.setArtifacts(previous)
@@ -371,7 +374,7 @@ function App() {
     }
   }
 
-  async function refreshArtifacts() { if (store.activeId) store.setArtifacts(await window.nocturne.artifacts.list(store.activeId)) }
+  async function refreshArtifacts() { await collections.refreshArtifacts(store.activeId) }
 
   async function saveMemory(content: string, rules: string) {
     if (!store.activeId) return
@@ -410,7 +413,7 @@ function App() {
 
   return <div className="app-shell">
     {compactLayout && sidebarOpen && <button tabIndex={-1} className="panel-backdrop sidebar-backdrop" aria-label="Fechar barra lateral" onClick={() => setSidebarVisibility(false)}/>}
-    <Sidebar open={sidebarOpen} compact={compactLayout} triggerRef={sidebarTriggerRef} conversations={filtered} hasConversations={store.conversations.length > 0} activeId={store.activeId} search={search} searchRef={searchRef} workspace={workspace} workspaces={workspaces} settings={settings} status={store.status} onClose={() => setSidebarVisibility(false)} onNew={() => void createConversation().finally(() => { if (compactLayout) setSidebarVisibility(false) })} onSearch={setSearch} onConversation={(id) => void openConversation(id).finally(() => { if (compactLayout) setSidebarVisibility(false) })} onDelete={(id) => void removeConversation(id)} onWorkspace={() => void selectWorkspace().finally(() => { if (compactLayout) setSidebarVisibility(false) })} onSavedWorkspace={(path) => void chooseSavedWorkspace(path).finally(() => { if (compactLayout) setSidebarVisibility(false) })} onFavorite={(item) => void favoriteWorkspace(item)} onSettings={() => { if (compactLayout) setSidebarVisibility(false); setSettingsOpen(true) }}/>
+    <Sidebar open={sidebarOpen} compact={compactLayout} triggerRef={sidebarTriggerRef} conversations={filtered} hasConversations={store.conversations.length > 0} hasMore={collections.conversationHasMore} loadingMore={collections.loading === 'conversations'} activeId={store.activeId} search={search} searchRef={searchRef} workspace={workspace} workspaces={workspaces} settings={settings} status={store.status} onClose={() => setSidebarVisibility(false)} onNew={() => void createConversation().finally(() => { if (compactLayout) setSidebarVisibility(false) })} onSearch={setSearch} onLoadMore={() => void collections.loadMoreConversations()} onConversation={(id) => void openConversation(id).finally(() => { if (compactLayout) setSidebarVisibility(false) })} onDelete={(id) => void removeConversation(id)} onWorkspace={() => void selectWorkspace().finally(() => { if (compactLayout) setSidebarVisibility(false) })} onSavedWorkspace={(path) => void chooseSavedWorkspace(path).finally(() => { if (compactLayout) setSidebarVisibility(false) })} onFavorite={(item) => void favoriteWorkspace(item)} onSettings={() => { if (compactLayout) setSidebarVisibility(false); setSettingsOpen(true) }}/>
 
     <main className="main-panel">
       <WorkspaceTopbar title={title} pathLabel={pathLabel} gitInfo={gitInfo} status={store.status} sidebarOpen={sidebarOpen} inspectorOpen={rightOpen} compact={compactLayout} hasMemory={Boolean(memory.content)} sidebarTriggerRef={sidebarTriggerRef} inspectorTriggerRef={inspectorTriggerRef} onOpenSidebar={() => setSidebarVisibility(true)} onSelectWorkspace={() => void selectWorkspace()} onOpenTool={(tool) => void openWorkspaceTool(tool)} onReconnect={() => void reconnect()} onMemory={() => store.activeId ? setMemoryOpen(true) : store.setError('Abra uma conversa para configurar a memória do workspace.')} onSettings={() => setSettingsOpen(true)} onToggleInspector={() => setInspectorVisibility(!rightOpen)}/>
@@ -421,7 +424,7 @@ function App() {
     </main>
     {compactLayout && rightOpen && <button tabIndex={-1} className="panel-backdrop inspector-backdrop" aria-label="Fechar painel do agente" onClick={() => setInspectorVisibility(false)}/>}
 
-    <Suspense fallback={null}><AgentPanel open={rightOpen} compact={compactLayout} triggerRef={inspectorTriggerRef} gitInfo={gitInfo} onClose={() => setInspectorVisibility(false)} onDecide={decide} onError={store.setError} onNotify={notify} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onSuggestionStatus={updateSuggestion} onSuggestionApply={applySuggestion} onPlanChange={(plan) => store.setPlan(plan, useAppStore.getState().planExplanation)} onPlanExecute={(plan) => preparePrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`, 'build')}/></Suspense>
+    <Suspense fallback={null}><AgentPanel open={rightOpen} compact={compactLayout} triggerRef={inspectorTriggerRef} gitInfo={gitInfo} artifactsHaveMore={collections.artifactHasMore} suggestionsHaveMore={collections.suggestionHasMore} loadingCollection={collections.loading} onClose={() => setInspectorVisibility(false)} onDecide={decide} onError={store.setError} onNotify={notify} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onLoadMoreArtifacts={() => void collections.loadMoreArtifacts()} onLoadMoreSuggestions={() => void collections.loadMoreSuggestions()} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onSuggestionStatus={updateSuggestion} onSuggestionApply={applySuggestion} onPlanChange={(plan) => store.setPlan(plan, useAppStore.getState().planExplanation)} onPlanExecute={(plan) => preparePrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`, 'build')}/></Suspense>
     {confirmation.dialog}<AppOverlays settingsOpen={settingsOpen} settings={settings} status={store.status} workspaces={workspaces} memoryOpen={memoryOpen} memory={memory} preview={preview} onboardingOpen={onboardingOpen} activeId={store.activeId} workspace={workspace} onSettingsClose={() => setSettingsOpen(false)} onSaveSettings={saveSettings} onNotify={notify} onOpenOnboarding={() => { setSettingsOpen(false); setOnboardingOpen(true) }} onMemoryClose={() => setMemoryOpen(false)} onSaveMemory={saveMemory} onPreviewClose={() => setPreview(null)} onError={store.setError} onWorkspace={selectWorkspace} onOpenSettings={() => { setOnboardingOpen(false); setSettingsOpen(true) }} onRecheck={recheckReadiness} onDismissOnboarding={() => { setOnboardingOpen(false); composerRef.current?.focus() }} onCompleteOnboarding={() => { localStorage.setItem('nocturne.onboarding.completed', 'true'); setOnboardingOpen(false); notify('Nocturne pronto para trabalhar.'); composerRef.current?.focus() }}/>{notice && <div className="product-toast" role="status" aria-live="polite"><span>{notice}</span><button aria-label="Fechar notificação" onClick={() => setNotice(null)}><X size={14}/></button></div>}
   </div>
 }

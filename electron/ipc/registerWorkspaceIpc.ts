@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import { spawn } from 'node:child_process'
 import { z } from 'zod'
 import type { LocalDatabase } from '../database/Database'
-import { idSchema, workspaceFavoriteSchema, workspaceToolSchema } from '../../shared/ipc/schemas'
+import { idSchema, pageSchema, workspaceFavoriteSchema, workspaceToolSchema } from '../../shared/ipc/schemas'
 import { safeIpcMain } from './safeIpc'
 import { assertSafeWorkspaceScope } from '../security/WorkspaceTrust'
 
@@ -41,6 +41,7 @@ export function registerWorkspaceIpc(win: BrowserWindow, database: LocalDatabase
     })
   })
   ipcMain.handle('conversations:list', () => database.listConversations())
+  ipcMain.handle('conversations:page', (_event, value: unknown) => { const data = pageSchema.parse(value); return database.listConversationPage(data.offset, data.limit) })
   ipcMain.handle('conversations:create', async (_event, value: unknown) => { const workspace = dependencies.assertKnownWorkspace(z.string().min(1).parse(value)); await dependencies.ensureWorkspace(workspace); return database.createConversation(workspace) })
   ipcMain.handle('conversations:messages', (_event, value: unknown) => database.listMessages(idSchema.parse(value)))
   ipcMain.handle('conversations:messagePage', (_event, value: unknown) => {

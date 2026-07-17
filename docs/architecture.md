@@ -23,6 +23,8 @@ Electron main
 
 `CodexClient` associa requests JSON-RPC a responses por `id`, encaminha notificações e mantém threads/turnos. `AgentStateMachine` é a fonte única para o estado operacional. `LocalDatabase` persiste workspaces, conversas, mensagens, artefatos, memória, configurações e auditoria de aprovações.
 
+Mensagens, conversas, artefatos e sugestões atravessam IPC em páginas limitadas. O renderer carrega a página inicial e solicita páginas anteriores explicitamente, evitando materializar históricos inteiros nas rotas interativas; os métodos integrais permanecem disponíveis apenas para compatibilidade interna enquanto consumidores antigos são removidos gradualmente.
+
 O Intelligent Review System recebe um bloco estruturado validado com Zod no processo principal. Sugestões e decisões usam tabelas próprias; Review Mode força `readOnly` no sandbox do turno. Aplicação é um novo turno Build confirmado pelo usuário, nunca efeito de abrir uma proposta.
 
 Dados ficam em `app.getPath('userData')`; logs ficam em `app.getPath('logs')`. Contexto versionável do projeto fica em `<workspace>/.nocturne/`.

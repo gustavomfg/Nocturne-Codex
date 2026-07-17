@@ -293,9 +293,9 @@ test.describe('renderer do produto', () => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await ready(page)
     await page.evaluate(() => {
-      window.nocturne.suggestions.list = async () => [{
+      window.nocturne.suggestions.page = async () => ({ items: [{
         id: 'suggestion-1', workspaceId: 'workspace-1', conversationId: 'conversation-1', title: 'Melhorar feedback', description: 'Problema', reasoning: 'Evidência', category: 'accessibility', severity: 'medium', affectedFiles: ['src/App.tsx'], proposedChanges: '+ feedback', expectedBenefits: ['Mais confiança'], complexity: 'low', risk: 'low', status: 'pending', createdAt: '2026-07-13T20:00:00.000Z', updatedAt: '2026-07-13T20:00:00.000Z',
-      }]
+      }], hasMore: false })
       window.nocturne.clipboard.writeText = async () => { throw new Error('Clipboard indisponível.') }
     })
     await page.locator('.conversation-open').click()
@@ -319,7 +319,7 @@ test.describe('renderer do produto', () => {
       const suggestion: Suggestion = {
         id: 'suggestion-persistence', workspaceId: '/workspace/nocturne-codex', conversationId: 'conversation-1', title: 'Persistir antes de aplicar', description: 'A decisão precisa ser durável.', reasoning: 'O fluxo de aprovação depende do registro local.', category: 'bug', severity: 'high', affectedFiles: ['src/App.tsx'], proposedChanges: '+ correção', expectedBenefits: ['Auditoria consistente'], complexity: 'low', risk: 'low', status: 'pending', createdAt: '2026-07-13T20:00:00.000Z', updatedAt: '2026-07-13T20:00:00.000Z',
       }
-      window.nocturne.suggestions.list = async () => [suggestion]
+      window.nocturne.suggestions.page = async () => ({ items: [suggestion], hasMore: false })
       window.nocturne.suggestions.status = async () => { throw new Error('Falha ao persistir decisão.') }
       Object.defineProperty(window, '__suggestionSendCount', { configurable: true, writable: true, value: 0 })
       window.nocturne.codex.send = async () => { (window as unknown as { __suggestionSendCount: number }).__suggestionSendCount += 1; return { threadId: 'thread-1', recreated: false } }

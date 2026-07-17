@@ -70,6 +70,12 @@ export class LocalDatabase {
       created_at createdAt, updated_at updatedAt FROM conversations ORDER BY updated_at DESC`).all() as ConversationRow[]
   }
 
+  listConversationPage(offset = 0, limit = 100) {
+    const rows = this.db.prepare(`SELECT id, title, workspace, codex_thread_id codexThreadId,
+      created_at createdAt, updated_at updatedAt FROM conversations ORDER BY updated_at DESC LIMIT ? OFFSET ?`).all(limit + 1, offset) as ConversationRow[]
+    return { items: rows.slice(0, limit), hasMore: rows.length > limit }
+  }
+
   getConversation(id: string): ConversationRow | null {
     return this.db.prepare(`SELECT id, title, workspace, codex_thread_id codexThreadId,
       created_at createdAt, updated_at updatedAt FROM conversations WHERE id=?`).get(id) as ConversationRow | undefined ?? null
@@ -154,6 +160,13 @@ export class LocalDatabase {
       WHERE conversation_id=? ORDER BY updated_at DESC`).all(conversationId) as ArtifactRow[]
   }
 
+  listArtifactPage(conversationId: string, offset = 0, limit = 50) {
+    const rows = this.db.prepare(`SELECT id,conversation_id conversationId,workspace,type,title,file_path filePath,
+      content,metadata,created_at createdAt,updated_at updatedAt FROM artifacts
+      WHERE conversation_id=? ORDER BY updated_at DESC LIMIT ? OFFSET ?`).all(conversationId, limit + 1, offset) as ArtifactRow[]
+    return { items: rows.slice(0, limit), hasMore: rows.length > limit }
+  }
+
   addArtifact(conversationId: string, workspace: string, type: string, title: string, filePath?: string | null, content?: string | null, metadata?: unknown) {
     const now = new Date().toISOString()
     const existing = filePath ? this.db.prepare('SELECT id,created_at createdAt FROM artifacts WHERE conversation_id=? AND file_path=? ORDER BY updated_at DESC LIMIT 1').get(conversationId, filePath) as { id: string; createdAt: string } | undefined : undefined
@@ -174,6 +187,16 @@ export class LocalDatabase {
     return rows.map((row) => ({ ...row, affectedFiles: JSON.parse(row.affectedFiles) as string[], expectedBenefits: JSON.parse(row.expectedBenefits) as string[] }))
   }
 
+  listSuggestionPage(conversationId: string, offset = 0, limit = 50) {
+    const rows = this.db.prepare(`SELECT id,workspace_id workspaceId,conversation_id conversationId,title,description,reasoning,category,severity,affected_files affectedFiles,proposed_changes proposedChanges,expected_benefits expectedBenefits,complexity,risk,status,created_at createdAt,updated_at updatedAt FROM suggestions WHERE conversation_id=? ORDER BY updated_at DESC LIMIT ? OFFSET ?`).all(conversationId, limit + 1, offset) as Array<Omit<Suggestion, 'affectedFiles' | 'expectedBenefits'> & { affectedFiles: string; expectedBenefits: string }>
+    return { items: decodeSuggestions(rows.slice(0, limit)), hasMore: rows.length > limit }
+  }
+
+  getSuggestion(id: string, conversationId?: string): Suggestion | null {
+    const row = this.db.prepare(`SELECT id,workspace_id workspaceId,conversation_id conversationId,title,description,reasoning,category,severity,affected_files affectedFiles,proposed_changes proposedChanges,expected_benefits expectedBenefits,complexity,risk,status,created_at createdAt,updated_at updatedAt FROM suggestions WHERE id=?${conversationId ? ' AND conversation_id=?' : ''}`).get(...(conversationId ? [id, conversationId] : [id])) as Omit<Suggestion, 'affectedFiles' | 'expectedBenefits'> & { affectedFiles: string; expectedBenefits: string } | undefined
+    return row ? decodeSuggestions([row])[0] : null
+  }
+
   addSuggestion(conversationId: string, workspaceId: string, value: Omit<Suggestion, 'id' | 'workspaceId' | 'conversationId' | 'createdAt' | 'updatedAt' | 'status'>): Suggestion {
     const now = new Date().toISOString()
     const row: Suggestion = { id: randomUUID(), workspaceId, conversationId, ...value, status: 'pending', createdAt: now, updatedAt: now }
@@ -191,7 +214,7 @@ export class LocalDatabase {
     if (!changed.changes) throw new Error('Sugestão não encontrada.')
     this.db.prepare('INSERT INTO suggestion_decisions(id,suggestion_id,status,result,created_at) VALUES(?,?,?,?,?)').run(randomUUID(), id, status, result?.slice(0, 20_000) ?? null, updatedAt)
     const row = this.db.prepare('SELECT conversation_id conversationId FROM suggestions WHERE id=?').get(id) as { conversationId: string }
-    return this.listSuggestions(row.conversationId).find((item) => item.id === id) as Suggestion
+    return this.getSuggestion(id, row.conversationId) as Suggestion
   }
 
   exportData() {
@@ -271,4 +294,8 @@ export class LocalDatabase {
     this.db.pragma('wal_checkpoint(PASSIVE)')
     this.db.close()
   }
+}
+
+function decodeSuggestions(rows: Array<Omit<Suggestion, 'affectedFiles' | 'expectedBenefits'> & { affectedFiles: string; expectedBenefits: string }>) {
+  return rows.map((row) => ({ ...row, affectedFiles: JSON.parse(row.affectedFiles) as string[], expectedBenefits: JSON.parse(row.expectedBenefits) as string[] }))
 }

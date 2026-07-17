@@ -5,11 +5,11 @@ import { relativeTime } from '../../shared/format'
 import { useOffCanvasPanel } from '../../shared/useOffCanvasPanel'
 
 interface SidebarProps {
-  open: boolean; compact: boolean; triggerRef: RefObject<HTMLElement | null>; conversations: Conversation[]; hasConversations: boolean; activeId: string | null; search: string; searchRef: RefObject<HTMLInputElement | null>; workspace: string; workspaces: Workspace[]; settings: CodexSettings; status: string;
-  onClose(): void; onNew(): void; onSearch(value: string): void; onConversation(id: string): void; onDelete(id: string): void; onWorkspace(): void; onSavedWorkspace(path: string): void; onFavorite(item: Workspace): void; onSettings(): void
+  open: boolean; compact: boolean; triggerRef: RefObject<HTMLElement | null>; conversations: Conversation[]; hasConversations: boolean; hasMore: boolean; loadingMore: boolean; activeId: string | null; search: string; searchRef: RefObject<HTMLInputElement | null>; workspace: string; workspaces: Workspace[]; settings: CodexSettings; status: string;
+  onClose(): void; onNew(): void; onSearch(value: string): void; onLoadMore(): void; onConversation(id: string): void; onDelete(id: string): void; onWorkspace(): void; onSavedWorkspace(path: string): void; onFavorite(item: Workspace): void; onSettings(): void
 }
 
-export function Sidebar({ open, compact, triggerRef, conversations, hasConversations, activeId, search, searchRef, workspace, workspaces, settings, status, onClose, onNew, onSearch, onConversation, onDelete, onWorkspace, onSavedWorkspace, onFavorite, onSettings }: SidebarProps) {
+export function Sidebar({ open, compact, triggerRef, conversations, hasConversations, hasMore, loadingMore, activeId, search, searchRef, workspace, workspaces, settings, status, onClose, onNew, onSearch, onLoadMore, onConversation, onDelete, onWorkspace, onSavedWorkspace, onFavorite, onSettings }: SidebarProps) {
   const sidebarRef = useOffCanvasPanel<HTMLElement>({ open, modal: compact, onClose, triggerRef })
   const newShortcut = navigator.platform.toLowerCase().includes('mac') ? '⌘ N' : 'Ctrl N'
   useEffect(() => { if (sidebarRef.current) sidebarRef.current.inert = !open }, [open, sidebarRef])
@@ -24,6 +24,7 @@ export function Sidebar({ open, compact, triggerRef, conversations, hasConversat
         <button className="delete-button" aria-label={`Excluir conversa ${conversation.title}`} title="Excluir conversa" onClick={() => onDelete(conversation.id)}><Trash2 size={13}/></button>
       </div>)}
       {!conversations.length && <div className="empty-list" role="status"><strong>{hasConversations ? 'Nenhum resultado encontrado' : 'Nenhuma conversa ainda'}</strong><small>{hasConversations ? 'Ajuste a busca ou selecione outro workspace.' : 'Crie uma conversa para começar a trabalhar.'}</small>{search && <button type="button" onClick={() => onSearch('')}>Limpar busca</button>}</div>}
+      {hasMore && <button className="collection-load-more" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? 'Carregando…' : 'Carregar conversas anteriores'}</button>}
     </nav>
     <div className="sidebar-footer">
       {workspaces.slice(0, 4).map((item) => <div key={item.path} className={`workspace-mini ${workspace === item.path ? 'active' : ''}`}><button className="workspace-open" onClick={() => onSavedWorkspace(item.path)}><Folder size={13}/><span>{item.name}</span></button><button className="workspace-favorite" aria-label={item.favorite ? `Remover ${item.name} dos favoritos` : `Favoritar ${item.name}`} aria-pressed={item.favorite} title={item.favorite ? 'Remover dos favoritos' : 'Favoritar'} onClick={() => onFavorite(item)}><Star size={12} fill={item.favorite ? 'currentColor' : 'none'}/></button></div>)}

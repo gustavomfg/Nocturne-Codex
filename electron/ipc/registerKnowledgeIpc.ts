@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { LocalDatabase } from '../database/Database'
 import type { Logger } from '../logging/Logger'
 import { extractSuggestions } from '../../shared/suggestions'
-import { idSchema, suggestionStatusSchema } from '../../shared/ipc/schemas'
+import { conversationPageSchema, idSchema, suggestionStatusSchema } from '../../shared/ipc/schemas'
 import { safeIpcMain } from './safeIpc'
 
 interface WorkspaceContext { content: string; rules: string; updatedAt: string }
@@ -28,12 +28,14 @@ export function registerKnowledgeIpc(win: BrowserWindow, database: LocalDatabase
     const result = await dependencies.write(workspace, data.content, data.rules); database.setWorkspaceMemory(workspace, `${data.content}\n\n# Regras do projeto\n${data.rules}`); return result
   })
   ipcMain.handle('artifacts:list', (_event, value: unknown) => database.listArtifacts(idSchema.parse(value)))
+  ipcMain.handle('artifacts:page', (_event, value: unknown) => { const data = conversationPageSchema.parse(value); return database.listArtifactPage(data.conversationId, data.offset, data.limit) })
   ipcMain.handle('artifacts:delete', (_event, value: unknown) => { const data = z.object({ conversationId: idSchema, artifactId: idSchema }).parse(value); if (!database.deleteArtifact(data.artifactId, data.conversationId)) throw new Error('Artefato não encontrado ou já removido.'); return { deleted: true } })
   ipcMain.handle('suggestions:list', (_event, value: unknown) => database.listSuggestions(idSchema.parse(value)))
+  ipcMain.handle('suggestions:page', (_event, value: unknown) => { const data = conversationPageSchema.parse(value); return database.listSuggestionPage(data.conversationId, data.offset, data.limit) })
   ipcMain.handle('suggestions:create', (_event, value: unknown) => {
     const data = z.object({ conversationId: idSchema, content: z.string().max(1_000_000) }).parse(value); const workspace = dependencies.workspace(data.conversationId); const extracted = extractSuggestions(data.content)
     const suggestions = extracted.suggestions.map((suggestion) => database.addSuggestion(data.conversationId, workspace, suggestion)); if (suggestions.length) logger.info('artifacts', 'Sugestões de review persistidas', { conversationId: data.conversationId, count: suggestions.length }); return { suggestions, content: extracted.content }
   })
-  ipcMain.handle('suggestions:status', async (_event, value: unknown) => { const data = suggestionStatusSchema.parse(value); const workspace = dependencies.authorizedWorkspace(data.conversationId); const suggestion = database.listSuggestions(data.conversationId).find((item) => item.id === data.suggestionId); if (!suggestion) throw new Error('Sugestão não pertence a esta conversa.'); const updated = database.setSuggestionStatus(data.suggestionId, data.status, data.result); await dependencies.recordDecision(workspace, updated); return updated })
+  ipcMain.handle('suggestions:status', async (_event, value: unknown) => { const data = suggestionStatusSchema.parse(value); const workspace = dependencies.authorizedWorkspace(data.conversationId); const suggestion = database.getSuggestion(data.suggestionId, data.conversationId); if (!suggestion) throw new Error('Sugestão não pertence a esta conversa.'); const updated = database.setSuggestionStatus(data.suggestionId, data.status, data.result); await dependencies.recordDecision(workspace, updated); return updated })
   return () => ipcMain.dispose()
 }

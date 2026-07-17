@@ -29,6 +29,8 @@ export const UI_TIMING = {
   diagnosticsIntervalMs: 10_000,
 } as const
 
+export const COLLECTION_PAGE_LIMITS = { conversations: 100, artifacts: 50, suggestions: 50 } as const
+
 function compareVersions(left: string, right: string) {
   const a = left.split('.').map(Number)
   const b = right.split('.').map(Number)
