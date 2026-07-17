@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { LocalDatabase } from '../electron/database/Database'
 import Sqlite from 'better-sqlite3'
 import { migrations } from '../electron/database/migrations'
+import { DATABASE_SCHEMA_VERSION } from '../shared/constants'
 
 const directories: string[] = []
 const create = () => { const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-test-')); directories.push(directory); return new LocalDatabase(directory) }
@@ -14,6 +15,7 @@ afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(direc
 describe('persistência SQLite', () => {
   it('mantém migrações incrementais, ordenadas e sem lacunas', () => {
     expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7])
+    expect(migrations[migrations.length - 1]?.version).toBe(DATABASE_SCHEMA_VERSION)
   })
   it('persiste conversa, thread, mensagens, memória e artefatos', () => {
     const db = create(); const workspace = '/tmp/workspace'; const conversation = db.createConversation(workspace)
@@ -92,10 +94,24 @@ describe('persistência SQLite', () => {
     previous.close()
     const migrated = new LocalDatabase(directory)
     expect(migrated.listMessages(conversation.id)[0].content).toBe('Preservar')
+    const migrationBackups = fs.readdirSync(directory).filter((name) => name.startsWith('nocturne.db.backup-'))
+    expect(migrationBackups).toHaveLength(1)
+    expect(fs.statSync(path.join(directory, migrationBackups[0])).mode & 0o777).toBe(0o600)
     migrated.close()
     const verified = new Sqlite(file, { readonly: true })
     expect(verified.pragma('user_version', { simple: true })).toBe(7)
     verified.close()
+  })
+  it('recusa schema futuro antes de executar manutenção ou migrações', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-test-')); directories.push(directory)
+    const file = path.join(directory, 'nocturne.db')
+    const future = new Sqlite(file)
+    future.pragma('user_version = 8')
+    future.close()
+    expect(() => new LocalDatabase(directory)).toThrow(/schema 8.*suporta até o schema 7/)
+    const preserved = new Sqlite(file, { readonly: true })
+    expect(preserved.pragma('user_version', { simple: true })).toBe(8)
+    preserved.close()
   })
   it('reverte integralmente uma restauração inválida', () => {
     const db = create(); const existing = db.createConversation('/tmp/existing'); db.addMessage(existing.id, 'user', 'Estado anterior')

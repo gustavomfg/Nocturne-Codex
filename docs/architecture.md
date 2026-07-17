@@ -2,7 +2,7 @@
 
 ## Migrações do banco
 
-O SQLite usa uma lista ordenada de migrações versionadas. Cada `up` é executado em uma transação exclusiva e atualiza `user_version` somente no fim da transação. Antes de migrar bancos existentes, o arquivo atual é preservado como backup. Uma falha reverte integralmente a versão em andamento.
+O SQLite usa uma lista ordenada de migrações versionadas. Cada `up` é executado em uma transação exclusiva e atualiza `user_version` somente no fim da transação. Antes de migrar qualquer banco existente de uma versão anterior suportada, o WAL recebe checkpoint e o arquivo atual é preservado como backup restrito. Uma falha reverte integralmente a versão em andamento. Bancos com `user_version` superior ao schema suportado são recusados antes de manutenção ou migração, evitando downgrade destrutivo.
 
 ## Visão geral
 

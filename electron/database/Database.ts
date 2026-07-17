@@ -3,6 +3,7 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import type { Suggestion, SuggestionStatus } from '../../shared/suggestions'
+import { DATABASE_SCHEMA_VERSION } from '../../shared/constants'
 import { migrateDatabase } from './migrations'
 
 export interface ConversationRow {
@@ -43,14 +44,21 @@ export class LocalDatabase {
   constructor(userDataPath: string) {
     this.databasePath = path.join(userDataPath, 'nocturne.db')
     this.db = new Database(this.databasePath)
+    const schemaVersion = this.db.pragma('user_version', { simple: true }) as number
+    if (schemaVersion > DATABASE_SCHEMA_VERSION) {
+      this.db.close()
+      throw new Error(`Este banco usa o schema ${schemaVersion}, mas esta versão do Nocturne suporta até o schema ${DATABASE_SCHEMA_VERSION}. Atualize o aplicativo antes de abrir estes dados.`)
+    }
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('foreign_keys = ON')
     this.db.pragma('busy_timeout = 5000')
     this.db.pragma('synchronous = NORMAL')
     this.db.pragma('temp_store = MEMORY')
-    const schemaVersion = this.db.pragma('user_version', { simple: true }) as number
-    if (schemaVersion < 5 && fs.existsSync(this.databasePath)) {
-      fs.copyFileSync(this.databasePath, `${this.databasePath}.backup-${Date.now()}`)
+    if (schemaVersion > 0 && schemaVersion < DATABASE_SCHEMA_VERSION && fs.existsSync(this.databasePath)) {
+      this.db.pragma('wal_checkpoint(FULL)')
+      const backupPath = `${this.databasePath}.backup-${Date.now()}`
+      fs.copyFileSync(this.databasePath, backupPath)
+      fs.chmodSync(backupPath, 0o600)
     }
     migrateDatabase(this.db, schemaVersion)
     this.runScheduledIntegrityCheck()
@@ -187,7 +195,7 @@ export class LocalDatabase {
   }
 
   exportData() {
-    return { schemaVersion: 7, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), suggestions: this.db.prepare('SELECT * FROM suggestions').all(), suggestionDecisions: this.db.prepare('SELECT * FROM suggestion_decisions').all(), settings: this.getSettings() }
+    return { schemaVersion: DATABASE_SCHEMA_VERSION, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), suggestions: this.db.prepare('SELECT * FROM suggestions').all(), suggestionDecisions: this.db.prepare('SELECT * FROM suggestion_decisions').all(), settings: this.getSettings() }
   }
 
   importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[]; suggestions?: unknown[]; suggestionDecisions?: unknown[]; settings?: Record<string, string> }) {
