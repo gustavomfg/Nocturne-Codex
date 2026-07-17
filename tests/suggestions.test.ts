@@ -4,6 +4,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { LocalDatabase } from '../electron/database/Database'
 import { extractSuggestions, sandboxModeForAgent, sanitizeSuggestionTitle, suggestedCommit } from '../shared/suggestions'
+import { hasAppliedSuggestionChanges } from '../src/domains/agent/useTurnLifecycle'
 
 const directories: string[] = []
 const tempDirectory = () => { const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-suggestions-')); directories.push(directory); return directory }
@@ -48,5 +49,13 @@ describe('sugestões', () => {
     expect(sandboxModeForAgent('review', 'workspace-write')).toBe('read-only')
     expect(sandboxModeForAgent('build', 'workspace-write')).toBe('workspace-write')
     expect(suggestedCommit({ category: 'security', title: 'Restringir IPC' })).toBe('fix(security): restringir ipc')
+  })
+
+  it('só considera aplicada uma sugestão com arquivos observados no escopo aprovado', () => {
+    expect(hasAppliedSuggestionChanges(['src/App.tsx'], [])).toBe(false)
+    expect(hasAppliedSuggestionChanges(['src/App.tsx'], ['docs/README.md'])).toBe(false)
+    expect(hasAppliedSuggestionChanges(['src/App.tsx'], ['/workspace/src/App.tsx'])).toBe(true)
+    expect(hasAppliedSuggestionChanges(['src/App.tsx', 'tests/App.test.ts'], ['src/App.tsx'])).toBe(false)
+    expect(hasAppliedSuggestionChanges([], ['src/novo.ts'])).toBe(true)
   })
 })

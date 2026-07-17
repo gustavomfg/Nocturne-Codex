@@ -61,7 +61,7 @@ function App() {
   const inspectorTriggerRef = useRef<HTMLButtonElement>(null)
   const { queueStreamDelta, flushStream, appendActivityDetail, addItemActivity, completeItem } = useBufferedCodexEvents()
   const activeTurnRef = useRef<ActiveTurnContext | null>(null)
-  const applyingSuggestionRef = useRef<string | null>(null)
+  const applyingSuggestionRef = useRef<{ id: string; affectedFiles: string[] } | null>(null)
   const conversationRequestRef = useRef(0)
   const historyOffsetRef = useRef(0)
   const active = store.conversations.find((item) => item.id === store.activeId)
@@ -218,7 +218,7 @@ function App() {
     if (!conversationId) return
     store.clearRun(); setPrompt('')
     const selectedAttachments = attachments
-    activeTurnRef.current = { conversationId, mode, suggestionId: applyingSuggestionRef.current }
+    activeTurnRef.current = { conversationId, mode, suggestionId: applyingSuggestionRef.current?.id ?? null, suggestionFiles: applyingSuggestionRef.current?.affectedFiles ?? [] }
     applyingSuggestionRef.current = null
     setAttachments([])
     store.addMessage({ id: fakeId(), conversationId, role: 'user', content, metadata: JSON.stringify({ attachments: selectedAttachments.map((item) => item.path) }), createdAt: now() })
@@ -283,9 +283,14 @@ function App() {
     catch (error) { store.setError(errorMessage(error)) }
   }
 
+  async function persistSuggestionStatus(suggestion: Suggestion, status: SuggestionStatus) {
+    if (!store.activeId) throw new Error('Abra a conversa da sugestão antes de registrar a decisão.')
+    await window.nocturne.suggestions.status(store.activeId, suggestion.id, status)
+    store.setSuggestions(await window.nocturne.suggestions.list(store.activeId))
+  }
+
   async function updateSuggestion(suggestion: Suggestion, status: SuggestionStatus) {
-    if (!store.activeId) return
-    try { await window.nocturne.suggestions.status(store.activeId, suggestion.id, status); store.setSuggestions(await window.nocturne.suggestions.list(store.activeId)) }
+    try { await persistSuggestionStatus(suggestion, status) }
     catch (error) { store.setError(errorMessage(error)) }
   }
 
@@ -299,9 +304,10 @@ function App() {
     ]
     const files = suggestion.affectedFiles.length ? suggestion.affectedFiles.join('\n• ') : 'arquivos a confirmar pelo agente'
     if (!await confirmation.confirm({ title: 'Aplicar esta sugestão?', description: `${suggestion.title}\n\nArquivos:\n• ${files}\n\nO agente poderá modificar somente o escopo confirmado e executará validações.`, confirmLabel: 'Preparar aplicação' })) return
-    await updateSuggestion(suggestion, 'accepted')
+    try { await persistSuggestionStatus(suggestion, 'accepted') }
+    catch (error) { store.setError(`A sugestão não foi aceita: ${errorMessage(error)}`); return }
     store.setPlan(steps, `Aplicação da sugestão: ${suggestion.title}`)
-    applyingSuggestionRef.current = suggestion.id
+    applyingSuggestionRef.current = { id: suggestion.id, affectedFiles: suggestion.affectedFiles }
     await submitPrompt(`Aplique a sugestão aprovada abaixo. Não amplie o escopo. Antes de editar, confirme os arquivos afetados; depois execute typecheck, lint e testes relacionados quando disponíveis.\n\nTítulo: ${suggestion.title}\nProblema: ${suggestion.description}\nJustificativa: ${suggestion.reasoning}\nArquivos: ${suggestion.affectedFiles.join(', ') || 'identificar antes de editar'}\nProposta:\n${suggestion.proposedChanges}`, 'build')
   }
 

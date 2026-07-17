@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { installNocturneMock } from './mockNocturne'
+import type { Suggestion } from '../../src/types'
 
 async function ready(page: import('@playwright/test').Page) {
   await page.goto('/')
@@ -309,6 +310,26 @@ test.describe('renderer do produto', () => {
     const dialog = page.getByRole('dialog', { name: 'Melhorar feedback' })
     await dialog.getByRole('button', { name: 'Copiar diff' }).click()
     await expect(dialog.getByRole('alert')).toContainText('Clipboard indisponível.')
+  })
+
+  test('não inicia Build quando a aceitação da sugestão não pode ser persistida', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await ready(page)
+    await page.evaluate(() => {
+      const suggestion: Suggestion = {
+        id: 'suggestion-persistence', workspaceId: '/workspace/nocturne-codex', conversationId: 'conversation-1', title: 'Persistir antes de aplicar', description: 'A decisão precisa ser durável.', reasoning: 'O fluxo de aprovação depende do registro local.', category: 'bug', severity: 'high', affectedFiles: ['src/App.tsx'], proposedChanges: '+ correção', expectedBenefits: ['Auditoria consistente'], complexity: 'low', risk: 'low', status: 'pending', createdAt: '2026-07-13T20:00:00.000Z', updatedAt: '2026-07-13T20:00:00.000Z',
+      }
+      window.nocturne.suggestions.list = async () => [suggestion]
+      window.nocturne.suggestions.status = async () => { throw new Error('Falha ao persistir decisão.') }
+      Object.defineProperty(window, '__suggestionSendCount', { configurable: true, writable: true, value: 0 })
+      window.nocturne.codex.send = async () => { (window as unknown as { __suggestionSendCount: number }).__suggestionSendCount += 1; return { threadId: 'thread-1', recreated: false } }
+    })
+    await page.locator('.conversation-open').click()
+    await page.getByRole('tab', { name: /Sugestões/ }).click()
+    await page.getByRole('button', { name: 'Aplicar' }).click()
+    await page.getByRole('button', { name: 'Preparar aplicação' }).click()
+    await expect(page.getByRole('alert')).toContainText('A sugestão não foi aceita: Falha ao persistir decisão.')
+    expect(await page.evaluate(() => (window as unknown as { __suggestionSendCount: number }).__suggestionSendCount)).toBe(0)
   })
 
   for (const viewport of [{ width: 1440, height: 900 }, { width: 980, height: 820 }, { width: 720, height: 800 }, { width: 520, height: 760 }]) {

@@ -3,7 +3,7 @@ import type { AgentMode } from '../../types'
 import { useAppStore } from '../../store'
 import { useShallow } from 'zustand/react/shallow'
 
-export interface ActiveTurnContext { conversationId: string; mode: AgentMode; suggestionId: string | null }
+export interface ActiveTurnContext { conversationId: string; mode: AgentMode; suggestionId: string | null; suggestionFiles: string[] }
 
 export function useTurnLifecycle({ flushStream, activeTurnRef, refreshGit }: { flushStream(): void; activeTurnRef: MutableRefObject<ActiveTurnContext | null>; refreshGit(conversationId: string): void }) {
   const processingTurnsRef = useRef(new Set<string>())
@@ -40,8 +40,8 @@ export function useTurnLifecycle({ flushStream, activeTurnRef, refreshGit }: { f
       if (useAppStore.getState().activeId === context.conversationId) store.setArtifacts(await window.nocturne.artifacts.list(context.conversationId))
     }
     if (context.suggestionId) {
-      const changed = useAppStore.getState().files.length > 0 || Boolean(useAppStore.getState().diff)
-      if (!error && changed) await window.nocturne.suggestions.status(context.conversationId, context.suggestionId, 'applied', 'Alteração executada; consulte a resposta do agente para resultados de validação.')
+      const changedInApprovedScope = hasAppliedSuggestionChanges(context.suggestionFiles, useAppStore.getState().files.map((file) => file.path))
+      if (!error && changedInApprovedScope) await window.nocturne.suggestions.status(context.conversationId, context.suggestionId, 'applied', 'Turno concluído com alterações observadas no escopo aprovado; consulte a resposta do agente para os resultados de validação.')
       if (useAppStore.getState().activeId === context.conversationId) store.setSuggestions(await window.nocturne.suggestions.list(context.conversationId))
     }
       refreshGit(context.conversationId)
@@ -54,3 +54,15 @@ export function useTurnLifecycle({ flushStream, activeTurnRef, refreshGit }: { f
     }
   }
 }
+
+export function hasAppliedSuggestionChanges(expectedFiles: string[], observedFiles: string[]) {
+  if (!observedFiles.length) return false
+  if (!expectedFiles.length) return true
+  const observed = observedFiles.map(normalizePath)
+  return expectedFiles.every((expectedFile) => {
+    const expected = normalizePath(expectedFile)
+    return observed.some((file) => file === expected || file.endsWith(`/${expected}`))
+  })
+}
+
+function normalizePath(value: string) { return value.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+|\/+$/g, '') }
