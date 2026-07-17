@@ -2,9 +2,10 @@ import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { performance } from 'node:perf_hooks'
 import { afterEach, describe, expect, it } from 'vitest'
 import { backupSchema } from '../shared/ipc/backupSchemas'
-import { assertBackupByteLimit, assertBackupRecordLimit, BACKUP_LIMITS } from '../shared/ipc/backupLimits'
+import { assertBackupByteLimit, assertBackupRecordLimit, BACKUP_LIMITS, PERSISTENCE_PERFORMANCE_BUDGETS } from '../shared/ipc/backupLimits'
 import { parseBackupInWorker, serializeBackupInWorker } from '../electron/ipc/backupWorkers'
 
 const now = new Date().toISOString()
@@ -55,9 +56,11 @@ describe('schema de backup', () => {
   it('serializa e reabre no worker backups acima do antigo limite de 50.000 registros', async () => {
     const file = path.join(os.tmpdir(), `nocturne-backup-worker-${randomUUID()}.json`)
     temporaryFiles.push(file)
-    const serialized = await serializeBackupInWorker({ messages: new Array(50_001).fill(null) })
+    const startedAt = performance.now()
+    const serialized = await serializeBackupInWorker({ messages: new Array(PERSISTENCE_PERFORMANCE_BUDGETS.workerRoundTripRecords).fill(null) })
     fs.writeFileSync(file, serialized)
     const parsed = await parseBackupInWorker(file) as { messages: unknown[] }
-    expect(parsed.messages).toHaveLength(50_001)
-  })
+    expect(parsed.messages).toHaveLength(PERSISTENCE_PERFORMANCE_BUDGETS.workerRoundTripRecords)
+    expect(performance.now() - startedAt).toBeLessThan(PERSISTENCE_PERFORMANCE_BUDGETS.workerRoundTripMs)
+  }, 10_000)
 })

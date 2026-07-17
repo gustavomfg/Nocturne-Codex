@@ -37,3 +37,9 @@ O workflow protegido também roda semanalmente e sempre que a matriz de compatib
 O workflow `Package validation` valida todo push no `master`. Typecheck, lint, testes e renderer rodam sobre a fonte integrada; a matriz de empacotamento permanece restrita a pull requests relevantes, tags e execuções manuais para evitar builds de plataforma redundantes.
 
 O workflow `Dependency security` roda semanalmente, por execução manual e em pull requests que alteram `package.json` ou `package-lock.json`. Ele instala exatamente o lockfile sem executar scripts, bloqueia vulnerabilidades de severidade alta ou crítica nas dependências de produção e publica por 30 dias um SBOM CycloneDX associado ao commit analisado.
+
+## Orçamentos de persistência
+
+A suíte de release mede dois cenários canônicos definidos em `shared/ipc/backupLimits.ts`: restauração SQLite de 25 mil mensagens em até 2 segundos, seguida da primeira página em até 100 ms; e round-trip de serialização, escrita e parsing em worker com 50.001 registros em até 2 segundos. Esses números são orçamentos de regressão para cargas representativas no ambiente de CI, não garantias para o limite agregado de 200 mil registros ou 25 MB.
+
+Exportação e importação registram duração, bytes ou quantidade de registros nos logs sanitizados. Ao alterar schemas, statements ou limites, compare essas métricas e ajuste o cenário somente com medição documentada; não eleve o orçamento apenas para acomodar uma regressão.

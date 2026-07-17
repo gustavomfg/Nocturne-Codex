@@ -5,6 +5,14 @@ export const BACKUP_LIMITS = Object.freeze({
   maxRecords: 200_000,
 })
 
+export const PERSISTENCE_PERFORMANCE_BUDGETS = Object.freeze({
+  representativeRestoreRecords: 25_000,
+  restoreMs: 2_000,
+  firstPageMs: 100,
+  workerRoundTripRecords: 50_001,
+  workerRoundTripMs: 2_000,
+})
+
 export function countBackupRecords(value: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return 0
   const record = value as Record<string, unknown>

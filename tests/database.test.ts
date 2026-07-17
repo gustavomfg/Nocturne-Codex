@@ -7,6 +7,7 @@ import { LocalDatabase } from '../electron/database/Database'
 import Sqlite from 'better-sqlite3'
 import { migrations } from '../electron/database/migrations'
 import { DATABASE_SCHEMA_VERSION } from '../shared/constants'
+import { PERSISTENCE_PERFORMANCE_BUDGETS } from '../shared/ipc/backupLimits'
 
 const directories: string[] = []
 const create = () => { const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-test-')); directories.push(directory); return new LocalDatabase(directory) }
@@ -146,11 +147,11 @@ describe('persistência SQLite', () => {
     expect(columns.map((item) => item.name)).toEqual(expect.arrayContaining(['expected_benefits', 'complexity', 'risk']))
     expect(migrated.pragma('user_version', { simple: true })).toBe(5); migrated.close()
   })
-  it('restaura e pagina 25 mil mensagens dentro do orçamento de release', () => {
+  it('restaura e pagina a carga representativa dentro do orçamento de release', () => {
     const workspace = '/tmp/performance'
     const conversationId = '00000000-0000-4000-8000-000000000001'
     const now = new Date().toISOString()
-    const messages = Array.from({ length: 25_000 }, (_, index) => ({
+    const messages = Array.from({ length: PERSISTENCE_PERFORMANCE_BUDGETS.representativeRestoreRecords }, (_, index) => ({
       id: `00000000-0000-4000-8000-${String(index + 2).padStart(12, '0')}`,
       conversation_id: conversationId,
       role: 'assistant',
@@ -171,8 +172,8 @@ describe('persistência SQLite', () => {
     const page = db.listMessagePage(conversationId)
     const pageDuration = performance.now() - pageStarted
     expect(page.items).toHaveLength(100)
-    expect(importDuration).toBeLessThan(2_000)
-    expect(pageDuration).toBeLessThan(100)
+    expect(importDuration).toBeLessThan(PERSISTENCE_PERFORMANCE_BUDGETS.restoreMs)
+    expect(pageDuration).toBeLessThan(PERSISTENCE_PERFORMANCE_BUDGETS.firstPageMs)
     db.close()
   }, 10_000)
 })

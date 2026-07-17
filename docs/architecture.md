@@ -25,6 +25,8 @@ Electron main
 
 Mensagens, conversas, artefatos e sugestões atravessam IPC em páginas limitadas. O renderer carrega a página inicial e solicita páginas anteriores explicitamente, evitando materializar históricos inteiros nas rotas interativas; os métodos integrais permanecem disponíveis apenas para compatibilidade interna enquanto consumidores antigos são removidos gradualmente.
 
+Na importação e exportação, leitura, parsing e serialização JSON são delegados a workers. Validação Zod, consultas SQLite e inserções transacionais continuam síncronas no processo principal. A suíte aplica orçamentos de regressão a cargas representativas e os logs registram duração e volume, mas o teto aceito de 25 MB e 200 mil registros não equivale a uma garantia de ausência de bloqueio; mudanças nessa rota devem ser medidas antes de ampliar os limites.
+
 O Intelligent Review System recebe um bloco estruturado validado com Zod no processo principal. Sugestões e decisões usam tabelas próprias; Review Mode força `readOnly` no sandbox do turno. Aplicação é um novo turno Build confirmado pelo usuário, nunca efeito de abrir uma proposta.
 
 Dados ficam em `app.getPath('userData')`; logs ficam em `app.getPath('logs')`. Contexto versionável do projeto fica em `<workspace>/.nocturne/`.

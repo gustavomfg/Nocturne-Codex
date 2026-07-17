@@ -18,7 +18,7 @@
 
 ### Performance e distribuição
 
-- importação de backups reutiliza statements preparados e possui orçamento automatizado com 25 mil mensagens;
+- importação de backups reutiliza statements preparados, registra duração e volume e possui orçamentos automatizados para restauração, primeira página e round-trip JSON em worker;
 - mensagens fora da viewport usam renderização sob demanda nativa do navegador;
 - conversas, artefatos e sugestões passam a usar páginas limitadas com carregamento explícito de históricos anteriores;
 - pacote conserva somente locales `pt-BR` e `en-US`, reduzindo em aproximadamente 45 MB a instalação Linux descompactada;

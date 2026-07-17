@@ -4,7 +4,7 @@ import { performance } from 'node:perf_hooks'
 import type { LocalDatabase } from '../database/Database'
 import type { Logger } from '../logging/Logger'
 import { backupSchema } from '../../shared/ipc/backupSchemas'
-import { assertBackupByteLimit, assertBackupRecordLimit } from '../../shared/ipc/backupLimits'
+import { assertBackupByteLimit, assertBackupRecordLimit, countBackupRecords } from '../../shared/ipc/backupLimits'
 import { safeIpcMain } from './safeIpc'
 import { parseBackupInWorker, serializeBackupInWorker } from './backupWorkers'
 import { assertSafeWorkspaceScope } from '../security/WorkspaceTrust'
@@ -34,11 +34,12 @@ export function registerDataIpc(win: BrowserWindow, database: LocalDatabase, log
     for (const workspace of validated.workspaces) assertSafeWorkspaceScope(workspace.path, false)
     const confirmation = await dialog.showMessageBox(win, { type: 'warning', buttons: ['Cancelar', 'Substituir dados'], defaultId: 0, cancelId: 0, title: 'Restaurar backup', message: 'Substituir todos os dados locais por este backup?', detail: 'Conversas, configurações, memórias e artefatos atuais serão substituídos. Exporte seus dados antes se quiser preservar uma cópia.' })
     if (confirmation.response !== 1) return false
+    const startedAt = performance.now()
     const recoveryPath = await database.createRecoverySnapshot()
     const safeSettings = { ...validated.settings }
     delete safeSettings.codexPath
     database.importData({ ...validated, settings: safeSettings })
-    logger.info('persistence', 'Dados importados', { recoveryPath })
+    logger.info('persistence', 'Dados importados', { recoveryPath, records: countBackupRecords(validated), durationMs: Math.round(performance.now() - startedAt) })
     return true
   })
   return () => ipcMain.dispose()
