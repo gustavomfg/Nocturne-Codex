@@ -8,6 +8,14 @@
 
 O onboarding valida a versão instalada antes de indicar que a integração está pronta. Versões mais novas podem funcionar, mas entram como compatíveis ainda não verificadas até passarem pelo smoke de contrato.
 
+O diagnóstico expõe três estados distintos:
+
+- `unsupported`: versão ausente, ilegível ou abaixo de `0.144.0`;
+- `minimum-compatible-unverified`: atende ao mínimo, mas não consta na matriz homologada;
+- `verified`: consta explicitamente em `shared/codex-compatibility.json`.
+
+O booleano legado `codexCompatible` permanece no contrato para compatibilidade da interface, mas somente `verified` significa homologação pelo projeto.
+
 O executável configurado inicia com `app-server --stdio`. A aplicação envia `initialize`, `thread/start` ou `thread/resume` e `turn/start`. Deltas de mensagem, plano, comandos e patches são encaminhados ao renderer. `turn/interrupt` cancela o turno conhecido.
 
 A autenticação pertence ao Codex CLI instalado no sistema. Tokens e credenciais não passam pelo preload. Em queda inesperada, chamadas pendentes são rejeitadas e uma reconexão com backoff é tentada quando não há encerramento intencional.

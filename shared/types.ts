@@ -1,5 +1,6 @@
 import type { AgentState } from './agentState'
 import type { AgentMode } from './suggestions'
+import type { CodexCompatibilityStatus } from './constants'
 
 export type { AgentMode, Suggestion, SuggestionStatus } from './suggestions'
 
@@ -19,7 +20,7 @@ export interface WorkspaceMemory { content: string; rules: string; project?: Pro
 export interface PlanStep { step: string; status: 'pending' | 'inProgress' | 'completed' }
 export interface GitChangedFile { path: string; status: string; originalPath?: string }
 export interface GitInfo { branch: string; status: string; diff: string; diffTruncated?: boolean; filesTruncated?: boolean; files: GitChangedFile[] }
-export interface CodexSettings { model: string; sandbox: 'read-only' | 'workspace-write'; approvalPolicy: 'untrusted' | 'on-request'; codexPath?: string; codexVersion?: string; codexCompatible?: boolean; codexCompatibilityMessage?: string; pandocVersion?: string; serverStatus?: CodexStatus; diagnosticMode?: boolean; authStatus?: string; authenticated?: boolean; theme?: 'dark'; defaultAgentMode?: AgentMode }
+export interface CodexSettings { model: string; sandbox: 'read-only' | 'workspace-write'; approvalPolicy: 'untrusted' | 'on-request'; codexPath?: string; codexVersion?: string; codexCompatible?: boolean; codexCompatibilityStatus?: CodexCompatibilityStatus; codexCompatibilityMessage?: string; pandocVersion?: string; serverStatus?: CodexStatus; diagnosticMode?: boolean; authStatus?: string; authenticated?: boolean; theme?: 'dark'; defaultAgentMode?: AgentMode }
 export interface CodexDiagnostics { executable: string; version?: string; pid: number | null; state: CodexStatus; lastFailure: string | null; logsPath: string }
 export interface CodexEvent { method: string; params: Record<string, unknown> }
 export type CodexStatus = AgentState

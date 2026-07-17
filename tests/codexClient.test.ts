@@ -99,6 +99,26 @@ describe('CodexClient', () => {
     await expect(config).rejects.toThrow('configuração inválida')
   })
 
+  it('estabiliza o estado quando thread/start falha ou retorna um contrato inválido', async () => {
+    const { client, process } = await readyClient()
+    const failed = client.createThread('/workspace')
+    await waitForRequest(process, 'thread/start')
+    process.fail('thread/start', 'workspace recusado')
+    await expect(failed).rejects.toThrow('workspace recusado')
+    expect(client.status).toBe('failed')
+    expect(client.getDiagnostics().lastFailure).toContain('Falha ao criar thread')
+
+    const restarted = client.restart()
+    await waitForRequest(process, 'initialize')
+    process.respond('initialize')
+    await restarted
+    const malformed = client.createThread('/workspace')
+    await waitForRequest(process, 'thread/start')
+    process.respond('thread/start', { thread: {} })
+    await expect(malformed).rejects.toThrow(/identificador válido/)
+    expect(client.status).toBe('failed')
+  })
+
   it('expira chamadas pendentes sem deixar respostas tardias interferirem', async () => {
     vi.useFakeTimers()
     const { client, process } = await readyClient()
@@ -154,6 +174,17 @@ describe('CodexClient', () => {
     await expect(nextTurn).resolves.toMatchObject({ turn: { id: 'turn-2' } })
   })
 
+  it('estabiliza o estado quando turn/start falha', async () => {
+    const { client, process } = await readyClient()
+    await createThread(client, process)
+    const turn = client.sendTurn('thread-1', '/workspace', 'Falhar')
+    await waitForRequest(process, 'turn/start')
+    process.fail('turn/start', 'turno recusado')
+    await expect(turn).rejects.toThrow('turno recusado')
+    expect(client.status).toBe('failed')
+    expect(client.getDiagnostics().lastFailure).toContain('Falha ao iniciar turno')
+  })
+
   it('sobrescreve as restrições de Review ao trocar para Build na mesma thread', async () => {
     const { client, process } = await readyClient()
     await createThread(client, process)
@@ -179,6 +210,20 @@ describe('CodexClient', () => {
     expect(JSON.stringify(buildRequest?.params)).toContain('Implemente a alteração solicitada')
     process.respond('turn/start', { turn: { id: 'turn-build' } })
     await buildTurn
+  })
+
+  it('mantém Docs como instrução de escopo dentro do sandbox configurado', async () => {
+    const { client, process } = await readyClient()
+    await createThread(client, process)
+    const docsTurn = client.sendTurn('thread-1', '/workspace', 'Atualize o README', { sandbox: 'workspace-write' }, [], '', 'docs')
+    await waitForRequest(process, 'turn/start')
+    const request = process.pendingRequest('turn/start')
+    expect(request?.params).toMatchObject({
+      sandboxPolicy: { type: 'workspaceWrite', writableRoots: ['/workspace'] },
+      additionalContext: { 'nocturne.review-mode': { value: expect.stringContaining('somente documentação diretamente relacionada') } },
+    })
+    process.respond('turn/start', { turn: { id: 'turn-docs' } })
+    await docsTurn
   })
 
   it('rejeita pendências na queda e reconecta com backoff', async () => {

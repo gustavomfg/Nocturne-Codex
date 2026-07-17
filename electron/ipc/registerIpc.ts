@@ -11,7 +11,7 @@ import { Logger } from '../logging/Logger'
 import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
 import { agentModes, sanitizeSuggestionTitle } from '../../shared/suggestions'
 import { approvalSchema, codexSendSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, saveAssistantSchema, saveMarkdownSchema } from '../../shared/ipc/schemas'
-import { CODEX_COMPATIBILITY } from '../../shared/constants'
+import { CODEX_COMPATIBILITY, classifyCodexVersion } from '../../shared/constants'
 import { registerDataIpc } from './registerDataIpc'
 import { registerGitIpc } from './registerGitIpc'
 import { registerCodexBridge } from './registerCodexBridge'
@@ -245,11 +245,16 @@ async function getCodexInfo(codex: CodexClient, configuredExecutable?: string) {
     commandVersion('pandoc'),
   ])
   const parsedVersion = version?.match(/(\d+\.\d+\.\d+)/)?.[1]
-  const compatible = Boolean(parsedVersion && compareVersions(parsedVersion, CODEX_COMPATIBILITY.minimum) >= 0)
-  return { codexPath: executable, codexVersion: version || 'indisponível', codexCompatible: compatible, codexCompatibilityMessage: parsedVersion ? compatible ? `Compatível (mínimo ${CODEX_COMPATIBILITY.minimum})` : `Versão incompatível; instale ${CODEX_COMPATIBILITY.minimum} ou superior.` : 'Não foi possível identificar a versão do Codex CLI.', pandocVersion: pandocVersion || 'indisponível', serverStatus: codex.status, authStatus: authStatus || 'Não foi possível verificar a autenticação.', authenticated: Boolean(authStatus && /logged in|autenticado/i.test(authStatus)), rawConfig: config }
+  const compatibilityStatus = classifyCodexVersion(parsedVersion)
+  const compatibilityMessage = compatibilityStatus === 'verified'
+    ? `Versão verificada (${parsedVersion}).`
+    : compatibilityStatus === 'minimum-compatible-unverified'
+      ? `Atende ao mínimo ${CODEX_COMPATIBILITY.minimum}, mas ainda não foi verificada pelo Nocturne.`
+      : parsedVersion
+        ? `Versão incompatível; instale ${CODEX_COMPATIBILITY.minimum} ou superior.`
+        : 'Não foi possível identificar a versão do Codex CLI.'
+  return { codexPath: executable, codexVersion: version || 'indisponível', codexCompatible: compatibilityStatus !== 'unsupported', codexCompatibilityStatus: compatibilityStatus, codexCompatibilityMessage: compatibilityMessage, pandocVersion: pandocVersion || 'indisponível', serverStatus: codex.status, authStatus: authStatus || 'Não foi possível verificar a autenticação.', authenticated: Boolean(authStatus && /logged in|autenticado/i.test(authStatus)), rawConfig: config }
 }
-
-function compareVersions(left: string, right: string) { const a = left.split('.').map(Number); const b = right.split('.').map(Number); for (let index = 0; index < 3; index += 1) { if ((a[index] || 0) !== (b[index] || 0)) return (a[index] || 0) - (b[index] || 0) } return 0 }
 
 function findExecutable(name: string) {
   for (const directory of (process.env.PATH || '').split(path.delimiter)) {

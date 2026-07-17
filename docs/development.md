@@ -2,7 +2,7 @@
 
 ## Compatibilidade do Codex CLI
 
-O desenvolvimento e os testes de contrato usam Codex CLI `0.144.1` e `0.144.5`; a versão mínima suportada é `0.144.0`. Ao atualizar o CLI, execute o smoke do pacote e registre a nova versão verificada em `shared/codex-compatibility.json` e `docs/codex-integration.md`.
+O desenvolvimento e os testes de contrato usam Codex CLI `0.144.1` e `0.144.5`; a versão mínima suportada é `0.144.0`. Uma versão no mínimo, mas ausente da matriz, permanece `minimum-compatible-unverified` até homologação; somente entradas explícitas são `verified`. Ao atualizar o CLI, execute o smoke do pacote e registre a nova versão verificada em `shared/codex-compatibility.json` e `docs/codex-integration.md`.
 
 O WebStorm é a IDE adotada pelo projeto. Mantenha o launcher `webstorm` disponível no `PATH` para que o atalho de abertura do workspace funcione; a pasta `.idea` permanece local e não deve ser versionada.
 
