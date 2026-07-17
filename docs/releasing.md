@@ -7,7 +7,7 @@
 
 ## Validação automatizada
 
-O workflow `Package validation` executa typecheck, lint, testes e renderer em todo push no `master`. Pull requests relevantes, tags e execuções manuais também empacotam e executam smoke test em Linux, Windows e macOS. O smoke test abre o executável unpacked com dados temporários, confirma que `better-sqlite3` abre o banco, verifica a API exposta pelo preload e exige encerramento limpo.
+O workflow `Package validation` executa typecheck, lint, testes, build e renderer em todo push no `master`. Pull requests relevantes, tags e execuções manuais também empacotam e executam smoke test em Linux, Windows e macOS. O smoke test abre o executável unpacked com dados temporários, confirma que `better-sqlite3` abre o banco, verifica a API exposta pelo preload, exercita o bloqueio de novas janelas e navegação inesperada e exige encerramento limpo.
 
 Para reproduzir localmente:
 
