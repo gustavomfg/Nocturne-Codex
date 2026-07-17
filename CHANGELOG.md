@@ -28,7 +28,7 @@
 
 ### Qualidade
 
-- 89 testes unitários e de integração;
+- 90 testes unitários e de integração;
 - 24 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints;
 - typecheck, ESLint, design system, build de produção, pacote Linux real e audit npm sem vulnerabilidades aprovados;
 - decisões de sugestão precisam persistir antes do turno Build, e o status aplicado exige alterações observadas no escopo aprovado;
