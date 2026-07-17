@@ -35,3 +35,5 @@ Em uma máquina isolada com o Codex CLI autenticado, execute `npm run smoke:code
 O workflow protegido também roda semanalmente e sempre que a matriz de compatibilidade ou o próprio smoke muda no `master`. O runner deve manter uma instalação controlada do CLI, autenticação exclusiva para esse teste e nenhum workspace real acessível. Cada execução conserva por 30 dias um relatório associado à versão observada.
 
 O workflow `Package validation` valida todo push no `master`. Typecheck, lint, testes e renderer rodam sobre a fonte integrada; a matriz de empacotamento permanece restrita a pull requests relevantes, tags e execuções manuais para evitar builds de plataforma redundantes.
+
+O workflow `Dependency security` roda semanalmente, por execução manual e em pull requests que alteram `package.json` ou `package-lock.json`. Ele instala exatamente o lockfile sem executar scripts, bloqueia vulnerabilidades de severidade alta ou crítica nas dependências de produção e publica por 30 dias um SBOM CycloneDX associado ao commit analisado.

@@ -1,0 +1,36 @@
+name: Dependency security
+
+on:
+  pull_request:
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/workflows/dependency-security.yml
+  schedule:
+    - cron: '17 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-and-sbom:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Generate CycloneDX SBOM
+        run: npm sbom --sbom-format cyclonedx > nocturne-codex.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dependency-sbom-${{ github.sha }}
+          path: nocturne-codex.cdx.json
+          if-no-files-found: error
+          retention-days: 30

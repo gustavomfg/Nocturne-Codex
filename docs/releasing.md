@@ -21,11 +21,12 @@ O smoke test é ativado somente em um aplicativo empacotado que receba `NOCTURNE
 ## Publicação
 
 1. Confirme worktree, versão e CHANGELOG.
-2. Execute `Codex CLI contract smoke` no commit exato da tag e guarde o ID da execução bem-sucedida. O workflow estável exige esse ID e rejeita resultados de outro commit.
-3. Exija sucesso do workflow nas três plataformas.
-4. Valide manualmente os artefatos da plataforma oficialmente suportada.
-5. Publique os pacotes junto ao `SHA256SUMS`, aos arquivos `latest*.yml` e aos `.blockmap` correspondentes. Sem esses metadados, o cliente não anuncia a atualização.
-6. Para uma versão estável, crie a tag correspondente à versão (`vX.Y.Z`) e execute manualmente o workflow `Stable signed artifacts`, informando a tag e o ID do smoke do Codex. O ambiente protegido `stable-release` recusa pré-releases, tags divergentes e um smoke pertencente a outro commit. O próprio workflow repete typecheck, lint, testes unitários, renderer e metadata antes de assinar. Depois de verificar também os pacotes, notarização, checksums e metadados das três plataformas, o gate cria ou atualiza o GitHub Release.
+2. Confirme que `Dependency security` passou no commit da release e anexe ou preserve o SBOM CycloneDX correspondente.
+3. Execute `Codex CLI contract smoke` no commit exato da tag e guarde o ID da execução bem-sucedida. O workflow estável exige esse ID e rejeita resultados de outro commit.
+4. Exija sucesso do workflow nas três plataformas.
+5. Valide manualmente os artefatos da plataforma oficialmente suportada.
+6. Publique os pacotes junto ao `SHA256SUMS`, aos arquivos `latest*.yml` e aos `.blockmap` correspondentes. Sem esses metadados, o cliente não anuncia a atualização.
+7. Para uma versão estável, crie a tag correspondente à versão (`vX.Y.Z`) e execute manualmente o workflow `Stable signed artifacts`, informando a tag e o ID do smoke do Codex. O ambiente protegido `stable-release` recusa pré-releases, tags divergentes e um smoke pertencente a outro commit. O próprio workflow repete typecheck, lint, testes unitários, renderer e metadata antes de assinar. Depois de verificar também os pacotes, notarização, checksums e metadados das três plataformas, o gate cria ou atualiza o GitHub Release.
 
 ## Assinatura e proteção das chaves
 

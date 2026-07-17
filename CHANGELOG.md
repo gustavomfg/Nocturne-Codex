@@ -23,6 +23,7 @@
 - pacote conserva somente locales `pt-BR` e `en-US`, reduzindo em aproximadamente 45 MB a instalação Linux descompactada;
 - Vite atualizado para `8.1.5` e rebuild nativo alinhado ao fluxo oficial do electron-builder;
 - release estável repete toda a suíte, valida workflows, exige smoke do Codex do mesmo commit e testa cada pacote assinado antes da publicação.
+- auditoria semanal bloqueia vulnerabilidades altas ou críticas em dependências de produção e gera SBOM CycloneDX por commit analisado.
 
 ### Qualidade
 
