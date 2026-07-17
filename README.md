@@ -199,7 +199,7 @@ Review [docs/security.md](docs/security.md) and [SECURITY.md](SECURITY.md) befor
 
 ### Requirements
 
-- Linux x64, Windows x64, or macOS for the packaged v0.8.0-beta builds;
+- Linux x64 for the publicly distributed v0.8.0-beta preview; Windows x64 and macOS packages are built and validated in CI but are not published for this Beta;
 - Codex CLI installed and authenticated;
 - Codex CLI 0.144.0 or newer with `app-server --stdio` (verified versions: 0.144.1 and 0.144.5);
 - Git for repository status, diff, and commit workflows;
@@ -229,7 +229,7 @@ chmod +x Nocturne.Codex-Linux-0.8.0-beta.AppImage
 ./Nocturne.Codex-Linux-0.8.0-beta.AppImage
 ```
 
-A `.tar.gz` archive is also produced for Linux. Windows uses the NSIS setup and macOS uses a DMG; the macOS ZIP is published for automatic updates. Beta artifacts are unsigned previews and may trigger operating-system warnings. Stable releases require Authenticode, Developer ID, and notarization.
+A `.tar.gz` archive is also published for Linux. The packaging pipeline validates Windows NSIS and macOS DMG/ZIP targets, but those packages are not distributed in v0.8.0-beta. Consent-based updates are implemented for packaged builds and require the platform package plus its `latest*.yml` metadata to be published together. Beta artifacts are unsigned previews and may trigger operating-system warnings. Stable releases require Authenticode, Developer ID, notarization, and signed checksums where applicable.
 
 Hardware acceleration is enabled by default for smooth scrolling, dialogs, and panel transitions. If a Linux graphics driver renders a blank or corrupted window, start the application once with the software-rendering fallback:
 
@@ -275,6 +275,8 @@ npm run verify:release-metadata # version and Codex compatibility consistency
 ```
 
 The default automated suite does not call the real Codex service. It combines a simulated App Server transport with direct `CodexClient` lifecycle coverage. `npm run smoke:codex` is a separate, deliberate opt-in check that requires an authenticated CLI, uses a temporary read-only workspace, and stores only a sanitized report. Renderer tests use a deterministic `window.nocturne` bridge and versioned references at 1440, 980, 720, and 520 px. See [docs/development.md](docs/development.md) for native module and release notes.
+
+Codex compatibility has three explicit states: versions below `0.144.0` are unsupported; versions at or above the minimum but outside the verified matrix are minimum-compatible but unverified; and versions listed in `shared/codex-compatibility.json` are verified. Because the App Server API is experimental, an unverified version must not be presented as homologated.
 
 ---
 

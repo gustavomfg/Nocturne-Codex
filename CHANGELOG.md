@@ -5,10 +5,15 @@
 ### Estabilidade e compatibilidade
 
 - Codex CLI `0.144.5` homologado com initialize, configuração, thread efêmera, resposta real e cancelamento durante atividade;
+- compatibilidade do Codex agora distingue versões incompatíveis, mínimas ainda não verificadas e versões explicitamente homologadas;
+- falhas ou respostas inválidas de `thread/start` e `turn/start` estabilizam o estado do agente como falho, preservando diagnóstico;
 - troca natural entre Build, Review e Docs preservada na mesma conversa, sem herdar restrições do modo anterior;
 - atualizador protegido contra consultas, diálogos, downloads e instalações duplicadas, com retry após falha e cleanup determinístico;
+- smoke empacotado passa a exercitar bloqueios reais de novas janelas e navegação inesperada;
+- navegações externas iniciadas por frames do renderer também são negadas explicitamente;
 - restaurações inválidas agora revertem integralmente, rejeitam identificadores duplicados e preservam o banco anterior;
 - migração SQLite 6 → 7 testada com dados da linha 0.7 e novos índices para navegação e relacionamentos;
+- bancos de schema futuro são recusados antes de manutenção, e toda migração de schema existente preserva backup restrito;
 - contexto do workspace usa I/O assíncrono, gravações atômicas e permissões restritas.
 
 ### Performance e distribuição
@@ -21,9 +26,12 @@
 
 ### Qualidade
 
-- 80 testes unitários e de integração;
-- 23 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints;
-- typecheck, ESLint, design system, build de produção, pacote Linux real e audit npm sem vulnerabilidades aprovados.
+- 89 testes unitários e de integração;
+- 24 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints;
+- typecheck, ESLint, design system, build de produção, pacote Linux real e audit npm sem vulnerabilidades aprovados;
+- decisões de sugestão precisam persistir antes do turno Build, e o status aplicado exige alterações observadas no escopo aprovado;
+- sanitização de logs cobre credenciais completas em headers, strings JSON e campos estruturados;
+- política de segurança, roadmap, plataformas publicadas e documentação visual sincronizados com a linha 0.8.
 
 ### Limitações conhecidas
 

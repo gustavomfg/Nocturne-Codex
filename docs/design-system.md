@@ -325,7 +325,7 @@ Counters use a contained surface and border so they remain distinguishable from 
 | `--motion-tab` | 150 ms | Tab indicator and content fade |
 | `--motion-base` | 160 ms | Focus, surfaces, and state transitions |
 | `--motion-panel` | 180 ms | Both sidebars and panel geometry |
-| `--motion-dialog` | 180 ms | Dialog surfaces |
+| `--motion-dialog` | 140 ms | Dialog surfaces |
 | `--motion-slow` | 240 ms | Progress or exceptional contextual changes |
 
 All standard transitions use `--ease-standard`, a restrained ease-out curve. Pressed controls move down by no more than 1 px. Home cards may lift by 1 px on hover. Dialog entrance uses 3 px translation and less than one percent scale change. Reduced-motion preferences collapse these durations globally.
@@ -453,15 +453,15 @@ This review evaluates the current interface as a first-time user. It documents o
 - The legacy structural layer remains only where it still supplies unique layout behavior. Declarations shadowed by identical selectors were removed without changing computed styles, and `npm run lint:design` now rejects new shadowed declarations before they accumulate.
 - A few icon sizes are defined directly in JSX. They align visually, but future work should map icon sizes to explicit component primitives.
 - Native `title` tooltips depend on the operating system and do not have the same timing or surface as the application.
-- Dialog semantics and focus trapping are not uniform across every modal; addressing that requires behavioral work rather than visual styling.
+- Shared dialog and off-canvas hooks now provide focus containment, Escape handling, initial focus, and focus restoration on the current modal surfaces.
 - Project Health explanations currently rely primarily on hover titles in the compact card layout.
 
 ### Future suggestions — not implemented
 
 - Create small internal primitives for Button, IconButton, Badge, Tooltip, and Dialog to enforce the documented scale automatically.
-- Add a visual regression suite covering the main desktop widths and 100%, 125%, and 150% zoom.
+- Expand the existing visual regression suite beyond the canonical widths to cover 125% and 150% zoom.
 - Add a non-blocking command palette preview only if it becomes part of an approved product phase.
-- Standardize focus trapping and initial focus for every modal.
+- Preserve the shared focus containment and restoration behavior when adding future modal surfaces.
 - Provide a compact, visible explanation affordance for each Project Health metric.
 - Validate the palette with automated contrast tooling as part of CI.
 

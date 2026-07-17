@@ -8,7 +8,7 @@ Use o canal privado de security advisories do GitHub deste repositório. Inclua 
 
 | Linha | Correções de segurança |
 | --- | --- |
-| `0.7.x-beta` | Sim, até a publicação da próxima linha Beta |
-| `0.6.x-beta` e anteriores | Não |
+| `0.8.x-beta` | Sim, até a publicação da próxima linha Beta |
+| `0.7.x-beta` e anteriores | Não |
 
 Atualize para a Beta mais recente antes de relatar ou validar uma correção. O projeto reutiliza a autenticação do Codex CLI e nunca deve transportar credenciais pelo renderer.
