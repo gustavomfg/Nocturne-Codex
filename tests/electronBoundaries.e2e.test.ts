@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { NocturneApi } from '../shared/ipc/contracts'
+import { DATABASE_SCHEMA_VERSION } from '../shared/constants'
 
 type IpcHandler = (event: unknown, ...args: unknown[]) => unknown
 
@@ -218,8 +219,9 @@ describe.sequential('fronteiras Electron E2E', () => {
   it('exporta e restaura o backup atravessando diálogos e IPC', async () => {
     electron.dialogs.save.push({ canceled: false, filePath: backupPath })
     await expect(api.data.export()).resolves.toBe(backupPath)
-    const backup = JSON.parse(fs.readFileSync(backupPath, 'utf8')) as { schemaVersion: number; conversations: Array<Record<string, unknown>>; workspaces: Array<Record<string, unknown>>; messages: unknown[]; artifacts: Array<Record<string, unknown>>; memories: Array<Record<string, unknown>>; suggestions: Array<Record<string, unknown>>; settings: Record<string, string> }
-    expect(backup.schemaVersion).toBe(7)
+    const backup = JSON.parse(fs.readFileSync(backupPath, 'utf8')) as { schemaVersion: number; conversations: Array<Record<string, unknown>>; workspaces: Array<Record<string, unknown>>; messages: unknown[]; artifacts: Array<Record<string, unknown>>; memories: Array<Record<string, unknown>>; brainMemories: Array<Record<string, unknown>>; suggestions: Array<Record<string, unknown>>; settings: Record<string, string> }
+    expect(backup.schemaVersion).toBe(DATABASE_SCHEMA_VERSION)
+    expect(backup.brainMemories).toEqual([])
     expect(backup.conversations.length).toBeGreaterThan(0)
     expect(backup.messages.length).toBeGreaterThan(0)
     const manipulated = structuredClone(backup)
@@ -228,6 +230,7 @@ describe.sequential('fronteiras Electron E2E', () => {
     manipulated.conversations.forEach((item) => { item.workspace = outside; item.codex_thread_id = 'thread-from-backup' })
     manipulated.artifacts.forEach((item) => { item.workspace = outside })
     manipulated.memories.forEach((item) => { item.workspace = outside })
+    manipulated.brainMemories.forEach((item) => { item.workspace_id = outside })
     manipulated.suggestions.forEach((item) => { item.workspace_id = outside })
     fs.writeFileSync(backupPath, JSON.stringify(manipulated))
 

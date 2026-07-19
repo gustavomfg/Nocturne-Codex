@@ -31,6 +31,8 @@ describe('schema de backup', () => {
     const message = { id: randomUUID(), conversation_id: randomUUID(), role: 'user' as const, content: 'órfã', metadata: null, created_at: now }
     expect(() => backupSchema.parse({ ...data, messages: [message] })).toThrow(/Conversa referenciada não existe/)
     expect(() => backupSchema.parse({ ...data, conversations: [{ ...conversation, workspace: '/tmp/unknown' }] })).toThrow(/Workspace referenciado não existe/)
+    const brainMemory = { id: randomUUID(), workspace_id: workspace.path, conversation_id: randomUUID(), kind: 'fact', scope: 'conversation', status: 'active', content: 'Órfã', confidence: 80, source_type: 'manual', source_id: null, created_at: now, updated_at: now, last_confirmed_at: now, last_used_at: null, use_count: 0 }
+    expect(() => backupSchema.parse({ ...data, brainMemories: [brainMemory] })).toThrow(/conversa inexistente/)
   })
   it('rejeita identificadores duplicados antes da restauração', () => {
     const data = valid()

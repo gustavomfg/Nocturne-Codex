@@ -15,7 +15,7 @@ afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(direc
 
 describe('persistência SQLite', () => {
   it('mantém migrações incrementais, ordenadas e sem lacunas', () => {
-    expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7])
+    expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
     expect(migrations[migrations.length - 1]?.version).toBe(DATABASE_SCHEMA_VERSION)
   })
   it('persiste conversa, thread, mensagens, memória e artefatos', () => {
@@ -25,6 +25,23 @@ describe('persistência SQLite', () => {
     expect(db.listMessages(conversation.id)).toHaveLength(1)
     expect(db.getWorkspaceMemory(workspace).content).toBe('decisão')
     expect(db.listArtifacts(conversation.id)[0].type).toBe('markdown'); db.close()
+  })
+  it('persiste, aprova, busca e pagina memórias estruturadas por escopo', () => {
+    const db = create(); const workspace = '/tmp/brain'; const conversation = db.createConversation(workspace)
+    const candidate = db.createBrainMemory(workspace, { conversationId: conversation.id, kind: 'decision', scope: 'conversation', content: 'Adotar SQLite como fonte de verdade', sourceType: 'message', sourceId: 'message-1' })
+    db.createBrainMemory(workspace, { kind: 'preference', scope: 'workspace', content: 'Preferir alterações pequenas e commits atômicos', status: 'active', confidence: 95 })
+    expect(candidate).toMatchObject({ status: 'candidate', confidence: 70, conversationId: conversation.id })
+    expect(db.retrieveBrainMemories(workspace, conversation.id, 'SQLite')).toEqual([])
+    const approved = db.updateBrainMemory(candidate.id, workspace, { status: 'active', confidence: 90 })
+    expect(approved.lastConfirmedAt).not.toBeNull()
+    expect(db.retrieveBrainMemories(workspace, conversation.id, 'decisão sobre SQLite')).toEqual([expect.objectContaining({ id: candidate.id, useCount: 0 })])
+    expect(db.getBrainMemory(candidate.id, workspace)?.useCount).toBe(1)
+    expect(db.listBrainMemoryPage(workspace, 0, 1)).toMatchObject({ items: { length: 1 }, hasMore: true })
+    expect(db.listBrainMemoryPage(workspace, 0, 50, 'commits')).toMatchObject({ items: [expect.objectContaining({ kind: 'preference' })], hasMore: false })
+    expect(() => db.createBrainMemory(workspace, { kind: 'fact', scope: 'conversation', content: 'Sem conversa' })).toThrow(/conversa válida/)
+    expect(() => db.createBrainMemory(workspace, { conversationId: conversation.id, kind: 'fact', scope: 'workspace', content: 'Escopo inconsistente' })).not.toThrow()
+    expect(db.deleteBrainMemory(candidate.id, workspace)).toBe(true)
+    db.close()
   })
   it('pagina históricos extensos do mais recente para o mais antigo', () => {
     const db = create(); const conversation = db.createConversation('/tmp/history')
@@ -59,8 +76,8 @@ describe('persistência SQLite', () => {
     recovered.close(); db.close()
   })
   it('exporta e importa um fluxo completo restaurável', () => {
-    const source = create(); const conversation = source.createConversation('/tmp/project'); source.addMessage(conversation.id, 'assistant', 'Resposta simulada'); source.setSettings({ theme: 'dark', model: 'modelo-teste' }); const data = source.exportData(); source.close()
-    const target = create(); target.importData(data); expect(target.listConversations()).toHaveLength(1); expect(target.listMessages(conversation.id)[0].content).toBe('Resposta simulada'); expect(target.getSettings().model).toBe('modelo-teste'); expect(target.listWorkspaces()[0].authorized).toBe(false); target.close()
+    const source = create(); const conversation = source.createConversation('/tmp/project'); source.addMessage(conversation.id, 'assistant', 'Resposta simulada'); const memory = source.createBrainMemory('/tmp/project', { kind: 'learning', scope: 'workspace', content: 'Backup preserva o Segundo Cérebro', status: 'active' }); source.setSettings({ theme: 'dark', model: 'modelo-teste' }); const data = source.exportData(); source.close()
+    const target = create(); target.importData(data); expect(target.listConversations()).toHaveLength(1); expect(target.listMessages(conversation.id)[0].content).toBe('Resposta simulada'); expect(target.getBrainMemory(memory.id, '/tmp/project')?.content).toContain('Segundo Cérebro'); expect(target.retrieveBrainMemories('/tmp/project', conversation.id, 'backup')[0].id).toBe(memory.id); expect(target.getSettings().model).toBe('modelo-teste'); expect(target.listWorkspaces()[0].authorized).toBe(false); target.close()
   })
   it('substitui dados locais ao restaurar em vez de mesclar históricos', () => {
     const source = create(); const restored = source.createConversation('/tmp/restored'); const data = source.exportData(); source.close()
@@ -84,7 +101,7 @@ describe('persistência SQLite', () => {
     const db = new LocalDatabase(directory)
     db.close()
     const migrated = new Sqlite(file, { readonly: true })
-    expect(migrated.pragma('user_version', { simple: true })).toBe(7)
+    expect(migrated.pragma('user_version', { simple: true })).toBe(8)
     const tables = migrated.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>
     expect(tables.map((item) => item.name)).toContain('suggestions')
     expect(tables.map((item) => item.name)).toContain('workspace_memory')
@@ -95,7 +112,7 @@ describe('persistência SQLite', () => {
     const directory = directories[directories.length - 1]
     const sqlite = new Sqlite(path.join(directory, 'nocturne.db'), { readonly: true })
     const indexes = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='index'").all() as Array<{ name: string }>
-    expect(indexes.map((item) => item.name)).toEqual(expect.arrayContaining(['idx_conversations_updated', 'idx_workspaces_recent', 'idx_artifacts_file', 'idx_suggestion_decisions_suggestion']))
+    expect(indexes.map((item) => item.name)).toEqual(expect.arrayContaining(['idx_conversations_updated', 'idx_workspaces_recent', 'idx_artifacts_file', 'idx_suggestion_decisions_suggestion', 'idx_brain_memories_workspace', 'idx_brain_memories_conversation']))
     sqlite.close()
   })
   it('migra o banco real da linha 0.7 sem perder conversas', () => {
@@ -112,18 +129,30 @@ describe('persistência SQLite', () => {
     expect(fs.statSync(path.join(directory, migrationBackups[0])).mode & 0o777).toBe(0o600)
     migrated.close()
     const verified = new Sqlite(file, { readonly: true })
-    expect(verified.pragma('user_version', { simple: true })).toBe(7)
+    expect(verified.pragma('user_version', { simple: true })).toBe(8)
     verified.close()
+  })
+  it('migra o schema 7 preservando dados e criando o índice do Segundo Cérebro', () => {
+    const db = create(); const conversation = db.createConversation('/tmp/from-7'); db.addMessage(conversation.id, 'user', 'Preservar'); db.close()
+    const directory = directories[directories.length - 1]; const file = path.join(directory, 'nocturne.db')
+    const previous = new Sqlite(file)
+    previous.exec("DROP TRIGGER brain_memories_ai; DROP TRIGGER brain_memories_ad; DROP TRIGGER brain_memories_au; DROP TABLE brain_memories_fts; DROP TABLE brain_memories; PRAGMA user_version = 7;")
+    previous.close()
+    const migrated = new LocalDatabase(directory)
+    expect(migrated.listMessages(conversation.id)[0].content).toBe('Preservar')
+    const memory = migrated.createBrainMemory('/tmp/from-7', { kind: 'fact', scope: 'workspace', content: 'Migração pesquisável', status: 'active' })
+    expect(migrated.retrieveBrainMemories('/tmp/from-7', conversation.id, 'pesquisável')[0].id).toBe(memory.id)
+    migrated.close()
   })
   it('recusa schema futuro antes de executar manutenção ou migrações', () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-test-')); directories.push(directory)
     const file = path.join(directory, 'nocturne.db')
     const future = new Sqlite(file)
-    future.pragma('user_version = 8')
+    future.pragma('user_version = 9')
     future.close()
-    expect(() => new LocalDatabase(directory)).toThrow(/schema 8.*suporta até o schema 7/)
+    expect(() => new LocalDatabase(directory)).toThrow(/schema 9.*suporta até o schema 8/)
     const preserved = new Sqlite(file, { readonly: true })
-    expect(preserved.pragma('user_version', { simple: true })).toBe(8)
+    expect(preserved.pragma('user_version', { simple: true })).toBe(9)
     preserved.close()
   })
   it('reverte integralmente uma restauração inválida', () => {

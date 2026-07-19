@@ -23,6 +23,8 @@ Electron main
 
 `CodexClient` associa requests JSON-RPC a responses por `id`, encaminha notificações e mantém threads/turnos. `AgentStateMachine` é a fonte única para o estado operacional. `LocalDatabase` persiste workspaces, conversas, mensagens, artefatos, memória, configurações e auditoria de aprovações.
 
+O Segundo Cérebro complementa o documento `.nocturne/memory.md` com memórias individuais no SQLite. Cada registro possui escopo de workspace ou conversa, tipo, estado, confiança, origem e métricas de uso. Somente memórias ativas podem ser recuperadas; candidatas exigem aprovação explícita. A busca usa FTS5 local e o backup preserva os registros, enquanto o índice é reconstruído a partir da fonte de verdade.
+
 Mensagens, conversas, artefatos e sugestões atravessam IPC em páginas limitadas. O renderer carrega a página inicial e solicita páginas anteriores explicitamente, evitando materializar históricos inteiros nas rotas interativas; os métodos integrais permanecem disponíveis apenas para compatibilidade interna enquanto consumidores antigos são removidos gradualmente.
 
 Na importação e exportação, leitura, parsing e serialização JSON são delegados a workers. Validação Zod, consultas SQLite e inserções transacionais continuam síncronas no processo principal. A suíte aplica orçamentos de regressão a cargas representativas e os logs registram duração e volume, mas o teto aceito de 25 MB e 200 mil registros não equivale a uma garantia de ausência de bloqueio; mudanças nessa rota devem ser medidas antes de ampliar os limites.

@@ -26,9 +26,14 @@
 - release estável repete toda a suíte, valida workflows, exige smoke do Codex do mesmo commit e testa cada pacote assinado antes da publicação.
 - auditoria semanal bloqueia vulnerabilidades altas ou críticas em dependências de produção e gera SBOM CycloneDX por commit analisado.
 
+### Segundo Cérebro
+
+- schema 8 adiciona memórias estruturadas por workspace ou conversa, com tipo, confiança, origem, estado de aprovação, paginação e busca textual FTS5;
+- backups validam e restauram as memórias estruturadas, reconstruindo o índice local sem substituir o contexto Markdown existente.
+
 ### Qualidade
 
-- 90 testes unitários e de integração;
+- 92 testes unitários e de integração;
 - 24 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints;
 - typecheck, ESLint, design system, build de produção, pacote Linux real e audit npm sem vulnerabilidades aprovados;
 - decisões de sugestão precisam persistir antes do turno Build, e o status aplicado exige alterações observadas no escopo aprovado;

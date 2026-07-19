@@ -3,6 +3,7 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import type { Suggestion, SuggestionStatus } from '../../shared/suggestions'
+import type { BrainMemory, CreateBrainMemoryInput, UpdateBrainMemoryInput } from '../../shared/brainMemory'
 import { DATABASE_SCHEMA_VERSION } from '../../shared/constants'
 import { migrateDatabase } from './migrations'
 
@@ -35,6 +36,7 @@ const importColumns: Record<string, ReadonlySet<string>> = {
   workspace_memory: new Set(['workspace', 'content', 'updated_at']),
   suggestions: new Set(['id', 'workspace_id', 'conversation_id', 'title', 'description', 'reasoning', 'category', 'severity', 'affected_files', 'proposed_changes', 'expected_benefits', 'complexity', 'risk', 'status', 'result', 'created_at', 'updated_at']),
   suggestion_decisions: new Set(['id', 'suggestion_id', 'status', 'result', 'created_at']),
+  brain_memories: new Set(['id', 'workspace_id', 'conversation_id', 'kind', 'scope', 'status', 'content', 'confidence', 'source_type', 'source_id', 'created_at', 'updated_at', 'last_confirmed_at', 'last_used_at', 'use_count']),
 }
 
 export class LocalDatabase {
@@ -154,6 +156,79 @@ export class LocalDatabase {
     return { content, updatedAt }
   }
 
+  createBrainMemory(workspaceId: string, value: CreateBrainMemoryInput): BrainMemory {
+    const conversationId = value.scope === 'conversation' ? value.conversationId ?? null : null
+    this.assertBrainMemoryScope(workspaceId, value.scope, conversationId)
+    const now = new Date().toISOString()
+    const row: BrainMemory = {
+      id: randomUUID(), workspaceId, conversationId, kind: value.kind, scope: value.scope,
+      status: value.status ?? 'candidate', content: value.content.trim(), confidence: value.confidence ?? 70,
+      sourceType: value.sourceType ?? 'manual', sourceId: value.sourceId ?? null,
+      createdAt: now, updatedAt: now, lastConfirmedAt: value.status === 'active' ? now : null,
+      lastUsedAt: null, useCount: 0,
+    }
+    this.db.prepare(`INSERT INTO brain_memories(id,workspace_id,conversation_id,kind,scope,status,content,confidence,source_type,source_id,created_at,updated_at,last_confirmed_at,last_used_at,use_count)
+      VALUES(@id,@workspaceId,@conversationId,@kind,@scope,@status,@content,@confidence,@sourceType,@sourceId,@createdAt,@updatedAt,@lastConfirmedAt,@lastUsedAt,@useCount)`).run(row)
+    return row
+  }
+
+  updateBrainMemory(id: string, workspaceId: string, value: UpdateBrainMemoryInput): BrainMemory {
+    const current = this.getBrainMemory(id, workspaceId)
+    if (!current) throw new Error('Memória não encontrada.')
+    const scope = value.scope ?? current.scope
+    const conversationId = scope === 'conversation' ? value.conversationId === undefined ? current.conversationId : value.conversationId : null
+    this.assertBrainMemoryScope(workspaceId, scope, conversationId)
+    const status = value.status ?? current.status
+    const updatedAt = new Date().toISOString()
+    const next = {
+      id, workspaceId, conversationId, kind: value.kind ?? current.kind, scope, status,
+      content: value.content?.trim() ?? current.content, confidence: value.confidence ?? current.confidence,
+      updatedAt, lastConfirmedAt: status === 'active' && current.status !== 'active' ? updatedAt : current.lastConfirmedAt,
+    }
+    this.db.prepare(`UPDATE brain_memories SET conversation_id=@conversationId,kind=@kind,scope=@scope,status=@status,content=@content,confidence=@confidence,updated_at=@updatedAt,last_confirmed_at=@lastConfirmedAt WHERE id=@id AND workspace_id=@workspaceId`).run(next)
+    return this.getBrainMemory(id, workspaceId) as BrainMemory
+  }
+
+  deleteBrainMemory(id: string, workspaceId: string) {
+    return this.db.prepare('DELETE FROM brain_memories WHERE id=? AND workspace_id=?').run(id, workspaceId).changes > 0
+  }
+
+  getBrainMemory(id: string, workspaceId: string): BrainMemory | null {
+    const row = this.db.prepare(`${brainMemorySelect} WHERE id=? AND workspace_id=?`).get(id, workspaceId) as BrainMemory | undefined
+    return row ?? null
+  }
+
+  listBrainMemoryPage(workspaceId: string, offset = 0, limit = 50, query = '', status?: BrainMemory['status']) {
+    const search = buildFtsQuery(query)
+    const statusFilter = status ? ' AND memory.status=@status' : ''
+    if (search) {
+      const rows = this.db.prepare(`${brainMemorySearchSelect} WHERE memory.workspace_id=@workspaceId${statusFilter} AND brain_memories_fts MATCH @search ORDER BY bm25(brain_memories_fts), memory.updated_at DESC LIMIT @fetch OFFSET @offset`).all({ workspaceId, status, search, fetch: limit + 1, offset }) as BrainMemory[]
+      return { items: rows.slice(0, limit), hasMore: rows.length > limit }
+    }
+    const rows = this.db.prepare(`${brainMemorySelect} WHERE workspace_id=@workspaceId${status ? ' AND status=@status' : ''} ORDER BY updated_at DESC LIMIT @fetch OFFSET @offset`).all({ workspaceId, status, fetch: limit + 1, offset }) as BrainMemory[]
+    return { items: rows.slice(0, limit), hasMore: rows.length > limit }
+  }
+
+  retrieveBrainMemories(workspaceId: string, conversationId: string, query: string, limit = 8): BrainMemory[] {
+    const search = buildFtsQuery(query)
+    if (!search) return []
+    const rows = this.db.prepare(`${brainMemorySearchSelect} WHERE memory.workspace_id=@workspaceId AND memory.status='active' AND (memory.scope='workspace' OR memory.conversation_id=@conversationId) AND brain_memories_fts MATCH @search ORDER BY bm25(brain_memories_fts), memory.confidence DESC, memory.updated_at DESC LIMIT @limit`).all({ workspaceId, conversationId, search, limit }) as BrainMemory[]
+    if (rows.length) {
+      const ids = rows.map((row) => row.id)
+      this.db.prepare(`UPDATE brain_memories SET last_used_at=?,use_count=use_count+1 WHERE id IN (${ids.map(() => '?').join(',')})`).run(new Date().toISOString(), ...ids)
+    }
+    return rows
+  }
+
+  private assertBrainMemoryScope(workspaceId: string, scope: BrainMemory['scope'], conversationId: string | null) {
+    if (scope === 'workspace' && conversationId) throw new Error('Memória do workspace não pode pertencer a uma conversa.')
+    if (scope === 'conversation') {
+      if (!conversationId) throw new Error('Memória da conversa exige uma conversa válida.')
+      const conversation = this.getConversation(conversationId)
+      if (!conversation || conversation.workspace !== workspaceId) throw new Error('A conversa da memória não pertence ao workspace atual.')
+    }
+  }
+
   listArtifacts(conversationId: string): ArtifactRow[] {
     return this.db.prepare(`SELECT id,conversation_id conversationId,workspace,type,title,file_path filePath,
       content,metadata,created_at createdAt,updated_at updatedAt FROM artifacts
@@ -218,10 +293,10 @@ export class LocalDatabase {
   }
 
   exportData() {
-    return { schemaVersion: DATABASE_SCHEMA_VERSION, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), suggestions: this.db.prepare('SELECT * FROM suggestions').all(), suggestionDecisions: this.db.prepare('SELECT * FROM suggestion_decisions').all(), settings: this.getSettings() }
+    return { schemaVersion: DATABASE_SCHEMA_VERSION, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), brainMemories: this.db.prepare('SELECT * FROM brain_memories ORDER BY created_at').all(), suggestions: this.db.prepare('SELECT * FROM suggestions').all(), suggestionDecisions: this.db.prepare('SELECT * FROM suggestion_decisions').all(), settings: this.getSettings() }
   }
 
-  importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[]; suggestions?: unknown[]; suggestionDecisions?: unknown[]; settings?: Record<string, string> }) {
+  importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[]; brainMemories?: unknown[]; suggestions?: unknown[]; suggestionDecisions?: unknown[]; settings?: Record<string, string> }) {
     const statements = new Map<string, Database.Statement>()
     const insert = (table: string, rows: unknown[]) => {
       const allowed = importColumns[table]
@@ -241,15 +316,15 @@ export class LocalDatabase {
       }
     }
     this.db.transaction(() => {
-      this.db.exec('DELETE FROM suggestion_decisions; DELETE FROM suggestions; DELETE FROM artifacts; DELETE FROM messages; DELETE FROM conversations; DELETE FROM workspaces; DELETE FROM workspace_memory; DELETE FROM settings;')
-      insert('workspaces', data.workspaces.map((row) => ({ ...(row as Record<string, unknown>), authorized: 0 }))); insert('conversations', data.conversations); insert('messages', data.messages); insert('artifacts', data.artifacts); insert('workspace_memory', data.memories); insert('suggestions', data.suggestions ?? []); insert('suggestion_decisions', data.suggestionDecisions ?? [])
+      this.db.exec('DELETE FROM brain_memories; DELETE FROM suggestion_decisions; DELETE FROM suggestions; DELETE FROM artifacts; DELETE FROM messages; DELETE FROM conversations; DELETE FROM workspaces; DELETE FROM workspace_memory; DELETE FROM settings;')
+      insert('workspaces', data.workspaces.map((row) => ({ ...(row as Record<string, unknown>), authorized: 0 }))); insert('conversations', data.conversations); insert('messages', data.messages); insert('artifacts', data.artifacts); insert('workspace_memory', data.memories); insert('brain_memories', data.brainMemories ?? []); insert('suggestions', data.suggestions ?? []); insert('suggestion_decisions', data.suggestionDecisions ?? [])
       if (data.settings) this.setSettings(data.settings)
       this.cleanupOrphans()
     })()
   }
 
   private cleanupOrphans() {
-    this.db.exec(`DELETE FROM messages WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM artifacts WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM suggestions WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM suggestion_decisions WHERE suggestion_id NOT IN (SELECT id FROM suggestions);`)
+    this.db.exec(`DELETE FROM messages WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM artifacts WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM suggestions WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM suggestion_decisions WHERE suggestion_id NOT IN (SELECT id FROM suggestions); DELETE FROM brain_memories WHERE workspace_id NOT IN (SELECT path FROM workspaces) OR (conversation_id IS NOT NULL AND conversation_id NOT IN (SELECT id FROM conversations));`)
   }
 
   private runScheduledIntegrityCheck() {
@@ -298,4 +373,13 @@ export class LocalDatabase {
 
 function decodeSuggestions(rows: Array<Omit<Suggestion, 'affectedFiles' | 'expectedBenefits'> & { affectedFiles: string; expectedBenefits: string }>) {
   return rows.map((row) => ({ ...row, affectedFiles: JSON.parse(row.affectedFiles) as string[], expectedBenefits: JSON.parse(row.expectedBenefits) as string[] }))
+}
+
+const brainMemoryColumns = (prefix = '') => `${prefix}id,${prefix}workspace_id workspaceId,${prefix}conversation_id conversationId,${prefix}kind,${prefix}scope,${prefix}status,${prefix}content,${prefix}confidence,${prefix}source_type sourceType,${prefix}source_id sourceId,${prefix}created_at createdAt,${prefix}updated_at updatedAt,${prefix}last_confirmed_at lastConfirmedAt,${prefix}last_used_at lastUsedAt,${prefix}use_count useCount`
+const brainMemorySelect = `SELECT ${brainMemoryColumns()} FROM brain_memories`
+const brainMemorySearchSelect = `SELECT ${brainMemoryColumns('memory.')} FROM brain_memories memory JOIN brain_memories_fts ON brain_memories_fts.rowid=memory.rowid`
+
+function buildFtsQuery(value: string) {
+  const tokens = value.normalize('NFKC').match(/[\p{L}\p{N}_-]{2,}/gu)?.slice(0, 12) ?? []
+  return tokens.map((token) => `"${token.replace(/"/g, '""')}"*`).join(' OR ')
 }

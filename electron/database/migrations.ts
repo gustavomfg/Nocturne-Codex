@@ -42,6 +42,42 @@ export const migrations: Migration[] = [
     CREATE INDEX IF NOT EXISTS idx_artifacts_file ON artifacts(conversation_id, file_path, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_suggestion_decisions_suggestion ON suggestion_decisions(suggestion_id, created_at);
   `) },
+  { version: 8, up: (db) => db.exec(`
+    CREATE TABLE IF NOT EXISTS brain_memories (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      conversation_id TEXT,
+      kind TEXT NOT NULL CHECK(kind IN ('fact','decision','preference','constraint','learning')),
+      scope TEXT NOT NULL CHECK(scope IN ('workspace','conversation')),
+      status TEXT NOT NULL CHECK(status IN ('candidate','active','outdated','archived')),
+      content TEXT NOT NULL,
+      confidence INTEGER NOT NULL CHECK(confidence BETWEEN 0 AND 100),
+      source_type TEXT NOT NULL CHECK(source_type IN ('manual','message','agent')),
+      source_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      last_confirmed_at TEXT,
+      last_used_at TEXT,
+      use_count INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (workspace_id) REFERENCES workspaces(path) ON DELETE CASCADE,
+      FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+      CHECK((scope = 'workspace' AND conversation_id IS NULL) OR (scope = 'conversation' AND conversation_id IS NOT NULL))
+    );
+    CREATE INDEX IF NOT EXISTS idx_brain_memories_workspace ON brain_memories(workspace_id, status, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_brain_memories_conversation ON brain_memories(conversation_id, status, updated_at DESC);
+    CREATE VIRTUAL TABLE IF NOT EXISTS brain_memories_fts USING fts5(content, content='brain_memories', content_rowid='rowid', tokenize='unicode61 remove_diacritics 2');
+    CREATE TRIGGER IF NOT EXISTS brain_memories_ai AFTER INSERT ON brain_memories BEGIN
+      INSERT INTO brain_memories_fts(rowid, content) VALUES (new.rowid, new.content);
+    END;
+    CREATE TRIGGER IF NOT EXISTS brain_memories_ad AFTER DELETE ON brain_memories BEGIN
+      INSERT INTO brain_memories_fts(brain_memories_fts, rowid, content) VALUES ('delete', old.rowid, old.content);
+    END;
+    CREATE TRIGGER IF NOT EXISTS brain_memories_au AFTER UPDATE OF content ON brain_memories BEGIN
+      INSERT INTO brain_memories_fts(brain_memories_fts, rowid, content) VALUES ('delete', old.rowid, old.content);
+      INSERT INTO brain_memories_fts(rowid, content) VALUES (new.rowid, new.content);
+    END;
+    INSERT INTO brain_memories_fts(brain_memories_fts) VALUES ('rebuild');
+  `) },
 ]
 
 export function migrateDatabase(db: Database.Database, currentVersion: number) {
