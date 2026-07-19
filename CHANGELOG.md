@@ -33,6 +33,7 @@
 - preload e IPC expõem somente criação de candidatas e operações validadas de consulta, aprovação, edição, arquivamento e exclusão dentro do workspace autorizado.
 - diálogo lazy do Segundo Cérebro oferece busca, filtros, paginação e ciclo explícito de revisão sem acumular a coleção no estado global do renderer.
 - biblioteca do Segundo Cérebro ganha hierarquia visual, metadados legíveis, feedback de confiança e navegação mobile entre consulta e captura, preservando aprovação humana explícita.
+- busca, filtro e ação da biblioteca compartilham altura e alinhamento, enquanto campos focados usam um único contorno violeta sem anéis sobrepostos.
 - cada turno recupera somente memórias ativas relevantes, com orçamento de oito itens/6.000 caracteres, serialização como dados e contabilização após `turn/start` aceito.
 - respostas podem propor até cinco candidatas estruturadas, validadas e deduplicadas; blocos técnicos são removidos antes da persistência e nenhuma candidata do agente é ativada sem aprovação.
 
