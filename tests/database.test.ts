@@ -34,6 +34,7 @@ describe('persistência SQLite', () => {
     expect(db.retrieveBrainMemories(workspace, conversation.id, 'SQLite')).toEqual([])
     const approved = db.updateBrainMemory(candidate.id, workspace, { status: 'active', confidence: 90 })
     expect(approved.lastConfirmedAt).not.toBeNull()
+    expect(() => db.updateBrainMemory(candidate.id, workspace, { status: 'candidate' })).toThrow(/Transição de memória inválida/)
     expect(db.retrieveBrainMemories(workspace, conversation.id, 'decisão sobre SQLite')).toEqual([expect.objectContaining({ id: candidate.id, useCount: 0 })])
     expect(db.getBrainMemory(candidate.id, workspace)?.useCount).toBe(1)
     expect(db.listBrainMemoryPage(workspace, 0, 1)).toMatchObject({ items: { length: 1 }, hasMore: true })

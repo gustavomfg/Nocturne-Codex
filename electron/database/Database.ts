@@ -179,6 +179,10 @@ export class LocalDatabase {
     const conversationId = scope === 'conversation' ? value.conversationId === undefined ? current.conversationId : value.conversationId : null
     this.assertBrainMemoryScope(workspaceId, scope, conversationId)
     const status = value.status ?? current.status
+    const transitions: Record<BrainMemory['status'], BrainMemory['status'][]> = {
+      candidate: ['active', 'archived'], active: ['outdated', 'archived'], outdated: ['active', 'archived'], archived: ['active'],
+    }
+    if (status !== current.status && !transitions[current.status].includes(status)) throw new Error(`Transição de memória inválida: ${current.status} → ${status}.`)
     const updatedAt = new Date().toISOString()
     const next = {
       id, workspaceId, conversationId, kind: value.kind ?? current.kind, scope, status,

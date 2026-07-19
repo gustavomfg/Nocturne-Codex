@@ -1,4 +1,5 @@
 import type { AgentMode, Artifact, Attachment, CodexDiagnostics, CodexEvent, CodexSettings, CodexStatus, CollectionPage, Conversation, FilePreview, GitInfo, Message, MessagePage, Suggestion, SuggestionStatus, Workspace, WorkspaceMemory } from '../types'
+import type { BrainMemory, BrainMemoryKind, BrainMemoryScope, BrainMemoryStatus, UpdateBrainMemoryInput } from '../brainMemory'
 
 export interface NocturneApi {
   workspace: { select(expectedWorkspace?: string): Promise<string | null>; validate(value: string): Promise<string | null>; list(): Promise<Workspace[]>; remove(value: string): Promise<void>; favorite(value: string, favorite: boolean): Promise<void>; openTool(value: string, tool: 'editor' | 'terminal'): Promise<void> }
@@ -6,6 +7,12 @@ export interface NocturneApi {
   codex: { start(): Promise<{ status: CodexStatus }>; restart(): Promise<CodexDiagnostics>; diagnostics(): Promise<CodexDiagnostics>; send(conversationId: string, prompt: string, attachments?: string[], mode?: AgentMode): Promise<{ threadId: string; recreated: boolean }>; resume(conversationId: string): Promise<{ resumed: boolean }>; interrupt(conversationId: string): Promise<void>; saveAssistant(conversationId: string, content: string, metadata?: unknown): Promise<Message>; approve(key: string, accepted: boolean, forSession?: boolean): Promise<void>; onEvent(listener: (event: CodexEvent) => void): () => void; onStatus(listener: (status: { status: CodexStatus; error?: string }) => void): () => void }
   files: { attach(conversationId: string): Promise<Attachment[]>; open(conversationId: string, filePath: string, action: 'file' | 'folder' | 'editor'): Promise<void>; preview(conversationId: string, filePath: string): Promise<FilePreview> }
   memory: { get(conversationId: string): Promise<WorkspaceMemory>; set(conversationId: string, content: string, rules: string): Promise<WorkspaceMemory> }
+  brain: {
+    page(conversationId: string, offset?: number, limit?: number, query?: string, status?: BrainMemoryStatus): Promise<CollectionPage<BrainMemory>>
+    create(conversationId: string, value: { kind: BrainMemoryKind; scope: BrainMemoryScope; content: string }): Promise<BrainMemory>
+    update(conversationId: string, memoryId: string, value: Omit<UpdateBrainMemoryInput, 'conversationId'>): Promise<BrainMemory>
+    delete(conversationId: string, memoryId: string): Promise<{ deleted: true }>
+  }
   artifacts: { list(conversationId: string): Promise<Artifact[]>; page(conversationId: string, offset?: number, limit?: number): Promise<CollectionPage<Artifact>>; delete(conversationId: string, artifactId: string): Promise<{ deleted: true }> }
   suggestions: { list(conversationId: string): Promise<Suggestion[]>; page(conversationId: string, offset?: number, limit?: number): Promise<CollectionPage<Suggestion>>; create(conversationId: string, content: string): Promise<{ suggestions: Suggestion[]; content: string }>; status(conversationId: string, suggestionId: string, status: SuggestionStatus, result?: string): Promise<Suggestion> }
   data: { export(): Promise<string | null>; import(): Promise<boolean> }

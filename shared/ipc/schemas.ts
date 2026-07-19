@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { agentModes, suggestionStatuses } from '../suggestions'
 import { PERSISTENCE_LIMITS } from '../constants'
+import { brainMemoryKinds, brainMemoryScopes, brainMemoryStatuses } from '../brainMemory'
 
 export const idSchema = z.string().uuid()
 export const pageSchema = z.object({ offset: z.number().int().min(0).max(1_000_000), limit: z.number().int().min(1).max(200) }).strict()
@@ -16,3 +17,9 @@ export const gitCommitSchema = z.object({ conversationId: idSchema, message: z.s
 export const saveAssistantSchema = z.object({ conversationId: idSchema, content: z.string().max(PERSISTENCE_LIMITS.assistantCharacters), metadata: z.unknown().optional() })
 export const saveMarkdownSchema = z.object({ conversationId: idSchema, content: z.string().max(PERSISTENCE_LIMITS.documentCharacters), name: z.string().trim().min(1).max(PERSISTENCE_LIMITS.documentNameCharacters).default('documento.md') })
 export const exportDocumentSchema = z.object({ conversationId: idSchema, content: z.string().max(PERSISTENCE_LIMITS.documentCharacters), format: z.enum(['docx', 'pdf', 'html']) })
+export const brainMemoryPageSchema = conversationPageSchema.extend({ query: z.string().trim().max(500).default(''), status: z.enum(brainMemoryStatuses).optional() })
+export const brainMemoryCreateSchema = z.object({ conversationId: idSchema, kind: z.enum(brainMemoryKinds), scope: z.enum(brainMemoryScopes), content: z.string().trim().min(1).max(8_000) }).strict()
+export const brainMemoryUpdateSchema = z.object({
+  conversationId: idSchema, memoryId: idSchema, kind: z.enum(brainMemoryKinds).optional(), scope: z.enum(brainMemoryScopes).optional(), content: z.string().trim().min(1).max(8_000).optional(), confidence: z.number().int().min(0).max(100).optional(), status: z.enum(brainMemoryStatuses).optional(),
+}).strict().refine((value) => value.kind !== undefined || value.scope !== undefined || value.content !== undefined || value.confidence !== undefined || value.status !== undefined, 'Informe ao menos uma alteração.')
+export const brainMemoryDeleteSchema = z.object({ conversationId: idSchema, memoryId: idSchema }).strict()

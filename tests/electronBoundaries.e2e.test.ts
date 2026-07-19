@@ -138,7 +138,7 @@ describe.sequential('fronteiras Electron E2E', () => {
   })
 
   it('expõe somente a API nomeada e cruza preload, IPC e SQLite', async () => {
-    expect(Object.keys(api).sort()).toEqual(['artifacts', 'clipboard', 'codex', 'conversations', 'data', 'diagnostics', 'documents', 'files', 'git', 'memory', 'settings', 'suggestions', 'workspace'])
+    expect(Object.keys(api).sort()).toEqual(['artifacts', 'brain', 'clipboard', 'codex', 'conversations', 'data', 'diagnostics', 'documents', 'files', 'git', 'memory', 'settings', 'suggestions', 'workspace'])
     await api.clipboard.writeText('commit sugerido')
     await expect(api.clipboard.readText()).resolves.toBe('commit sugerido')
     const configReads = codex.configReads
@@ -216,6 +216,16 @@ describe.sequential('fronteiras Electron E2E', () => {
     expect(codex.eventNames().reduce((total, event) => total + codex.listenerCount(event), 0)).toBe(listenerCount)
   })
 
+  it('gerencia o Segundo Cérebro somente pela conversa autorizada', async () => {
+    const conversation = (await api.conversations.list())[0]
+    const candidate = await api.brain.create(conversation.id, { kind: 'decision', scope: 'workspace', content: 'Manter decisões aprovadas e rastreáveis' })
+    expect(candidate).toMatchObject({ status: 'candidate', sourceType: 'manual', workspaceId: conversation.workspace })
+    await expect(api.brain.page(conversation.id, 0, 50, 'rastreáveis')).resolves.toMatchObject({ items: [expect.objectContaining({ id: candidate.id })], hasMore: false })
+    await expect(api.brain.update(conversation.id, candidate.id, { status: 'active', confidence: 92 })).resolves.toMatchObject({ status: 'active', confidence: 92 })
+    await expect(api.brain.update(conversation.id, candidate.id, { status: 'candidate' })).rejects.toThrow(/Transição de memória inválida/)
+    await expect(api.brain.delete(conversation.id, candidate.id)).resolves.toEqual({ deleted: true })
+  })
+
   it('exporta e restaura o backup atravessando diálogos e IPC', async () => {
     electron.dialogs.save.push({ canceled: false, filePath: backupPath })
     await expect(api.data.export()).resolves.toBe(backupPath)
@@ -243,6 +253,7 @@ describe.sequential('fronteiras Electron E2E', () => {
     await expect(api.artifacts.list(restored.id)).resolves.not.toThrow()
     await expect(api.suggestions.list(restored.id)).resolves.not.toThrow()
     await expect(api.memory.get(restored.id)).rejects.toThrow(/Workspace não autorizado/)
+    await expect(api.brain.page(restored.id)).rejects.toThrow(/Workspace não autorizado/)
     await expect(api.codex.resume(restored.id)).rejects.toThrow(/Workspace não autorizado/)
     await expect(api.files.preview(restored.id, path.join(outside, 'secret.md'))).rejects.toThrow(/Workspace não autorizado/)
     await expect(api.git.status(restored.id)).rejects.toThrow(/Workspace não autorizado/)

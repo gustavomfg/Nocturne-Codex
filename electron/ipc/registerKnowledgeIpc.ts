@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { LocalDatabase } from '../database/Database'
 import type { Logger } from '../logging/Logger'
 import { extractSuggestions } from '../../shared/suggestions'
-import { conversationPageSchema, idSchema, suggestionStatusSchema } from '../../shared/ipc/schemas'
+import { brainMemoryCreateSchema, brainMemoryDeleteSchema, brainMemoryPageSchema, brainMemoryUpdateSchema, conversationPageSchema, idSchema, suggestionStatusSchema } from '../../shared/ipc/schemas'
 import { safeIpcMain } from './safeIpc'
 
 interface WorkspaceContext { content: string; rules: string; updatedAt: string }
@@ -26,6 +26,28 @@ export function registerKnowledgeIpc(win: BrowserWindow, database: LocalDatabase
   ipcMain.handle('memory:set', async (_event, value: unknown) => {
     const data = z.object({ conversationId: idSchema, content: z.string().max(20_000), rules: z.string().max(20_000).default('') }).parse(value); const workspace = dependencies.authorizedWorkspace(data.conversationId)
     const result = await dependencies.write(workspace, data.content, data.rules); database.setWorkspaceMemory(workspace, `${data.content}\n\n# Regras do projeto\n${data.rules}`); return result
+  })
+  ipcMain.handle('brain:page', (_event, value: unknown) => {
+    const data = brainMemoryPageSchema.parse(value); const workspace = dependencies.authorizedWorkspace(data.conversationId)
+    return database.listBrainMemoryPage(workspace, data.offset, data.limit, data.query, data.status)
+  })
+  ipcMain.handle('brain:create', (_event, value: unknown) => {
+    const data = brainMemoryCreateSchema.parse(value); const workspace = dependencies.authorizedWorkspace(data.conversationId)
+    const memory = database.createBrainMemory(workspace, { kind: data.kind, scope: data.scope, content: data.content, conversationId: data.scope === 'conversation' ? data.conversationId : undefined, sourceType: 'manual', status: 'candidate' })
+    logger.info('persistence', 'Candidata de memória criada', { memoryId: memory.id, conversationId: data.conversationId, scope: memory.scope, kind: memory.kind })
+    return memory
+  })
+  ipcMain.handle('brain:update', (_event, value: unknown) => {
+    const data = brainMemoryUpdateSchema.parse(value); const workspace = dependencies.authorizedWorkspace(data.conversationId)
+    const memory = database.updateBrainMemory(data.memoryId, workspace, { kind: data.kind, scope: data.scope, content: data.content, confidence: data.confidence, status: data.status, conversationId: data.scope === 'conversation' ? data.conversationId : data.scope === 'workspace' ? null : undefined })
+    logger.info('persistence', 'Memória estruturada atualizada', { memoryId: memory.id, conversationId: data.conversationId, status: memory.status })
+    return memory
+  })
+  ipcMain.handle('brain:delete', (_event, value: unknown) => {
+    const data = brainMemoryDeleteSchema.parse(value); const workspace = dependencies.authorizedWorkspace(data.conversationId)
+    if (!database.deleteBrainMemory(data.memoryId, workspace)) throw new Error('Memória não encontrada ou já removida.')
+    logger.info('persistence', 'Memória estruturada removida', { memoryId: data.memoryId, conversationId: data.conversationId })
+    return { deleted: true }
   })
   ipcMain.handle('artifacts:list', (_event, value: unknown) => database.listArtifacts(idSchema.parse(value)))
   ipcMain.handle('artifacts:page', (_event, value: unknown) => { const data = conversationPageSchema.parse(value); return database.listArtifactPage(data.conversationId, data.offset, data.limit) })

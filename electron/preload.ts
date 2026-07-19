@@ -45,6 +45,12 @@ export const nocturneApi: NocturneApi = {
     preview: (conversationId: string, filePath: string) => ipcRenderer.invoke(channels.files.preview, { conversationId, filePath }),
   },
   memory: { get: (conversationId: string) => ipcRenderer.invoke(channels.memory.get, conversationId), set: (conversationId: string, content: string, rules: string) => ipcRenderer.invoke(channels.memory.set, { conversationId, content, rules }) },
+  brain: {
+    page: (conversationId, offset = 0, limit = COLLECTION_PAGE_LIMITS.brainMemories, query = '', status) => ipcRenderer.invoke(channels.brain.page, { conversationId, offset, limit, query, status }),
+    create: (conversationId, value) => ipcRenderer.invoke(channels.brain.create, { conversationId, ...value }),
+    update: (conversationId, memoryId, value) => ipcRenderer.invoke(channels.brain.update, { conversationId, memoryId, ...value }),
+    delete: (conversationId, memoryId) => ipcRenderer.invoke(channels.brain.delete, { conversationId, memoryId }),
+  },
   artifacts: { list: (conversationId: string) => ipcRenderer.invoke(channels.artifacts.list, conversationId), page: (conversationId: string, offset = 0, limit = COLLECTION_PAGE_LIMITS.artifacts) => ipcRenderer.invoke(channels.artifacts.page, { conversationId, offset, limit }), delete: (conversationId: string, artifactId: string) => ipcRenderer.invoke(channels.artifacts.delete, { conversationId, artifactId }) },
   suggestions: { list: (conversationId: string) => ipcRenderer.invoke(channels.suggestions.list, conversationId), page: (conversationId: string, offset = 0, limit = COLLECTION_PAGE_LIMITS.suggestions) => ipcRenderer.invoke(channels.suggestions.page, { conversationId, offset, limit }), create: (conversationId: string, content: string) => ipcRenderer.invoke(channels.suggestions.create, { conversationId, content }), status: (conversationId: string, suggestionId: string, status: string, result?: string) => ipcRenderer.invoke(channels.suggestions.status, { conversationId, suggestionId, status, result }) },
   data: { export: () => ipcRenderer.invoke(channels.data.export), import: () => ipcRenderer.invoke(channels.data.import) },
