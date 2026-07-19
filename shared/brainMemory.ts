@@ -45,3 +45,15 @@ export interface UpdateBrainMemoryInput {
   confidence?: number
   status?: BrainMemoryStatus
 }
+
+export interface BrainMemoryCandidate {
+  kind: BrainMemoryKind
+  scope: BrainMemoryScope
+  content: string
+  confidence: number
+}
+
+export function isSafeBrainMemoryContent(value: string) {
+  const credential = /(?:authorization\s*[:=]\s*(?:bearer\s+)?\S{8,}|(?:api[_-]?key|token|password|senha|secret)\s*[:=]\s*\S{12,}|sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,})/i
+  return !credential.test(value)
+}

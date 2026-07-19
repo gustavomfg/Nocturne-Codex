@@ -105,6 +105,10 @@ Each workspace can maintain:
 
 Detected stack information, useful commands, architectural decisions, and project preferences are supplied as context in future turns. Accepted and rejected review decisions also become part of the project's durable memory.
 
+### Second Brain
+
+The local Second Brain complements workspace Markdown with structured SQLite memories. Facts, decisions, preferences, constraints, and learnings remain scoped to a workspace or conversation, searchable through FTS5, included in backup and restoration, and manageable from a dedicated library. The agent may propose durable knowledge, but every generated entry starts as a candidate and requires explicit approval. Only active memories relevant to the current prompt enter Codex context, under strict item and character budgets; archived, outdated, and unapproved entries are excluded.
+
 ### Artifacts
 
 Responses, reports, diffs, files, images, Markdown, configuration, and exported documents can be retained as conversation artifacts. Text, Markdown, code, and supported images have an internal preview; safe HTTPS links open in the system browser, while HTTP, local, and unsafe protocols remain blocked. Files can also be opened in the system editor or containing folder.
@@ -133,7 +137,7 @@ The renderer runs with `contextIsolation: true`, `nodeIntegration: false`, and E
 6. **Evaluate suggestions.** Review the evidence, impact, files, benefits, risk, complexity, and proposed diff before deciding what to do.
 7. **Approve implementation deliberately.** Applying a suggestion creates an implementation request in Build Mode; opening a suggestion alone never changes a file.
 8. **Validate the result.** Ask the agent to run relevant type checks, linting, and tests, then inspect the Git diff yourself.
-9. **Preserve or export the outcome.** Keep artifacts in the conversation, update workspace memory, save Markdown, or export supported document formats.
+9. **Preserve or export the outcome.** Review Second Brain candidates, keep artifacts in the conversation, update workspace memory, save Markdown, or export supported document formats.
 
 ---
 

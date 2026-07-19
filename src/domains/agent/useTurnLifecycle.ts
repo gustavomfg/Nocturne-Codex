@@ -28,6 +28,9 @@ export function useTurnLifecycle({ flushStream, activeTurnRef, refreshGit }: { f
       if (state.streaming) {
       const current = useAppStore.getState()
       let assistantContent = state.streaming
+      const memoryExtraction = await window.nocturne.brain.extract(context.conversationId, assistantContent)
+      assistantContent = memoryExtraction.content || (memoryExtraction.memories.length ? `${memoryExtraction.memories.length} candidata(s) foram enviadas ao Segundo Cérebro para sua revisão.` : 'A resposta do agente não continha conteúdo persistível.')
+      if (memoryExtraction.warning) store.setError(memoryExtraction.warning)
       if (context.mode === 'review') {
         const extracted = await window.nocturne.suggestions.create(context.conversationId, assistantContent)
         assistantContent = extracted.content || assistantContent

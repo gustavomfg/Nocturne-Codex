@@ -4,7 +4,7 @@ export const IPC_CHANNELS = {
   codex: { start: 'codex:start', restart: 'codex:restart', diagnostics: 'codex:diagnostics', send: 'codex:send', resume: 'codex:resume', interrupt: 'codex:interrupt', saveAssistant: 'codex:save-assistant', approve: 'codex:approve', event: 'codex:event', status: 'codex:status' },
   files: { attach: 'files:attach', open: 'files:open', preview: 'files:preview' },
   memory: { get: 'memory:get', set: 'memory:set' },
-  brain: { page: 'brain:page', create: 'brain:create', update: 'brain:update', delete: 'brain:delete' },
+  brain: { page: 'brain:page', create: 'brain:create', update: 'brain:update', delete: 'brain:delete', extract: 'brain:extract' },
   artifacts: { list: 'artifacts:list', page: 'artifacts:page', delete: 'artifacts:delete' },
   suggestions: { list: 'suggestions:list', page: 'suggestions:page', create: 'suggestions:create', status: 'suggestions:status' },
   data: { export: 'data:export', import: 'data:import' },

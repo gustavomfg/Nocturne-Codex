@@ -25,6 +25,8 @@ Electron main
 
 O Segundo Cérebro complementa o documento `.nocturne/memory.md` com memórias individuais no SQLite. Cada registro possui escopo de workspace ou conversa, tipo, estado, confiança, origem e métricas de uso. Somente memórias ativas podem ser recuperadas; candidatas exigem aprovação explícita. A busca usa FTS5 local e o backup preserva os registros, enquanto o índice é reconstruído a partir da fonte de verdade.
 
+Respostas do agente podem carregar um bloco opcional `nocturne-memories`. A extração é limitada, validada e persistida transacionalmente no processo principal; duplicatas e padrões reconhecíveis de credenciais são recusados. O bloco técnico é removido antes da mensagem ser persistida, e falhas nessa captura opcional não descartam a resposta principal.
+
 No renderer, a biblioteca do Segundo Cérebro é um diálogo lazy isolado em `src/domains/memory/`. Seu estado de busca, formulário e paginação permanece local; o `App.tsx` guarda somente se a superfície está aberta. Criação manual produz uma candidata, e aprovação, edição, desatualização, arquivamento e exclusão são ações visíveis do usuário.
 
 Mensagens, conversas, artefatos e sugestões atravessam IPC em páginas limitadas. O renderer carrega a página inicial e solicita páginas anteriores explicitamente, evitando materializar históricos inteiros nas rotas interativas; os métodos integrais permanecem disponíveis apenas para compatibilidade interna enquanto consumidores antigos são removidos gradualmente.

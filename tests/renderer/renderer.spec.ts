@@ -306,6 +306,29 @@ test.describe('renderer do produto', () => {
     await expect(brain.getByText('Nenhuma memória encontrada')).toBeVisible()
   })
 
+  test('transforma propostas do agente somente em candidatas revisáveis', async ({ page }) => {
+    await page.setViewportSize({ width: 1180, height: 850 })
+    await ready(page)
+    await page.evaluate(() => { window.nocturne.codex.send = async () => ({ threadId: 'thread-1', recreated: false }) })
+    await page.getByLabel('Mensagem para o Codex').fill('Registre um aprendizado durável.')
+    await page.getByRole('button', { name: 'Enviar mensagem' }).click()
+    await page.evaluate(() => {
+      const bridge = (window as unknown as { __nocturneTest: { emitEvent(payload: unknown): void; emitStatus(payload: unknown): void } }).__nocturneTest
+      const block = `Resposta sem metadados visíveis.\n\n\`\`\`nocturne-memories\n${JSON.stringify([{ kind: 'learning', scope: 'workspace', content: 'Validar restaurações antes de substituir dados locais.', confidence: 85 }])}\n\`\`\``
+      bridge.emitStatus({ status: 'streaming' })
+      bridge.emitEvent({ method: 'item/agentMessage/delta', params: { delta: block } })
+      bridge.emitEvent({ method: 'turn/completed', params: { turn: { id: 'turn-memory' }, threadId: 'thread-1' } })
+    })
+    await expect(page.getByText('Resposta sem metadados visíveis.')).toBeVisible()
+    await expect(page.getByText('nocturne-memories')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Memória do workspace' }).click()
+    await page.getByRole('button', { name: 'Abrir Segundo Cérebro' }).click()
+    const brain = page.getByRole('dialog', { name: 'Segundo Cérebro' })
+    await expect(brain.getByText('Validar restaurações antes de substituir dados locais.')).toBeVisible()
+    await expect(brain.locator('.brain-card').getByText('Candidata', { exact: true })).toBeVisible()
+    await expect(brain.getByRole('button', { name: 'Aprovar' })).toBeVisible()
+  })
+
   test('confirma a criação de commit no próprio fluxo', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await ready(page)

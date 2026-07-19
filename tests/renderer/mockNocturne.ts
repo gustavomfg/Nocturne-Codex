@@ -12,7 +12,7 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
     let selectedExpected: string | undefined
     let memoryReads = 0
     let resumes = 0
-    type MockBrainMemory = { id: string; workspaceId: string; conversationId: string | null; kind: 'fact' | 'decision' | 'preference' | 'constraint' | 'learning'; scope: 'workspace' | 'conversation'; status: 'candidate' | 'active' | 'outdated' | 'archived'; content: string; confidence: number; sourceType: 'manual'; sourceId: string | null; createdAt: string; updatedAt: string; lastConfirmedAt: string | null; lastUsedAt: string | null; useCount: number }
+    type MockBrainMemory = { id: string; workspaceId: string; conversationId: string | null; kind: 'fact' | 'decision' | 'preference' | 'constraint' | 'learning'; scope: 'workspace' | 'conversation'; status: 'candidate' | 'active' | 'outdated' | 'archived'; content: string; confidence: number; sourceType: 'manual' | 'agent'; sourceId: string | null; createdAt: string; updatedAt: string; lastConfirmedAt: string | null; lastUsedAt: string | null; useCount: number }
     let brainMemories: MockBrainMemory[] = []
     const noop = async () => undefined
     const api = {
@@ -33,7 +33,7 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       },
       codex: {
         start: noop, restart: noop, diagnostics: async () => ({ executable: 'codex', pid: 42, state: 'ready', lastFailure: null, logsPath: '/tmp/nocturne' }), send: noop, resume: async () => { resumes += 1 }, interrupt: noop,
-        saveAssistant: async () => ({ id: 'saved-message' }), approve: noop,
+        saveAssistant: async (conversationId: string, content: string) => ({ id: 'saved-message', conversationId, role: 'assistant', content, metadata: null, createdAt: now }), approve: noop,
         onEvent: (listener: (payload: unknown) => void) => { eventListeners.push(listener); return () => { const index = eventListeners.indexOf(listener); if (index >= 0) eventListeners.splice(index, 1) } },
         onStatus: (listener: (payload: unknown) => void) => { statusListeners.push(listener); return () => { const index = statusListeners.indexOf(listener); if (index >= 0) statusListeners.splice(index, 1) } },
       },
@@ -54,6 +54,20 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
           Object.assign(memory, value, { updatedAt: now }); if (value.status === 'active') memory.lastConfirmedAt = now; return memory
         },
         delete: async (_id: string, memoryId: string) => { brainMemories = brainMemories.filter((item) => item.id !== memoryId); return { deleted: true as const } },
+        extract: async (_id: string, content: string) => {
+          const pattern = /```nocturne-memories\s*\n([\s\S]*?)```/gi
+          const created: MockBrainMemory[] = []
+          let match: RegExpExecArray | null
+          while ((match = pattern.exec(content)) !== null) {
+            const values = JSON.parse(match[1]) as Array<Pick<MockBrainMemory, 'kind' | 'scope' | 'content' | 'confidence'>>
+            for (const value of values) {
+              const memory: MockBrainMemory = { id: `brain-${brainMemories.length + created.length + 1}`, workspaceId: workspace, conversationId: value.scope === 'conversation' ? conversation.id : null, ...value, status: 'candidate', sourceType: 'agent', sourceId: null, createdAt: now, updatedAt: now, lastConfirmedAt: null, lastUsedAt: null, useCount: 0 }
+              created.push(memory)
+            }
+          }
+          brainMemories = [...created, ...brainMemories]
+          return { memories: created, content: content.replace(pattern, '').trim() }
+        },
       },
       artifacts: { list: async () => [], page: async () => ({ items: [], hasMore: false }), delete: noop },
       suggestions: { list: async () => [], page: async () => ({ items: [], hasMore: false }), create: async (_id: string, content: string) => ({ suggestions: [], content }), status: noop },

@@ -223,12 +223,18 @@ describe.sequential('fronteiras Electron E2E', () => {
 
   it('gerencia o Segundo Cérebro somente pela conversa autorizada', async () => {
     const conversation = (await api.conversations.list())[0]
+    await expect(api.brain.create(conversation.id, { kind: 'fact', scope: 'workspace', content: 'authorization: Bearer abcdefghijklmnop' })).rejects.toThrow(/credencial/)
     const candidate = await api.brain.create(conversation.id, { kind: 'decision', scope: 'workspace', content: 'Manter decisões aprovadas e rastreáveis' })
     expect(candidate).toMatchObject({ status: 'candidate', sourceType: 'manual', workspaceId: conversation.workspace })
     await expect(api.brain.page(conversation.id, 0, 50, 'rastreáveis')).resolves.toMatchObject({ items: [expect.objectContaining({ id: candidate.id })], hasMore: false })
     await expect(api.brain.update(conversation.id, candidate.id, { status: 'active', confidence: 92 })).resolves.toMatchObject({ status: 'active', confidence: 92 })
     await expect(api.brain.update(conversation.id, candidate.id, { status: 'candidate' })).rejects.toThrow(/Transição de memória inválida/)
     await expect(api.brain.delete(conversation.id, candidate.id)).resolves.toEqual({ deleted: true })
+    const block = `Resposta limpa.\n\`\`\`nocturne-memories\n${JSON.stringify({ kind: 'learning', scope: 'workspace', content: 'Candidatas automáticas precisam de aprovação', confidence: 75 })}\n\`\`\``
+    const extracted = await api.brain.extract(conversation.id, block)
+    expect(extracted).toMatchObject({ content: 'Resposta limpa.', memories: [expect.objectContaining({ status: 'candidate', sourceType: 'agent' })] })
+    await expect(api.brain.extract(conversation.id, block)).resolves.toMatchObject({ memories: [] })
+    await expect(api.brain.delete(conversation.id, extracted.memories[0].id)).resolves.toEqual({ deleted: true })
   })
 
   it('exporta e restaura o backup atravessando diálogos e IPC', async () => {

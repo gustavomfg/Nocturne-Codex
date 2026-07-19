@@ -3,7 +3,7 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import type { Suggestion, SuggestionStatus } from '../../shared/suggestions'
-import type { BrainMemory, CreateBrainMemoryInput, UpdateBrainMemoryInput } from '../../shared/brainMemory'
+import type { BrainMemory, BrainMemoryCandidate, CreateBrainMemoryInput, UpdateBrainMemoryInput } from '../../shared/brainMemory'
 import { DATABASE_SCHEMA_VERSION } from '../../shared/constants'
 import { migrateDatabase } from './migrations'
 
@@ -200,6 +200,19 @@ export class LocalDatabase {
   getBrainMemory(id: string, workspaceId: string): BrainMemory | null {
     const row = this.db.prepare(`${brainMemorySelect} WHERE id=? AND workspace_id=?`).get(id, workspaceId) as BrainMemory | undefined
     return row ?? null
+  }
+
+  findEquivalentBrainMemory(workspaceId: string, scope: BrainMemory['scope'], conversationId: string | null, content: string): BrainMemory | null {
+    const row = this.db.prepare(`${brainMemorySelect} WHERE workspace_id=? AND scope=? AND conversation_id IS ? AND content=? COLLATE NOCASE AND status IN ('candidate','active') LIMIT 1`).get(workspaceId, scope, conversationId, content.trim()) as BrainMemory | undefined
+    return row ?? null
+  }
+
+  createBrainMemoryCandidates(workspaceId: string, currentConversationId: string, candidates: BrainMemoryCandidate[]) {
+    return this.db.transaction(() => candidates.flatMap((candidate) => {
+      const conversationId = candidate.scope === 'conversation' ? currentConversationId : null
+      if (this.findEquivalentBrainMemory(workspaceId, candidate.scope, conversationId, candidate.content)) return []
+      return [this.createBrainMemory(workspaceId, { ...candidate, conversationId: conversationId ?? undefined, sourceType: 'agent', status: 'candidate' })]
+    }))()
   }
 
   listBrainMemoryPage(workspaceId: string, offset = 0, limit = 50, query = '', status?: BrainMemory['status']) {

@@ -2,8 +2,8 @@ import type { BrowserWindow } from 'electron'
 import { z } from 'zod'
 import type { LocalDatabase } from '../database/Database'
 import type { Logger } from '../logging/Logger'
-import { extractSuggestions } from '../../shared/suggestions'
-import { brainMemoryCreateSchema, brainMemoryDeleteSchema, brainMemoryPageSchema, brainMemoryUpdateSchema, conversationPageSchema, idSchema, suggestionStatusSchema } from '../../shared/ipc/schemas'
+import { extractBrainMemoryCandidates, extractSuggestions } from '../../shared/suggestions'
+import { brainMemoryCreateSchema, brainMemoryDeleteSchema, brainMemoryExtractSchema, brainMemoryPageSchema, brainMemoryUpdateSchema, conversationPageSchema, idSchema, suggestionStatusSchema } from '../../shared/ipc/schemas'
 import { safeIpcMain } from './safeIpc'
 
 interface WorkspaceContext { content: string; rules: string; updatedAt: string }
@@ -48,6 +48,18 @@ export function registerKnowledgeIpc(win: BrowserWindow, database: LocalDatabase
     if (!database.deleteBrainMemory(data.memoryId, workspace)) throw new Error('Memória não encontrada ou já removida.')
     logger.info('persistence', 'Memória estruturada removida', { memoryId: data.memoryId, conversationId: data.conversationId })
     return { deleted: true }
+  })
+  ipcMain.handle('brain:extract', (_event, value: unknown) => {
+    const data = brainMemoryExtractSchema.parse(value); const workspace = dependencies.authorizedWorkspace(data.conversationId)
+    const extracted = extractBrainMemoryCandidates(data.content)
+    try {
+      const memories = database.createBrainMemoryCandidates(workspace, data.conversationId, extracted.candidates)
+      if (memories.length) logger.info('persistence', 'Candidatas de memória extraídas', { conversationId: data.conversationId, count: memories.length })
+      return { memories, content: extracted.content }
+    } catch (error) {
+      logger.error('persistence', 'Falha ao persistir candidatas de memória', { conversationId: data.conversationId, error: error instanceof Error ? error.message : String(error) })
+      return { memories: [], content: extracted.content, warning: 'A resposta foi preservada, mas não foi possível salvar as candidatas do Segundo Cérebro.' }
+    }
   })
   ipcMain.handle('artifacts:list', (_event, value: unknown) => database.listArtifacts(idSchema.parse(value)))
   ipcMain.handle('artifacts:page', (_event, value: unknown) => { const data = conversationPageSchema.parse(value); return database.listArtifactPage(data.conversationId, data.offset, data.limit) })

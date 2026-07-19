@@ -50,6 +50,7 @@ export const nocturneApi: NocturneApi = {
     create: (conversationId, value) => ipcRenderer.invoke(channels.brain.create, { conversationId, ...value }),
     update: (conversationId, memoryId, value) => ipcRenderer.invoke(channels.brain.update, { conversationId, memoryId, ...value }),
     delete: (conversationId, memoryId) => ipcRenderer.invoke(channels.brain.delete, { conversationId, memoryId }),
+    extract: (conversationId, content) => ipcRenderer.invoke(channels.brain.extract, { conversationId, content }),
   },
   artifacts: { list: (conversationId: string) => ipcRenderer.invoke(channels.artifacts.list, conversationId), page: (conversationId: string, offset = 0, limit = COLLECTION_PAGE_LIMITS.artifacts) => ipcRenderer.invoke(channels.artifacts.page, { conversationId, offset, limit }), delete: (conversationId: string, artifactId: string) => ipcRenderer.invoke(channels.artifacts.delete, { conversationId, artifactId }) },
   suggestions: { list: (conversationId: string) => ipcRenderer.invoke(channels.suggestions.list, conversationId), page: (conversationId: string, offset = 0, limit = COLLECTION_PAGE_LIMITS.suggestions) => ipcRenderer.invoke(channels.suggestions.page, { conversationId, offset, limit }), create: (conversationId: string, content: string) => ipcRenderer.invoke(channels.suggestions.create, { conversationId, content }), status: (conversationId: string, suggestionId: string, status: string, result?: string) => ipcRenderer.invoke(channels.suggestions.status, { conversationId, suggestionId, status, result }) },

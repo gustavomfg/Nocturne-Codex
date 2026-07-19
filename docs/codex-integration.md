@@ -20,6 +20,8 @@ O executável configurado inicia com `app-server --stdio`. A aplicação envia `
 
 Antes de cada `turn/start`, o processo principal busca no Segundo Cérebro somente memórias ativas que correspondam ao prompt e pertençam ao workspace ou à conversa atual. Até oito entradas e 6.000 caracteres são anexados ao contexto dinâmico como linhas JSON explicitamente classificadas como dados potencialmente desatualizados, nunca como instruções. O contador de uso só avança depois que o turno é aceito pelo App Server.
 
+As instruções de modo permitem que a resposta proponha opcionalmente até cinco candidatas em `nocturne-memories`. A extração não cria uma segunda operação do App Server: o bloco da própria resposta é validado, removido antes da persistência visível e gravado transacionalmente como candidato. Ausência ou invalidade do bloco não altera o ciclo do turno.
+
 A autenticação pertence ao Codex CLI instalado no sistema. Tokens e credenciais não passam pelo preload. Em queda inesperada, chamadas pendentes são rejeitadas e uma reconexão com backoff é tentada quando não há encerramento intencional.
 
 O App Server é experimental: incompatibilidades devem aparecer como falha, nunca como estado pronto.
