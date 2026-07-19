@@ -4,10 +4,23 @@
 .health-card > div:first-child strong { font-size: var(--font-title); font-weight: 650; letter-spacing: -.02em; }
 .health-card small { color: var(--color-text-muted); font-size: var(--font-caption); line-height: var(--leading-ui); }
 .health-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-sm); }
-.health-grid span { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--spacing-2xs); min-height: 96px; padding: var(--spacing-sm); background: var(--color-panel); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); }
+.health-metric { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--spacing-2xs); min-height: 96px; padding: var(--spacing-sm); background: var(--color-panel); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); }
 .health-grid b { color: var(--color-text-secondary); font-size: var(--font-label); font-weight: 550; }
 .health-grid strong { justify-self: start; color: #c2b1f2; font-size: var(--font-small); font-weight: 650; }
-.health-grid span small { display: block; margin-top: var(--spacing-2xs); }
+.health-metric small { display: block; margin-top: var(--spacing-2xs); }
+.health-score { display: flex; align-items: center; gap: var(--spacing-xs); min-height: 20px; }
+.health-score s { color: var(--color-text-muted); font-size: var(--font-caption); text-decoration-color: var(--color-text-subtle); }
+.health-score svg { color: var(--color-success); }
+.health-metric.improved { border-color: color-mix(in srgb, var(--color-success) 46%, var(--color-border)); background: color-mix(in srgb, var(--color-success) 7%, var(--color-panel)); animation: health-updated var(--motion-slow) var(--ease-standard); }
+.health-metric.improved .health-score strong { color: var(--color-success); }
+.health-metric.declined { border-color: color-mix(in srgb, var(--color-warning) 46%, var(--color-border)); background: color-mix(in srgb, var(--color-warning) 7%, var(--color-panel)); animation: health-updated var(--motion-slow) var(--ease-standard); }
+.health-metric.declined .health-score strong,
+.health-metric.declined .health-score svg { color: var(--color-warning); }
+
+@keyframes health-updated {
+  from { transform: translateY(2px); opacity: .72; }
+  to { transform: translateY(0); opacity: 1; }
+}
 
 .suggestion-list { display: flex; flex-direction: column; gap: var(--spacing-md); }
 .suggestion-card { border: 1px solid var(--color-border); border-left: 3px solid var(--color-text-subtle); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-sm); }
@@ -61,8 +74,8 @@
 .health-card { padding: var(--spacing-lg); background: linear-gradient(145deg, #17151c, #131217); box-shadow: var(--shadow-sm); }
 .health-card > div:first-child { padding-bottom: var(--spacing-sm); border-bottom: 1px solid var(--color-border-subtle); }
 .health-grid { margin-top: var(--spacing-md); }
-.health-grid span { transition: background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard); }
-.health-grid span:hover { background: var(--color-surface-raised); border-color: var(--color-border); }
+.health-metric { transition: background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard); }
+.health-metric:hover { background: var(--color-surface-raised); border-color: var(--color-border); }
 .suggestion-card { padding: var(--spacing-lg); transition: background-color var(--motion-card) var(--ease-standard), border-color var(--motion-card) var(--ease-standard), box-shadow var(--motion-card) var(--ease-standard); }
 .suggestion-card:hover { background: #17171c; border-top-color: var(--color-border-strong); border-right-color: var(--color-border-strong); border-bottom-color: var(--color-border-strong); box-shadow: 0 8px 24px rgb(0 0 0 / 16%); }
 .suggestion-card header::before { content: ''; width: 7px; height: 7px; flex: 0 0 7px; background: var(--color-text-subtle); border-radius: 50%; }
@@ -77,3 +90,8 @@
 .suggestion-dialog > footer { background: rgb(0 0 0 / 10%); }
 .suggestion-dialog > header button, .commit-suggestion > button { width: var(--control-sm); height: var(--control-sm); display: grid; place-items: center; border-radius: var(--radius-sm); }
 .suggestion-dialog > header button:hover, .commit-suggestion > button:hover { background: var(--color-surface-hover); }
+
+@media (prefers-reduced-motion: reduce) {
+  .health-metric.improved,
+  .health-metric.declined { animation: none; }
+}

@@ -431,6 +431,44 @@ test.describe('renderer do produto', () => {
     expect(await page.evaluate(() => (window as unknown as { __suggestionSendCount: number }).__suggestionSendCount)).toBe(0)
   })
 
+  test('recalcula a Saúde do Projeto quando uma sugestão é aplicada', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await ready(page)
+    await page.evaluate(() => {
+      const common = { workspaceId: '/workspace/nocturne-codex', conversationId: 'conversation-1', description: 'A arquitetura precisa de uma fronteira mais clara.', reasoning: 'Responsabilidades observadas no mesmo módulo.', category: 'architecture' as const, affectedFiles: ['src/App.tsx'], proposedChanges: '+ extrair responsabilidade', expectedBenefits: ['Arquitetura mais clara'], complexity: 'low' as const, risk: 'low' as const, status: 'pending' as const, createdAt: '2026-07-13T20:00:00.000Z', updatedAt: '2026-07-13T20:00:00.000Z' }
+      const suggestions: Suggestion[] = [
+        { ...common, id: 'suggestion-live-health', title: 'Refinar fronteiras', severity: 'medium' },
+        { ...common, id: 'suggestion-remaining', title: 'Separar domínio restante', severity: 'high' },
+      ]
+      window.nocturne.suggestions.page = async () => ({ items: suggestions.map((suggestion) => ({ ...suggestion })), hasMore: false })
+      window.nocturne.suggestions.status = async (_conversationId, suggestionId, status) => {
+        const suggestion = suggestions.find((item) => item.id === suggestionId)
+        if (!suggestion) throw new Error('Sugestão não encontrada.')
+        suggestion.status = status; suggestion.updatedAt = '2026-07-13T20:05:00.000Z'
+        return { ...suggestion }
+      }
+      window.nocturne.codex.send = async () => ({ threadId: 'thread-1', recreated: false })
+    })
+    await page.locator('.conversation-open').click()
+    await page.getByRole('tab', { name: /Sugestões/ }).click()
+    const architecture = page.locator('.health-metric').filter({ hasText: 'Arquitetura' })
+    await expect(architecture.getByText('7/10', { exact: true })).toBeVisible()
+    await page.locator('.suggestion-card').filter({ hasText: 'Refinar fronteiras' }).getByRole('button', { name: 'Aplicar' }).click()
+    await page.getByRole('button', { name: 'Preparar aplicação' }).click()
+    await expect(architecture.getByText('7/10', { exact: true })).toBeVisible()
+    await page.evaluate(() => {
+      const bridge = (window as unknown as { __nocturneTest: { emitEvent(payload: unknown): void } }).__nocturneTest
+      bridge.emitEvent({ method: 'item/completed', params: { item: { id: 'file-change-health', type: 'fileChange', status: 'completed', changes: [{ path: 'src/App.tsx', kind: 'modified', status: 'completed' }] } } })
+      bridge.emitEvent({ method: 'turn/completed', params: { turn: { id: 'turn-live-health' }, threadId: 'thread-1' } })
+    })
+    const healthCard = page.locator('.health-card')
+    await expect(healthCard.locator('.sr-only[role="status"]')).toContainText('Arquitetura passou de 7 para 8')
+    await expect(architecture).toHaveClass(/improved/)
+    await expect(architecture.locator('.health-score s')).toHaveText('7/10')
+    await expect(architecture.locator('.health-score strong')).toHaveText('8/10')
+    await expect(page.locator('#agent-inspector')).toHaveScreenshot('project-health-updated.png', { animations: 'disabled', caret: 'hide' })
+  })
+
   for (const viewport of [{ width: 1440, height: 900 }, { width: 980, height: 820 }, { width: 720, height: 800 }, { width: 520, height: 760 }]) {
     test(`mantém a referência visual em ${viewport.width}px`, async ({ page }) => {
       await page.setViewportSize(viewport)

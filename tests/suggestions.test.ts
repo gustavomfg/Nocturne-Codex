@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { LocalDatabase } from '../electron/database/Database'
 import { extractSuggestions, sandboxModeForAgent, sanitizeSuggestionTitle, suggestedCommit } from '../shared/suggestions'
 import { hasAppliedSuggestionChanges } from '../src/domains/agent/useTurnLifecycle'
+import { projectHealth } from '../src/domains/suggestions/projectHealth'
+import type { Suggestion } from '../src/types'
 
 const directories: string[] = []
 const tempDirectory = () => { const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-suggestions-')); directories.push(directory); return directory }
@@ -57,5 +59,14 @@ describe('sugestões', () => {
     expect(hasAppliedSuggestionChanges(['src/App.tsx'], ['/workspace/src/App.tsx'])).toBe(true)
     expect(hasAppliedSuggestionChanges(['src/App.tsx', 'tests/App.test.ts'], ['src/App.tsx'])).toBe(false)
     expect(hasAppliedSuggestionChanges([], ['src/novo.ts'])).toBe(true)
+  })
+
+  it('recalcula todas as dimensões quando sugestões deixam de estar abertas', () => {
+    const base: Omit<Suggestion, 'id' | 'category' | 'severity'> = { workspaceId: '/workspace', conversationId: 'conversation-1', title: 'Melhoria', description: 'Problema confirmado.', reasoning: 'Evidência.', affectedFiles: ['src/App.tsx'], proposedChanges: '+ melhoria', expectedBenefits: ['Mais qualidade'], complexity: 'low', risk: 'low', status: 'pending', createdAt: '2026-07-19T10:00:00.000Z', updatedAt: '2026-07-19T10:00:00.000Z' }
+    const suggestions: Suggestion[] = [
+      ['architecture', 'medium'], ['security', 'high'], ['testing', 'medium'], ['performance', 'critical'], ['cleanup', 'medium'], ['documentation', 'high'],
+    ].map(([category, severity], index) => ({ ...base, id: `suggestion-${index}`, category: category as Suggestion['category'], severity: severity as Suggestion['severity'] }))
+    expect(Object.fromEntries(Object.entries(projectHealth(suggestions)).map(([label, metric]) => [label, metric.score]))).toEqual({ Arquitetura: 9, Segurança: 8, Testes: 9, Performance: 7, Manutenção: 9, Documentação: 8 })
+    expect(Object.values(projectHealth(suggestions.map((suggestion) => ({ ...suggestion, status: 'applied' })))).every((metric) => metric.score === 10)).toBe(true)
   })
 })

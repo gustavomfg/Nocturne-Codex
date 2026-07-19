@@ -39,10 +39,11 @@
 
 ### Qualidade
 
-- 97 testes unitários e de integração;
-- 27 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints e no Segundo Cérebro em desktop e mobile;
+- 98 testes unitários e de integração;
+- 28 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints, no Segundo Cérebro e na atualização da Saúde do Projeto;
 - typecheck, ESLint, design system, build de produção, pacote Linux real e audit npm sem vulnerabilidades aprovados;
 - decisões de sugestão precisam persistir antes do turno Build, e o status aplicado exige alterações observadas no escopo aprovado;
+- Saúde do Projeto recalcula todas as dimensões após mudanças persistidas nas sugestões e evidencia a transição de cada nota com feedback visual e acessível;
 - sanitização de logs cobre credenciais completas em headers, strings JSON e campos estruturados;
 - política de segurança, roadmap, plataformas publicadas e documentação visual sincronizados com a linha 0.8.
 

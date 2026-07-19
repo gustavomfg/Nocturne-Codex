@@ -1,22 +1,46 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { AlertTriangle, Check, Clipboard, Eye, FileCode2, GitCommit, ShieldAlert, X } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Check, Clipboard, Eye, FileCode2, GitCommit, ShieldAlert, X } from 'lucide-react'
 import { suggestedCommit } from '../../../shared/suggestions'
 import type { Suggestion, SuggestionStatus } from '../../types'
 import { useDialogA11y } from '../../shared/useDialogA11y'
 import { errorMessage } from '../../shared/format'
+import { projectHealth, type ProjectHealth } from './projectHealth'
 import './suggestions.css'
 
 interface Props { suggestions: Suggestion[]; hasMore: boolean; loadingMore: boolean; onLoadMore(): void; onStatus(suggestion: Suggestion, status: SuggestionStatus): void; onApply(suggestion: Suggestion): void; onOpenFile(filePath: string): void; onNotify(value: string): void }
 const labels: Record<string, string> = { architecture: 'Arquitetura', security: 'Segurança', performance: 'Performance', bug: 'Bug', cleanup: 'Limpeza', testing: 'Testes', documentation: 'Documentação', dependency: 'Dependência', accessibility: 'Acessibilidade' }
-const severityWeight: Record<string, number> = { info: 0, low: 0.5, medium: 1, high: 2, critical: 3 }
+type HealthLabel = keyof ProjectHealth
+type HealthChange = { from: number; to: number }
 
 export function SuggestionsPanel({ suggestions, hasMore, loadingMore, onLoadMore, onStatus, onApply, onOpenFile, onNotify }: Props) {
   const [selected, setSelected] = useState<Suggestion | null>(null)
   const health = useMemo(() => projectHealth(suggestions), [suggestions])
+  const previousHealth = useRef<ProjectHealth | null>(null)
+  const healthTimer = useRef<number | null>(null)
+  const [healthChanges, setHealthChanges] = useState<Partial<Record<HealthLabel, HealthChange>>>({})
+  const [healthAnnouncement, setHealthAnnouncement] = useState('')
+
+  useEffect(() => {
+    const previous = previousHealth.current
+    previousHealth.current = health
+    if (!previous) return
+    const changes: Partial<Record<HealthLabel, HealthChange>> = {}
+    for (const label of Object.keys(health) as HealthLabel[]) {
+      if (previous[label].score !== health[label].score) changes[label] = { from: previous[label].score, to: health[label].score }
+    }
+    const changed = Object.entries(changes) as Array<[HealthLabel, HealthChange]>
+    if (!changed.length) return
+    setHealthChanges(changes)
+    setHealthAnnouncement(`Saúde do projeto atualizada. ${changed.map(([label, value]) => `${label} passou de ${value.from} para ${value.to}`).join('. ')}.`)
+    if (healthTimer.current !== null) window.clearTimeout(healthTimer.current)
+    healthTimer.current = window.setTimeout(() => { setHealthChanges({}); setHealthAnnouncement(''); healthTimer.current = null }, 3_200)
+  }, [health])
+  useEffect(() => () => { if (healthTimer.current !== null) window.clearTimeout(healthTimer.current) }, [])
+
   if (!suggestions.length) return <div className="inspector-empty"><div><ShieldAlert size={22}/></div><p>Nenhuma sugestão publicada.</p><small>Use o modo Review para analisar o projeto sem alterar arquivos.</small></div>
   return <div className="suggestions-view">
-    <section className="health-card"><div><strong>Saúde do projeto</strong><small>Estimativa baseada nas sugestões abertas</small></div><div className="health-grid">{Object.entries(health).map(([label, metric]) => <span key={label} title={metric.explanation}><b>{label}</b><strong>{metric.score}/10</strong><small>{metric.explanation}</small></span>)}</div></section>
+    <section className={`health-card ${Object.keys(healthChanges).length ? 'is-updated' : ''}`}><div><strong>Saúde do projeto</strong><small>{Object.keys(healthChanges).length ? 'Indicadores recalculados agora' : 'Estimativa baseada nas sugestões abertas'}</small></div><p className="sr-only" role="status" aria-live="polite">{healthAnnouncement}</p><div className="health-grid">{Object.entries(health).map(([rawLabel, metric]) => { const label = rawLabel as HealthLabel; const change = healthChanges[label]; return <span className={`health-metric ${change ? change.to > change.from ? 'improved' : 'declined' : ''}`} key={label} title={metric.explanation}><b>{label}</b><div className="health-score">{change && <><s>{change.from}/10</s><ArrowRight size={12}/></>}<strong>{metric.score}/10</strong></div><small>{metric.explanation}</small></span> })}</div></section>
     <div className="suggestion-list">{suggestions.map((suggestion) => <article className={`suggestion-card ${suggestion.severity}`} key={suggestion.id}><header><span/><b>{labels[suggestion.category]}</b><small>{severityLabel(suggestion.severity)}</small></header><h4>{suggestion.title}</h4><p>{suggestion.description}</p><div className="suggestion-files">{suggestion.affectedFiles.slice(0, 4).map((file) => <button key={file} onClick={() => onOpenFile(file)}><FileCode2 size={12}/>{file}</button>)}</div><footer><em className={suggestion.status}>{statusLabel(suggestion.status)} · {new Date(suggestion.updatedAt).toLocaleDateString('pt-BR')}</em><button onClick={() => setSelected(suggestion)}><Eye size={13}/>Ver solução</button>{suggestion.status === 'pending' && <><button onClick={() => onStatus(suggestion, 'rejected')}><X size={13}/>Ignorar</button><button className="apply" onClick={() => onApply(suggestion)}><Check size={13}/>Aplicar</button></>}</footer></article>)}{hasMore && <button className="collection-load-more" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? 'Carregando…' : 'Carregar sugestões anteriores'}</button>}</div>
     {selected && <SuggestionDialog suggestion={selected} onClose={() => setSelected(null)} onApply={() => { setSelected(null); onApply(selected) }} onOpenFile={onOpenFile} onNotify={onNotify}/>}
   </div>
@@ -42,6 +66,5 @@ function SuggestionDialog({ suggestion, onClose, onApply, onOpenFile, onNotify }
   </section></div>, document.body)
 }
 
-function projectHealth(suggestions: Suggestion[]) { const pending = suggestions.filter((item) => item.status === 'pending' || item.status === 'accepted'); const metric = (categories: string[]) => { const relevant = pending.filter((item) => categories.includes(item.category)); return { score: Math.max(1, Math.round(10 - relevant.reduce((sum, item) => sum + severityWeight[item.severity], 0))), explanation: relevant.length ? `${relevant.length} sugestão(ões) aberta(s); desconto proporcional à severidade.` : 'Nenhuma sugestão aberta nesta dimensão.' } }; return { Arquitetura: metric(['architecture']), Segurança: metric(['security']), Testes: metric(['testing', 'bug']), Performance: metric(['performance']), Manutenção: metric(['cleanup', 'dependency', 'accessibility']), Documentação: metric(['documentation']) } }
 function statusLabel(status: SuggestionStatus) { return ({ pending: 'Pendente', accepted: 'Aceita', rejected: 'Ignorada', applied: 'Aplicada' } as const)[status] }
 function severityLabel(value: string) { return ({ info: 'informativo', low: 'baixo', medium: 'médio', high: 'alto', critical: 'crítico' } as Record<string, string>)[value] || value }

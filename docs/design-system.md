@@ -190,6 +190,8 @@ Use a vertical sequence, consistent 31 px event markers, and explicit labels suc
 
 Severity uses the left border, category text, and severity label together. Health scores are estimates and must retain their explanatory tooltip or supporting copy. Suggestion cards prioritize title, problem, affected files, decision state, then actions.
 
+When persisted suggestion state changes a health dimension, the affected metric shows its previous and current score for a short interval and announces the recalculation through a polite live region. All six dimensions follow the same behavior. Scores are always recomputed from open suggestions after persistence; the interface never increments a metric optimistically.
+
 ### Cards and artifacts
 
 Cards use one border and at most `--shadow-sm`. Hover may lift contrast but should not shift layout. File type is communicated by icon, text, and color.
