@@ -202,6 +202,10 @@ Tabs use readable labels, a stable height, and an accent underline for selection
 
 Dialogs use `--shadow-lg`, a strong border, and restrained backdrop blur. Titles are 16 px or greater. Sections are separated by spacing and subtle borders. Inputs always have visible labels.
 
+### Segundo Cérebro
+
+The memory dialog separates capture from review on desktop and uses explicit Library and Create tabs at 720 px and below. Confidence, origin, scope, and lifecycle state remain legible without competing with memory content; pending candidates retain a visible review count. Human approval is stated in the header and new entries remain visually identified as candidates until activation. Loading, empty, filtered, editing, disabled, and destructive states must preserve the same dialog geometry and keyboard behavior.
+
 ### Buttons and badges
 
 - Primary: violet fill, high-contrast text, reserved for the main decision.

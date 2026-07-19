@@ -32,13 +32,14 @@
 - backups validam e restauram as memórias estruturadas, reconstruindo o índice local sem substituir o contexto Markdown existente.
 - preload e IPC expõem somente criação de candidatas e operações validadas de consulta, aprovação, edição, arquivamento e exclusão dentro do workspace autorizado.
 - diálogo lazy do Segundo Cérebro oferece busca, filtros, paginação e ciclo explícito de revisão sem acumular a coleção no estado global do renderer.
+- biblioteca do Segundo Cérebro ganha hierarquia visual, metadados legíveis, feedback de confiança e navegação mobile entre consulta e captura, preservando aprovação humana explícita.
 - cada turno recupera somente memórias ativas relevantes, com orçamento de oito itens/6.000 caracteres, serialização como dados e contabilização após `turn/start` aceito.
 - respostas podem propor até cinco candidatas estruturadas, validadas e deduplicadas; blocos técnicos são removidos antes da persistência e nenhuma candidata do agente é ativada sem aprovação.
 
 ### Qualidade
 
 - 97 testes unitários e de integração;
-- 26 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints;
+- 27 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints e no Segundo Cérebro em desktop e mobile;
 - typecheck, ESLint, design system, build de produção, pacote Linux real e audit npm sem vulnerabilidades aprovados;
 - decisões de sugestão precisam persistir antes do turno Build, e o status aplicado exige alterações observadas no escopo aprovado;
 - sanitização de logs cobre credenciais completas em headers, strings JSON e campos estruturados;

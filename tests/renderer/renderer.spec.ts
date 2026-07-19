@@ -289,11 +289,11 @@ test.describe('renderer do produto', () => {
     await expect(brain).toBeVisible()
     await brain.getByLabel('Tipo').selectOption('decision')
     await brain.getByLabel('Conteúdo').fill('SQLite permanece como fonte de verdade local.')
-    await brain.getByRole('button', { name: 'Adicionar candidata' }).click()
+    await brain.getByRole('button', { name: 'Adicionar para revisão' }).click()
     await expect(brain.getByText('SQLite permanece como fonte de verdade local.')).toBeVisible()
     await brain.getByRole('button', { name: 'Aprovar' }).click()
     await expect(brain.getByRole('button', { name: 'Desatualizar' })).toBeVisible()
-    await brain.getByPlaceholder('Buscar memórias').fill('SQLite')
+    await brain.getByLabel('Buscar memórias').fill('SQLite')
     await brain.getByRole('button', { name: 'Buscar' }).click()
     await expect(brain.locator('.brain-card')).toHaveCount(1)
     await brain.getByRole('button', { name: 'Editar memória' }).click()
@@ -303,7 +303,7 @@ test.describe('renderer do produto', () => {
     await brain.getByRole('button', { name: 'Arquivar' }).click()
     await brain.getByRole('button', { name: 'Excluir' }).click()
     await brain.getByRole('button', { name: 'Confirmar exclusão' }).click()
-    await expect(brain.getByText('Nenhuma memória encontrada')).toBeVisible()
+    await expect(brain.getByText('Nenhuma correspondência')).toBeVisible()
   })
 
   test('transforma propostas do agente somente em candidatas revisáveis', async ({ page }) => {
@@ -327,6 +327,37 @@ test.describe('renderer do produto', () => {
     await expect(brain.getByText('Validar restaurações antes de substituir dados locais.')).toBeVisible()
     await expect(brain.locator('.brain-card').getByText('Candidata', { exact: true })).toBeVisible()
     await expect(brain.getByRole('button', { name: 'Aprovar' })).toBeVisible()
+  })
+
+  test('mantém o Segundo Cérebro alinhado em desktop e mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await ready(page)
+    await page.evaluate(async () => {
+      const active = await window.nocturne.brain.create('conversation-1', { kind: 'decision', scope: 'workspace', content: 'SQLite permanece como fonte de verdade local e recuperável.' })
+      await window.nocturne.brain.update('conversation-1', active.id, { status: 'active', confidence: 94 })
+      const outdated = await window.nocturne.brain.create('conversation-1', { kind: 'preference', scope: 'conversation', content: 'Usar uma preferência temporária de interface nesta conversa.' })
+      await window.nocturne.brain.update('conversation-1', outdated.id, { status: 'outdated', confidence: 62 })
+      await window.nocturne.brain.extract('conversation-1', `\`\`\`nocturne-memories\n${JSON.stringify([{ kind: 'learning', scope: 'workspace', content: 'Validar restaurações antes de substituir dados locais.', confidence: 86 }])}\n\`\`\``)
+    })
+    await page.getByRole('button', { name: 'Memória do workspace' }).click()
+    await page.getByRole('button', { name: 'Abrir Segundo Cérebro' }).click()
+    const brain = page.getByRole('dialog', { name: 'Segundo Cérebro' })
+    await expect(brain.locator('.brain-card')).toHaveCount(3)
+    const [brainBox, createActionBox] = await Promise.all([
+      brain.boundingBox(),
+      brain.getByRole('button', { name: 'Adicionar para revisão' }).boundingBox(),
+    ])
+    expect(brainBox).not.toBeNull()
+    expect(createActionBox).not.toBeNull()
+    expect((createActionBox?.y ?? 0) + (createActionBox?.height ?? 0)).toBeLessThanOrEqual((brainBox?.y ?? 0) + (brainBox?.height ?? 0))
+    await expect(brain).toHaveScreenshot('second-brain-dialog.png', { animations: 'disabled', caret: 'hide' })
+
+    await page.setViewportSize({ width: 520, height: 760 })
+    await expect(brain.getByRole('tab', { name: 'Biblioteca' })).toHaveAttribute('aria-selected', 'true')
+    await expect(brain).toHaveScreenshot('second-brain-dialog-mobile.png', { animations: 'disabled', caret: 'hide' })
+    await brain.getByRole('tab', { name: 'Criar memória' }).click()
+    await expect(brain.getByLabel('Conteúdo')).toBeVisible()
+    await expect(brain).toHaveScreenshot('second-brain-create-mobile.png', { animations: 'disabled', caret: 'hide' })
   })
 
   test('confirma a criação de commit no próprio fluxo', async ({ page }) => {
