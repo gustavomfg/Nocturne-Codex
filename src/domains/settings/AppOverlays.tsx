@@ -23,6 +23,7 @@ interface AppOverlaysProps {
   onNotify(message: string): void
   onOpenOnboarding(): void
   onMemoryClose(): void
+  onOpenBrain(): void
   onSaveMemory(content: string, rules: string): Promise<void>
   onPreviewClose(): void
   onError(message: string | null): void
@@ -33,10 +34,10 @@ interface AppOverlaysProps {
   onCompleteOnboarding(): void
 }
 
-export function AppOverlays({ settingsOpen, settings, status, workspaces, memoryOpen, memory, preview, onboardingOpen, activeId, workspace, onSettingsClose, onSaveSettings, onNotify, onOpenOnboarding, onMemoryClose, onSaveMemory, onPreviewClose, onError, onWorkspace, onOpenSettings, onRecheck, onDismissOnboarding, onCompleteOnboarding }: AppOverlaysProps) {
+export function AppOverlays({ settingsOpen, settings, status, workspaces, memoryOpen, memory, preview, onboardingOpen, activeId, workspace, onSettingsClose, onSaveSettings, onNotify, onOpenOnboarding, onMemoryClose, onOpenBrain, onSaveMemory, onPreviewClose, onError, onWorkspace, onOpenSettings, onRecheck, onDismissOnboarding, onCompleteOnboarding }: AppOverlaysProps) {
   return <Suspense fallback={null}>
     {settingsOpen && <SettingsDialog value={settings} status={status} workspaces={workspaces} onClose={onSettingsClose} onSave={onSaveSettings} onNotify={onNotify} onOnboarding={onOpenOnboarding}/>}
-    {memoryOpen && <MemoryDialog value={memory} onClose={onMemoryClose} onSave={onSaveMemory}/>}
+    {memoryOpen && <MemoryDialog value={memory} onClose={onMemoryClose} onOpenBrain={onOpenBrain} onSave={onSaveMemory}/>}
     {preview && <PreviewDialog preview={preview} activeId={activeId} onClose={onPreviewClose} onError={onError} onNotify={onNotify}/>}
     {onboardingOpen && <OnboardingDialog settings={settings} status={status} hasWorkspace={Boolean(workspace)} onWorkspace={onWorkspace} onSettings={onOpenSettings} onRecheck={onRecheck} onDismiss={onDismissOnboarding} onComplete={onCompleteOnboarding}/>}
   </Suspense>

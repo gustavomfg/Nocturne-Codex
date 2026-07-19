@@ -1,0 +1,102 @@
+.brain-dialog {
+  width: min(980px, 92vw);
+  max-height: min(780px, 92vh);
+  padding: 0;
+  overflow: hidden;
+}
+
+.brain-dialog .modal-title {
+  padding: var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.brain-dialog .modal-title > span {
+  display: grid;
+  gap: var(--spacing-2xs);
+  margin-right: auto;
+}
+
+.brain-dialog .modal-title small,
+.brain-create p,
+.brain-card footer small,
+.brain-empty small {
+  color: var(--color-text-muted);
+  font-size: var(--font-caption);
+}
+
+.brain-layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  min-height: 540px;
+  max-height: calc(min(780px, 92vh) - 72px);
+}
+
+.brain-create {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  border-right: 1px solid var(--color-border-subtle);
+  background: var(--color-panel);
+}
+
+.brain-create p { margin: calc(-1 * var(--spacing-xs)) 0 var(--spacing-xs); line-height: var(--leading-ui); }
+.brain-create label { display: grid; gap: var(--spacing-xs); color: var(--color-text-secondary); font-size: var(--font-label); font-weight: 600; }
+.brain-create select,
+.brain-create textarea,
+.brain-search input,
+.brain-search select,
+.brain-edit textarea { border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); }
+.brain-create select,
+.brain-search select { min-height: var(--control-md); padding: 0 var(--spacing-sm); }
+.brain-create textarea { min-height: 150px; padding: var(--spacing-sm); resize: vertical; line-height: var(--leading-body); }
+.brain-create textarea:focus,
+.brain-create select:focus,
+.brain-search input:focus,
+.brain-search select:focus,
+.brain-edit textarea:focus { border-color: var(--color-accent); outline: none; box-shadow: var(--focus-ring); }
+.brain-create .primary { margin-top: auto; }
+
+.brain-library { min-width: 0; padding: var(--spacing-lg); overflow: auto; }
+.brain-search { display: grid; grid-template-columns: minmax(180px, 1fr) auto auto; gap: var(--spacing-sm); margin-bottom: var(--spacing-lg); }
+.brain-search label { display: flex; align-items: center; gap: var(--spacing-sm); min-height: var(--control-md); padding: 0 var(--spacing-sm); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); }
+.brain-search label:focus-within { border-color: var(--color-accent); box-shadow: var(--focus-ring); }
+.brain-search input { min-width: 0; width: 100%; border: 0; background: transparent; outline: 0; }
+.brain-list { display: grid; gap: var(--spacing-md); }
+.brain-card { display: grid; gap: var(--spacing-md); padding: var(--spacing-md); border: 1px solid var(--color-border); border-left: 3px solid var(--color-text-muted); border-radius: var(--radius-md); background: var(--color-surface); }
+.brain-card.active { border-left-color: var(--color-success); }
+.brain-card.candidate { border-left-color: var(--color-warning); }
+.brain-card.outdated { border-left-color: var(--color-info); }
+.brain-card p { margin: 0; color: var(--color-text-secondary); line-height: var(--leading-body); overflow-wrap: anywhere; white-space: pre-wrap; }
+.brain-card-meta { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); }
+.brain-card-meta span { padding: var(--spacing-2xs) var(--spacing-xs); border-radius: var(--radius-xs); background: var(--color-surface-raised); color: var(--color-text-muted); font-size: var(--font-caption); }
+.brain-card footer { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-md); }
+.brain-card footer > div,
+.brain-edit > div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--spacing-xs); }
+.brain-card footer button { min-height: var(--control-sm); }
+.brain-card footer button.success { color: var(--color-success); }
+.brain-card footer button.danger { color: var(--color-danger); }
+.brain-edit { display: grid; gap: var(--spacing-sm); }
+.brain-edit textarea { width: 100%; min-height: 100px; padding: var(--spacing-sm); resize: vertical; }
+.brain-empty { display: grid; justify-items: center; gap: var(--spacing-xs); padding: var(--spacing-3xl) var(--spacing-lg); color: var(--color-text-muted); text-align: center; }
+.brain-error { padding: var(--spacing-sm); border: 1px solid color-mix(in srgb, var(--color-danger) 45%, transparent); border-radius: var(--radius-sm); color: var(--color-danger); background: color-mix(in srgb, var(--color-danger) 8%, transparent); }
+.brain-loading { color: var(--color-text-muted); text-align: center; }
+.brain-more { width: 100%; margin-top: var(--spacing-md); }
+
+@media (max-width: 720px) {
+  .brain-dialog { width: 96vw; max-height: 94vh; }
+  .brain-layout { grid-template-columns: 1fr; overflow: auto; max-height: calc(94vh - 72px); }
+  .brain-create { border-right: 0; border-bottom: 1px solid var(--color-border-subtle); }
+  .brain-library { overflow: visible; }
+  .brain-search { grid-template-columns: 1fr auto; }
+  .brain-search select { grid-column: 1 / -1; }
+  .brain-card footer { align-items: flex-start; flex-direction: column; }
+}
+
+@media (max-width: 520px) {
+  .brain-library,
+  .brain-create { padding: var(--spacing-md); }
+  .brain-search { grid-template-columns: 1fr; }
+  .brain-search select { grid-column: auto; }
+  .brain-card footer > div { justify-content: flex-start; }
+}

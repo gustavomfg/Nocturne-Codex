@@ -12,6 +12,8 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
     let selectedExpected: string | undefined
     let memoryReads = 0
     let resumes = 0
+    type MockBrainMemory = { id: string; workspaceId: string; conversationId: string | null; kind: 'fact' | 'decision' | 'preference' | 'constraint' | 'learning'; scope: 'workspace' | 'conversation'; status: 'candidate' | 'active' | 'outdated' | 'archived'; content: string; confidence: number; sourceType: 'manual'; sourceId: string | null; createdAt: string; updatedAt: string; lastConfirmedAt: string | null; lastUsedAt: string | null; useCount: number }
+    let brainMemories: MockBrainMemory[] = []
     const noop = async () => undefined
     const api = {
       workspace: { select: async (expected?: string) => { selectedExpected = expected; authorized = true; return workspace }, validate: async () => true, list: async () => [{ path: workspace, name: 'nocturne-codex', favorite: true, authorized, createdAt: now, lastOpenedAt: now }], remove: noop, favorite: noop, openTool: noop },
@@ -37,6 +39,22 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       },
       files: { attach: async () => [], open: noop, preview: async (_id: string, filePath: string) => ({ kind: 'text', name: filePath.split('/').pop(), filePath, mime: 'text/plain', content: 'conteúdo', size: 8 }) },
       memory: { get: async () => { memoryReads += 1; return { content: '', rules: '', updatedAt: '' } }, set: async (_id: string, content: string, rules: string) => ({ content, rules, updatedAt: now }) },
+      brain: {
+        page: async (_id: string, offset = 0, limit = 50, query = '', status?: MockBrainMemory['status']) => {
+          const normalized = query.toLocaleLowerCase()
+          const filtered = brainMemories.filter((item) => (!status || item.status === status) && (!normalized || item.content.toLocaleLowerCase().includes(normalized)))
+          return { items: filtered.slice(offset, offset + limit), hasMore: filtered.length > offset + limit }
+        },
+        create: async (_id: string, value: Pick<MockBrainMemory, 'kind' | 'scope' | 'content'>) => {
+          const memory: MockBrainMemory = { id: `brain-${brainMemories.length + 1}`, workspaceId: workspace, conversationId: value.scope === 'conversation' ? conversation.id : null, ...value, status: 'candidate', confidence: 70, sourceType: 'manual', sourceId: null, createdAt: now, updatedAt: now, lastConfirmedAt: null, lastUsedAt: null, useCount: 0 }
+          brainMemories = [memory, ...brainMemories]; return memory
+        },
+        update: async (_id: string, memoryId: string, value: Partial<MockBrainMemory>) => {
+          const memory = brainMemories.find((item) => item.id === memoryId); if (!memory) throw new Error('Memória não encontrada.')
+          Object.assign(memory, value, { updatedAt: now }); if (value.status === 'active') memory.lastConfirmedAt = now; return memory
+        },
+        delete: async (_id: string, memoryId: string) => { brainMemories = brainMemories.filter((item) => item.id !== memoryId); return { deleted: true as const } },
+      },
       artifacts: { list: async () => [], page: async () => ({ items: [], hasMore: false }), delete: noop },
       suggestions: { list: async () => [], page: async () => ({ items: [], hasMore: false }), create: async (_id: string, content: string) => ({ suggestions: [], content }), status: noop },
       data: { export: async () => '/tmp/backup.json', import: async () => true },

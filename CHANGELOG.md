@@ -31,11 +31,12 @@
 - schema 8 adiciona memórias estruturadas por workspace ou conversa, com tipo, confiança, origem, estado de aprovação, paginação e busca textual FTS5;
 - backups validam e restauram as memórias estruturadas, reconstruindo o índice local sem substituir o contexto Markdown existente.
 - preload e IPC expõem somente criação de candidatas e operações validadas de consulta, aprovação, edição, arquivamento e exclusão dentro do workspace autorizado.
+- diálogo lazy do Segundo Cérebro oferece busca, filtros, paginação e ciclo explícito de revisão sem acumular a coleção no estado global do renderer.
 
 ### Qualidade
 
 - 93 testes unitários e de integração;
-- 24 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints;
+- 25 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints;
 - typecheck, ESLint, design system, build de produção, pacote Linux real e audit npm sem vulnerabilidades aprovados;
 - decisões de sugestão precisam persistir antes do turno Build, e o status aplicado exige alterações observadas no escopo aprovado;
 - sanitização de logs cobre credenciais completas em headers, strings JSON e campos estruturados;
