@@ -18,6 +18,8 @@ O booleano legado `codexCompatible` permanece no contrato para compatibilidade d
 
 O executável configurado inicia com `app-server --stdio`. A aplicação envia `initialize`, `thread/start` ou `thread/resume` e `turn/start`. Deltas de mensagem, plano, comandos e patches são encaminhados ao renderer. `turn/interrupt` cancela o turno conhecido.
 
+Antes de cada `turn/start`, o processo principal busca no Segundo Cérebro somente memórias ativas que correspondam ao prompt e pertençam ao workspace ou à conversa atual. Até oito entradas e 6.000 caracteres são anexados ao contexto dinâmico como linhas JSON explicitamente classificadas como dados potencialmente desatualizados, nunca como instruções. O contador de uso só avança depois que o turno é aceito pelo App Server.
+
 A autenticação pertence ao Codex CLI instalado no sistema. Tokens e credenciais não passam pelo preload. Em queda inesperada, chamadas pendentes são rejeitadas e uma reconexão com backoff é tentada quando não há encerramento intencional.
 
 O App Server é experimental: incompatibilidades devem aparecer como falha, nunca como estado pronto.

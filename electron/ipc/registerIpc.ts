@@ -13,6 +13,7 @@ import { agentModes, sanitizeSuggestionTitle } from '../../shared/suggestions'
 import { approvalSchema, codexSendSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, saveAssistantSchema, saveMarkdownSchema } from '../../shared/ipc/schemas'
 import { CODEX_COMPATIBILITY, classifyCodexVersion } from '../../shared/constants'
 import { registerDataIpc } from './registerDataIpc'
+import { buildBrainMemoryContext } from '../memory/BrainMemoryContext'
 import { registerGitIpc } from './registerGitIpc'
 import { registerCodexBridge } from './registerCodexBridge'
 import { registerWorkspaceIpc } from './registerWorkspaceIpc'
@@ -103,7 +104,8 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     let threadId = conversation.codexThreadId
     let recreated = false
     const context = await readWorkspaceContext(conversation.workspace)
-    const memory = `${context.content}\n\n# Regras do projeto\n${context.rules}\n\n# Projeto detectado\n${JSON.stringify(context.project, null, 2)}`
+    const brain = buildBrainMemoryContext(database, conversation.workspace, conversationId, prompt)
+    const memory = `${context.content}\n\n# Regras do projeto\n${context.rules}\n\n# Projeto detectado\n${JSON.stringify(context.project, null, 2)}${brain.text ? `\n\n${brain.text}` : ''}`
     if (!threadId) {
       threadId = await codex.createThread(conversation.workspace, database.getSettings(), memory)
       database.setThread(conversationId, threadId)
@@ -119,6 +121,7 @@ export function registerIpc(win: BrowserWindow, database: LocalDatabase, codex: 
     database.addMessage(conversationId, 'user', prompt, { attachments })
     if (conversation.title === 'Nova conversa') database.renameFromPrompt(conversationId, prompt)
     await codex.sendTurn(threadId, conversation.workspace, prompt, database.getSettings(), attachments, memory, mode)
+    database.markBrainMemoriesUsed(brain.memoryIds)
     return { threadId, recreated }
   })
 

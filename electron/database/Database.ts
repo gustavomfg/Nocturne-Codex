@@ -216,12 +216,13 @@ export class LocalDatabase {
   retrieveBrainMemories(workspaceId: string, conversationId: string, query: string, limit = 8): BrainMemory[] {
     const search = buildFtsQuery(query)
     if (!search) return []
-    const rows = this.db.prepare(`${brainMemorySearchSelect} WHERE memory.workspace_id=@workspaceId AND memory.status='active' AND (memory.scope='workspace' OR memory.conversation_id=@conversationId) AND brain_memories_fts MATCH @search ORDER BY bm25(brain_memories_fts), memory.confidence DESC, memory.updated_at DESC LIMIT @limit`).all({ workspaceId, conversationId, search, limit }) as BrainMemory[]
-    if (rows.length) {
-      const ids = rows.map((row) => row.id)
-      this.db.prepare(`UPDATE brain_memories SET last_used_at=?,use_count=use_count+1 WHERE id IN (${ids.map(() => '?').join(',')})`).run(new Date().toISOString(), ...ids)
-    }
-    return rows
+    return this.db.prepare(`${brainMemorySearchSelect} WHERE memory.workspace_id=@workspaceId AND memory.status='active' AND (memory.scope='workspace' OR memory.conversation_id=@conversationId) AND brain_memories_fts MATCH @search ORDER BY bm25(brain_memories_fts), memory.confidence DESC, memory.updated_at DESC LIMIT @limit`).all({ workspaceId, conversationId, search, limit }) as BrainMemory[]
+  }
+
+  markBrainMemoriesUsed(ids: string[]) {
+    const unique = [...new Set(ids)].slice(0, 50)
+    if (!unique.length) return
+    this.db.prepare(`UPDATE brain_memories SET last_used_at=?,use_count=use_count+1 WHERE id IN (${unique.map(() => '?').join(',')})`).run(new Date().toISOString(), ...unique)
   }
 
   private assertBrainMemoryScope(workspaceId: string, scope: BrainMemory['scope'], conversationId: string | null) {

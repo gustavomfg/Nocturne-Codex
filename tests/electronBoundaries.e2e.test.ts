@@ -68,7 +68,7 @@ class SimulatedCodex extends EventEmitter {
   status = 'ready'
   createdThreads: string[] = []
   resumedThreads: string[] = []
-  turns: Array<{ threadId: string; prompt: string }> = []
+  turns: Array<{ threadId: string; prompt: string; memory: string }> = []
   interruptions: string[] = []
   approvals: Array<{ key: string; accepted: boolean; forSession: boolean }> = []
   restarts = 0
@@ -79,7 +79,7 @@ class SimulatedCodex extends EventEmitter {
   getDiagnostics() { return { executable: 'simulated-codex', pid: 42, state: this.status } }
   async createThread() { const id = `thread-${this.createdThreads.length + 1}`; this.createdThreads.push(id); return id }
   async resumeThread(threadId: string) { this.resumedThreads.push(threadId) }
-  async sendTurn(threadId: string, _workspace: string, prompt: string) { this.turns.push({ threadId, prompt }); return { id: `turn-${this.turns.length}` } }
+  async sendTurn(threadId: string, _workspace: string, prompt: string, _settings: unknown, _attachments: string[], memory = '') { this.turns.push({ threadId, prompt, memory }); return { id: `turn-${this.turns.length}` } }
   async interrupt(threadId: string) { this.interruptions.push(threadId) }
   async resolveApproval(key: string, accepted: boolean, forSession = false) { this.approvals.push({ key, accepted, forSession }) }
   async readConfig() { this.configReads += 1; return {} }
@@ -149,7 +149,12 @@ describe.sequential('fronteiras Electron E2E', () => {
     expect(fs.existsSync(path.join(workspace, '.nocturne', 'project.json'))).toBe(true)
 
     const conversation = await api.conversations.create(workspace)
+    const remembered = database.createBrainMemory(workspace, { kind: 'decision', scope: 'workspace', content: 'O Primeiro turno deve preservar a arquitetura aprovada.', status: 'active' })
     await api.codex.send(conversation.id, 'Primeiro turno')
+    expect(codex.turns[0].memory).toContain('"type":"nocturne-memory"')
+    expect(codex.turns[0].memory).toContain('preservar a arquitetura aprovada')
+    expect(database.getBrainMemory(remembered.id, workspace)?.useCount).toBe(1)
+    database.deleteBrainMemory(remembered.id, workspace)
     await api.codex.send(conversation.id, 'Retomar thread')
     await api.codex.resume(conversation.id)
     await api.codex.interrupt(conversation.id)
