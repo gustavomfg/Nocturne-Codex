@@ -4,6 +4,7 @@ import type { ProviderSource } from '../../../../shared/ai/provider'
 import { PROVIDER_CONFIGURATION_LIMITS } from '../../../../shared/ai/providerConfiguration'
 
 export const OPENAI_COMPATIBLE_LIMITS = {
+  models: 25_000,
   modelsResponseBytes: 2 * 1024 * 1024,
   streamResponseBytes: 10 * 1024 * 1024,
   streamEventBytes: 1024 * 1024,

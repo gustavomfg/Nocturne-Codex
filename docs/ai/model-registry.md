@@ -37,6 +37,12 @@ Provider discovery replaces only that Provider's catalog, and only after every
 descriptor passes normalized validation. A failed or superseded refresh
 preserves the last valid catalog.
 
+For OpenAI-compatible transports, new `/models` entries begin with an empty
+capability set. A previously verified descriptor keeps its normalized metadata
+while the identifier remains in the remote catalog. This lets discovery expose
+what an account can see without treating a protocol-compatible identifier as
+proof that the model supports chat, streaming, tools or reasoning.
+
 The last valid normalized snapshot is persisted locally. Startup hydrates the
 in-memory Registry from that snapshot before configured Provider adapters are
 rebuilt, without treating persisted availability as a successful live health

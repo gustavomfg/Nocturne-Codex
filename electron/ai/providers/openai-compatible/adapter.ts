@@ -10,6 +10,7 @@ import { modelDescriptorSchema } from '../../../../shared/ai/modelSchemas'
 import { ProviderExecutionError } from '../../ProviderExecutionError'
 import type { ProviderAdapter } from '../../ProviderRegistry'
 import {
+  OPENAI_COMPATIBLE_LIMITS,
   parseOpenAICompatibleConfig,
   providerEndpoint,
   type OpenAICompatibleConfig,
@@ -53,33 +54,9 @@ export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
 
   async getAvailability(): Promise<ProviderAvailability> {
     if (!this.config.enabled) return { status: 'disabled' }
-    let credential: string | undefined
     try {
-      credential = await this.resolveCredential()
-    } catch {
-      return {
-        status: 'authentication-required',
-        message: 'A credencial do Provider não está disponível.',
-      }
-    }
-
-    const request = createRequestControl(undefined, this.config.timeoutMs)
-    try {
-      const response = await this.request(providerEndpoint(this.config, 'models'), {
-        method: 'GET',
-        headers: requestHeaders(credential),
-        redirect: 'error',
-        signal: request.signal,
-      })
-      if (!response.ok) return availabilityFromStatus(response.status)
-      const body = asRecord(await readBoundedJson(response))
-      if (!body || !Array.isArray(body.data)) {
-        return { status: 'degraded', message: 'O catálogo de modelos é inválido.' }
-      }
-      const discovered = new Set(body.data.flatMap((value) => {
-        const model = asRecord(value)
-        return typeof model?.id === 'string' ? [model.id] : []
-      }))
+      const catalog = await this.requestModelCatalog()
+      const discovered = new Set(catalog.map(({ modelId }) => modelId))
       if (this.models.some((model) => !discovered.has(model.modelId))) {
         return {
           status: 'degraded',
@@ -87,20 +64,19 @@ export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
         }
       }
       return { status: 'available' }
-    } catch {
+    } catch (error) {
+      if (error instanceof ProviderExecutionError) {
+        return availabilityFromError(error)
+      }
       return {
         status: 'offline',
-        message: request.didTimeout()
-          ? 'O teste de conexão excedeu o tempo permitido.'
-          : 'Não foi possível acessar o endpoint do Provider.',
+        message: 'Não foi possível acessar o endpoint do Provider.',
       }
-    } finally {
-      request.dispose()
     }
   }
 
-  listModels(): ModelDescriptor[] {
-    return this.models.map(cloneModel)
+  async listModels(): Promise<ModelDescriptor[]> {
+    return this.requestModelCatalog()
   }
 
   async execute(
@@ -181,6 +157,54 @@ export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
     }
     return credential || undefined
   }
+
+  private async requestModelCatalog(): Promise<ModelDescriptor[]> {
+    let credential: string | undefined
+    try {
+      credential = await this.resolveCredential()
+    } catch {
+      throw providerError(
+        'authentication-failed',
+        'A credencial do Provider não está disponível.',
+        false,
+      )
+    }
+
+    const request = createRequestControl(undefined, this.config.timeoutMs)
+    try {
+      const response = await this.request(providerEndpoint(this.config, 'models'), {
+        method: 'GET',
+        headers: requestHeaders(credential),
+        redirect: 'error',
+        signal: request.signal,
+      })
+      if (!response.ok) throw errorFromStatus(response.status)
+      return normalizeModelCatalog(
+        await readBoundedJson(response),
+        this.config,
+        this.models,
+      )
+    } catch (error) {
+      if (error instanceof ProviderExecutionError) throw error
+      if (request.didTimeout()) {
+        throw providerError('timeout', 'O Provider excedeu o tempo permitido.', true)
+      }
+      if (error instanceof OpenAICompatibleProtocolError) {
+        throw providerError(
+          'invalid-response',
+          'O catálogo de modelos do Provider é inválido.',
+          false,
+        )
+      }
+      throw providerError(
+        'provider-unavailable',
+        'Não foi possível acessar o endpoint do Provider.',
+        true,
+      )
+    } finally {
+      request.dispose()
+    }
+  }
 }
 
 function requestHeaders(credential: string | undefined) {
@@ -211,16 +235,19 @@ function createRequestControl(parent: AbortSignal | undefined, timeoutMs: number
   }
 }
 
-function availabilityFromStatus(status: number): ProviderAvailability {
-  if (status === 401 || status === 403) {
+function availabilityFromError(error: ProviderExecutionError): ProviderAvailability {
+  if (error.normalized.code === 'authentication-failed') {
     return { status: 'authentication-required', message: 'A credencial foi recusada.' }
   }
-  if (status === 404) {
+  if (error.normalized.code === 'model-unavailable') {
     return { status: 'incompatible', message: 'O endpoint de modelos não foi encontrado.' }
   }
+  if (error.normalized.code === 'timeout') {
+    return { status: 'offline', message: 'O teste de conexão excedeu o tempo permitido.' }
+  }
   return {
-    status: status >= 500 ? 'offline' : 'degraded',
-    message: 'O Provider recusou o teste de conexão.',
+    status: error.normalized.code === 'provider-unavailable' ? 'offline' : 'degraded',
+    message: error.normalized.message,
   }
 }
 
@@ -260,6 +287,40 @@ function providerError(
 
 function cancelledError() {
   return providerError('cancelled', 'A execução foi cancelada.', false)
+}
+
+function normalizeModelCatalog(
+  value: unknown,
+  config: OpenAICompatibleConfig,
+  knownModels: readonly ModelDescriptor[],
+): ModelDescriptor[] {
+  const body = asRecord(value)
+  if (!body || !Array.isArray(body.data) || body.data.length > OPENAI_COMPATIBLE_LIMITS.models) {
+    throw new OpenAICompatibleProtocolError()
+  }
+  const known = new Map(knownModels.map((model) => [model.modelId, model]))
+  const identifiers = new Set<string>()
+  return body.data.map((nativeModel) => {
+    const record = asRecord(nativeModel)
+    const modelId = typeof record?.id === 'string' ? record.id.trim() : ''
+    if (!modelId || modelId.length > 512 || identifiers.has(modelId)) {
+      throw new OpenAICompatibleProtocolError()
+    }
+    identifiers.add(modelId)
+    const current = known.get(modelId)
+    if (current) return { ...cloneModel(current), availability: 'available' }
+    const nativeName = typeof record?.name === 'string' ? record.name.trim() : ''
+    return {
+      providerId: config.id,
+      modelId,
+      displayName: nativeName && nativeName.length <= 500
+        ? nativeName
+        : modelId.slice(0, 500),
+      source: config.source,
+      capabilities: [],
+      availability: 'available',
+    }
+  })
 }
 
 function cloneModel(model: ModelDescriptor): ModelDescriptor {

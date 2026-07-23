@@ -188,6 +188,49 @@ describe('OpenAICompatibleProviderAdapter', () => {
     })
   })
 
+  it('descobre modelos sem inventar capabilities e preserva metadados verificados', async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({
+      object: 'list',
+      data: [
+        { id: 'model-1', name: 'Nome nativo ignorado para modelo conhecido' },
+        { id: 'new-model', name: 'Novo modelo', owned_by: 'segredo-nativo' },
+      ],
+    }))
+
+    const discovered = await adapter(request).listModels()
+    expect(discovered).toEqual([
+      model,
+      {
+        providerId: 'custom-openai',
+        modelId: 'new-model',
+        displayName: 'Novo modelo',
+        source: 'remote',
+        capabilities: [],
+        availability: 'available',
+      },
+    ])
+    expect(JSON.stringify(discovered)).not.toContain('segredo-nativo')
+  })
+
+  it('recusa catálogo malformado ou com identificadores duplicados', async () => {
+    const malformed = vi.fn<typeof fetch>().mockResolvedValue(Response.json({
+      data: [{ id: 'duplicate' }, { id: 'duplicate' }],
+    }))
+    await expect(adapter(malformed).listModels()).rejects.toMatchObject({
+      normalized: {
+        code: 'invalid-response',
+        message: 'O catálogo de modelos do Provider é inválido.',
+      },
+    })
+
+    const invalidIdentifier = vi.fn<typeof fetch>().mockResolvedValue(Response.json({
+      data: [{ name: 'Sem ID' }],
+    }))
+    await expect(adapter(invalidIdentifier).listModels()).rejects.toMatchObject({
+      normalized: { code: 'invalid-response' },
+    })
+  })
+
   it('traduz tarefa, streaming fragmentado e uso para contratos normalizados', async () => {
     const response = sse([
       'data: {"id":"native-secret-id","choices":[{"delta":{"content":"Olá "},"finish_reason":null}]}',

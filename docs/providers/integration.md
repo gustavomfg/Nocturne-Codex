@@ -97,10 +97,14 @@ remote APIs and loopback runtimes. Its initial contract:
 - rejects native tool-call completion until the common Tool Calling contract is
   available.
 
-Configured model descriptors remain explicit. The connection check confirms
-that each configured model exists in `/models`; automatic capability inference
-is not performed because OpenAI-compatible catalogs do not expose a portable
-capability contract.
+Explicit discovery reads the bounded `/models` response and normalizes only
+model identity, display name, source and availability. Previously verified
+metadata is preserved for identifiers that remain present. New identifiers are
+stored with an empty capability set because OpenAI-compatible catalogs do not
+expose a portable capability contract; capability inference is never performed.
+Malformed or duplicate identifiers reject the complete refresh and preserve the
+last valid snapshot. The same discovery operation backs connection health and
+the user-requested catalog refresh.
 
 The main-process credential vault and configuration service provide the
 secure-storage boundary used by the injected credential resolver. Provider

@@ -64,6 +64,8 @@
   principal das configurações de IA;
 - catálogo compartilhado diferencia empresas, protocolos e métodos de conexão
   realmente disponíveis sem tratar assinaturas de consumo como acesso à API;
+- discovery OpenAI-compatible consulta `/models` com os mesmos limites de rede,
+  preserva metadados já verificados e não inventa capabilities para IDs novos;
 - geração de imagens permanece fora do conjunto inicial de capacidades e será tratada em uma etapa futura.
 
 ### Estabilidade e compatibilidade
