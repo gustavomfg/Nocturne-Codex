@@ -58,6 +58,10 @@ captures the submitted secret.
 
 At application startup, the main process constructs the Registry, Model
 Registry, credential vault and configuration service before registering IPC.
+The Model Registry first hydrates its last validated SQLite snapshot, allowing
+adapters to receive normalized model descriptors without performing discovery
+during startup. Persisted availability remains cache metadata and does not
+replace Provider health validation.
 An initialization failure is logged as a degraded Provider subsystem rather
 than preventing access to the local Workspace; subsequent operations still
 fail through sanitized configuration errors.

@@ -35,6 +35,9 @@
 - schema SQLite 10 persiste snapshots normalizados do catálogo por Provider e
   bindings de modelos por Workspace, com substituição atômica, migração
   preventiva e restauração validada;
+- startup hidrata o Model Registry antes de reconstruir adapters configurados,
+  e falhas de persistência durante discovery restauram o catálogo anterior em
+  memória;
 - backups preservam metadados de Providers, mas removem referências do cofre e
   exigem nova credencial após restauração;
 - serviço de configuração do main process coordena validação, SQLite, cofre e
@@ -90,7 +93,7 @@
 
 ### Qualidade
 
-- 187 testes unitários e de integração;
+- 189 testes unitários e de integração;
 - 30 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints, Providers, Segundo Cérebro e atualização da Saúde do Projeto;
 - typecheck, ESLint, design system, build de produção, pacote Linux real e audit npm sem vulnerabilidades aprovados;
 - decisões de sugestão precisam persistir antes do turno Build, e o status aplicado exige alterações observadas no escopo aprovado;

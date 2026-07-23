@@ -37,9 +37,11 @@ Provider discovery replaces only that Provider's catalog, and only after every
 descriptor passes normalized validation. A failed or superseded refresh
 preserves the last valid catalog.
 
-The last valid normalized snapshot is persisted locally. Startup may hydrate
-the in-memory Registry from that snapshot before a new discovery, without
-treating persisted availability as a successful live health check.
+The last valid normalized snapshot is persisted locally. Startup hydrates the
+in-memory Registry from that snapshot before configured Provider adapters are
+rebuilt, without treating persisted availability as a successful live health
+check. A persistence failure during refresh restores the previous in-memory
+catalog.
 
 ## Pricing
 

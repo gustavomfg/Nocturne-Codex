@@ -13,6 +13,7 @@ import { ProviderConfigurationService } from './ai/ProviderConfigurationService'
 import { OpenAICompatibleAdapterFactory } from './ai/providers/openai-compatible/factory'
 import { ProviderCredentialVault } from './security/ProviderCredentialVault'
 import { ElectronCredentialEncryption } from './security/ElectronCredentialEncryption'
+import { ModelCatalogService } from './ai/ModelCatalogService'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const softwareRendering = process.env.NOCTURNE_DISABLE_GPU === '1' || process.argv.includes('--disable-gpu')
@@ -120,6 +121,24 @@ async function initializeServices() {
   logger = new Logger(app.getPath('logs'), database.getSettings().diagnosticMode === 'true')
   const models = new ModelRegistry()
   providerRegistry = new ProviderRegistry()
+  const modelCatalog = new ModelCatalogService(
+    providerRegistry,
+    models,
+    database.modelCatalog,
+  )
+  try {
+    logger.info(
+      'persistence',
+      'Catálogo de modelos restaurado',
+      modelCatalog.initialize(),
+    )
+  } catch (error) {
+    logger.error(
+      'persistence',
+      'O catálogo de modelos persistido não pôde ser restaurado',
+      error,
+    )
+  }
   providerConfigurations = new ProviderConfigurationService(
     database.providerConfigurations,
     new ProviderCredentialVault(
