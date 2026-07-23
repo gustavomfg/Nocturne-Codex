@@ -205,9 +205,10 @@ Selection follows this order:
 1. Explicit user selection.
 2. Workspace role binding.
 3. Workspace default model.
-4. Global default model.
 
-The registry validates compatibility before execution.
+The initial resolver does not use a global default. The registry validates
+compatibility before execution, while fallback remains an explicit Workspace
+policy and never overrides a direct user selection.
 
 ---
 

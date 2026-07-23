@@ -11,6 +11,8 @@
 - eventos iniciais de execução possuem schemas estritos, identificador estável, sequência monotônica, limites explícitos e um único estado terminal;
 - Task Builder cria solicitações provider-independent com contexto classificado, seleção explícita ou por role, limites agregados e Review Mode obrigatoriamente somente leitura;
 - ferramentas permanecem bloqueadas no contrato inicial até existir validação, política e autorização normalizadas para Tool Calling;
+- Workspace Model Bindings resolvem escolha explícita, role e padrão local, validando capacidades e disponibilidade sem substituir silenciosamente a decisão do usuário;
+- fallback desabilitado, dependente de confirmação ou previamente configurado possui comportamento distinto e auditável;
 - geração de imagens permanece fora do conjunto inicial de capacidades e será tratada em uma etapa futura.
 
 ### Estabilidade e compatibilidade

@@ -537,6 +537,23 @@ They should not be interpreted as autonomous agents by default.
 
 A task may explicitly override the role binding when the user chooses another compatible model.
 
+## Binding Resolution
+
+The initial resolver evaluates:
+
+1. the exact `providerId + modelId` explicitly selected by the user;
+2. the binding for the requested workspace role;
+3. the workspace default binding.
+
+An explicit model is never replaced automatically. `disabled` fallback stops
+with remediation, `explicit` returns configured alternatives for confirmation,
+and `configured` may use only the ordered alternatives previously saved in the
+workspace policy. Every fallback result remains visible in execution metadata.
+
+Resolution validates model availability, all required capabilities and Provider
+availability before execution. Bindings from another Workspace are rejected.
+No global default is used by the initial resolver.
+
 ## Provider Independence
 
 Workspace data must not depend on provider-native identifiers or payloads beyond stable references.

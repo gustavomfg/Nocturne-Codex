@@ -187,24 +187,27 @@ The orchestrator never knows provider APIs.
 
 ---
 
-# Step 6 — Provider Resolution
+# Step 6 — Model and Provider Resolution
 
-The Provider Registry determines which provider should execute the task.
+The Orchestrator applies the Workspace selection policy and validates the
+selected model through the Model Registry before resolving its Provider.
 
 Resolution order:
 
-1. Explicit provider selected by the user.
-2. Provider bound to the task role.
-3. Workspace default provider.
-4. Global default provider.
+1. Explicit provider/model pair selected by the user.
+2. Provider/model pair bound to the task role.
+3. Workspace default provider/model pair.
+4. A configured fallback, only when Workspace policy allows it.
 
 If no compatible provider exists, execution stops with a user-facing error.
+An explicit user selection is never replaced automatically.
 
 ---
 
 # Step 7 — Capability Validation
 
-Before execution, the provider must satisfy the required capabilities.
+Before execution, the selected model must satisfy the required capabilities and
+its Provider must be available.
 
 Examples:
 

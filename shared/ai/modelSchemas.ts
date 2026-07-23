@@ -3,6 +3,10 @@ import { modelAvailabilityStatuses, modelCapabilities } from './model'
 
 export const modelCapabilitySchema = z.enum(modelCapabilities)
 export const modelAvailabilitySchema = z.enum(modelAvailabilityStatuses)
+export const modelReferenceSchema = z.object({
+  providerId: z.string().trim().min(1),
+  modelId: z.string().trim().min(1),
+}).strict()
 
 const priceSchema = z.number().finite().nonnegative()
 
