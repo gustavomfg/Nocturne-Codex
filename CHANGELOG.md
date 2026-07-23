@@ -45,6 +45,9 @@
 - IPC e preload tipados expõem somente operações nomeadas de configuração,
   validam novamente os payloads e devolvem resumos e erros sanitizados sem
   credenciais ou referências do cofre;
+- Configurações ganha gerenciamento acessível de Providers OpenAI-compatible,
+  com drafts offline, credencial transitória, validação explícita, edição,
+  teste de conexão e remoção confirmada em layouts desktop e compacto;
 - geração de imagens permanece fora do conjunto inicial de capacidades e será tratada em uma etapa futura.
 
 ### Estabilidade e compatibilidade
@@ -85,7 +88,7 @@
 ### Qualidade
 
 - 184 testes unitários e de integração;
-- 28 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints, no Segundo Cérebro e na atualização da Saúde do Projeto;
+- 30 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints, Providers, Segundo Cérebro e atualização da Saúde do Projeto;
 - typecheck, ESLint, design system, build de produção, pacote Linux real e audit npm sem vulnerabilidades aprovados;
 - decisões de sugestão precisam persistir antes do turno Build, e o status aplicado exige alterações observadas no escopo aprovado;
 - Saúde do Projeto recalcula todas as dimensões após mudanças persistidas nas sugestões e evidencia a transição de cada nota com feedback visual e acessível;

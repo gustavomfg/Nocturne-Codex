@@ -204,6 +204,13 @@ Tabs use readable labels, a stable height, and an accent underline for selection
 
 Dialogs use `--shadow-lg`, a strong border, and restrained backdrop blur. Titles are 16 px or greater. Sections are separated by spacing and subtle borders. Inputs always have visible labels.
 
+Provider settings use a single-column list of bounded cards and one editor at a
+time. Source, endpoint, credential state and availability remain textual; icon
+color alone never communicates connection state. Password fields use one
+focus-within boundary, drafts state that no network request occurs, and enabled
+submissions state that validation will run. Unsaved Provider edits prevent
+silent navigation away.
+
 ### Segundo Cérebro
 
 The memory dialog separates capture from review on desktop and uses explicit Library and Create tabs at 720 px and below. Confidence, origin, scope, and lifecycle state remain legible without competing with memory content; pending candidates retain a visible review count. Human approval is stated in the header and new entries remain visually identified as candidates until activation. Loading, empty, filtered, editing, disabled, and destructive states must preserve the same dialog geometry and keyboard behavior.

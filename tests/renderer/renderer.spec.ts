@@ -187,6 +187,10 @@ test.describe('renderer do produto', () => {
     await expect(workspaces).toHaveCSS('transform', 'none')
     await page.waitForTimeout(240)
     await expect(dialog.getByText('Codex pronto')).toBeVisible()
+    await dialog.evaluate((element) => {
+      element.scrollTo(0, 0)
+      element.querySelectorAll<HTMLElement>('*').forEach((child) => child.scrollTo(0, 0))
+    })
     await expect(dialog).toHaveScreenshot('settings-dialog.png', { animations: 'disabled', caret: 'hide' })
   })
 
@@ -252,6 +256,56 @@ test.describe('renderer do produto', () => {
     const dialog = page.getByRole('dialog', { name: 'Configurações' })
     await expect(dialog.getByRole('alert')).toContainText('Não foi possível salvar as configurações.')
     await expect(dialog).toBeVisible()
+  })
+
+  test('gerencia Providers com credencial transitória e estados explícitos', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await ready(page)
+    await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
+    const dialog = page.getByRole('dialog', { name: 'Configurações' })
+    await dialog.getByRole('button', { name: /Providers/ }).click()
+    await expect(dialog.getByText('Nenhum Provider configurado')).toBeVisible()
+    await dialog.getByRole('button', { name: 'Adicionar primeiro Provider' }).click()
+
+    await dialog.getByRole('textbox', { name: 'Nome' }).fill('OpenRouter pessoal')
+    const secret = dialog.getByRole('textbox', { name: 'Credencial', exact: true })
+    await secret.fill('temporary-renderer-secret')
+    const secretSurface = secret.locator('..')
+    await expect(secret).toHaveCSS('border-top-width', '0px')
+    await expect(secret).toHaveCSS('box-shadow', 'none')
+    await expect(secretSurface).toHaveCSS('border-top-color', 'rgb(155, 124, 246)')
+    await expect(dialog.getByRole('button', { name: /Codex/ })).toBeDisabled()
+    await dialog.getByRole('button', { name: 'Salvar draft' }).click()
+
+    const card = dialog.locator('.provider-card')
+    await expect(card).toContainText('OpenRouter pessoal')
+    await expect(card).toContainText('Credencial protegida')
+    await expect(card).toContainText('Desabilitado')
+    await card.getByRole('button', { name: 'Editar OpenRouter pessoal' }).click()
+    await dialog.getByRole('checkbox', { name: /Habilitar agora/ }).check()
+    await dialog.getByRole('button', { name: 'Validar e salvar' }).click()
+    await card.getByRole('button', { name: 'Testar OpenRouter pessoal' }).click()
+    await expect(card).toContainText('Disponível')
+    await expect(dialog).toHaveScreenshot('provider-settings.png', { animations: 'disabled', caret: 'hide' })
+
+    await card.getByRole('button', { name: 'Remover OpenRouter pessoal' }).click()
+    await expect(card.getByRole('alert')).toContainText('Remover?')
+    await card.getByRole('button', { name: 'Confirmar' }).click()
+    await expect(dialog.getByText('Nenhum Provider configurado')).toBeVisible()
+  })
+
+  test('protege um formulário de Provider ainda não salvo', async ({ page }) => {
+    await page.setViewportSize({ width: 720, height: 800 })
+    await ready(page)
+    await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
+    const dialog = page.getByRole('dialog', { name: 'Configurações' })
+    await dialog.getByRole('button', { name: /Providers/ }).click()
+    await dialog.getByRole('button', { name: 'Adicionar primeiro Provider' }).click()
+    await dialog.getByRole('textbox', { name: 'Nome' }).fill('Provider em edição')
+    await page.keyboard.press('Escape')
+    await expect(dialog.getByRole('alert')).toContainText('Descartar alterações?')
+    await dialog.getByRole('button', { name: 'Continuar editando' }).click()
+    await expect(dialog.getByRole('textbox', { name: 'Nome' })).toHaveValue('Provider em edição')
   })
 
   test('protege e salva o contexto do workspace com feedback', async ({ page }) => {

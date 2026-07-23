@@ -245,6 +245,7 @@ Current highlights:
 - Review Mode
 - Electron secure architecture
 - IPC isolation
+- Secure OpenAI-compatible Provider configuration
 - Provider-agnostic architecture in development
 
 ---

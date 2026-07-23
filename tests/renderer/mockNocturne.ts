@@ -13,7 +13,9 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
     let memoryReads = 0
     let resumes = 0
     type MockBrainMemory = { id: string; workspaceId: string; conversationId: string | null; kind: 'fact' | 'decision' | 'preference' | 'constraint' | 'learning'; scope: 'workspace' | 'conversation'; status: 'candidate' | 'active' | 'outdated' | 'archived'; content: string; confidence: number; sourceType: 'manual' | 'agent'; sourceId: string | null; createdAt: string; updatedAt: string; lastConfirmedAt: string | null; lastUsedAt: string | null; useCount: number }
+    type MockProviderConfiguration = { id: string; providerType: 'openai-compatible'; displayName: string; source: 'local' | 'remote'; baseUrl: string; enabled: boolean; requiresAuthentication: boolean; credentialConfigured: boolean; timeoutMs: number; createdAt: string; updatedAt: string }
     let brainMemories: MockBrainMemory[] = []
+    let providerConfigurations: MockProviderConfiguration[] = []
     const noop = async () => undefined
     const api = {
       workspace: { select: async (expected?: string) => { selectedExpected = expected; authorized = true; return workspace }, validate: async () => true, list: async () => [{ path: workspace, name: 'nocturne-codex', favorite: true, authorized, createdAt: now, lastOpenedAt: now }], remove: noop, favorite: noop, openTool: noop },
@@ -74,6 +76,27 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       data: { export: async () => '/tmp/backup.json', import: async () => true },
       diagnostics: { openLogs: noop, copy: async () => 'diagnóstico', rendererError: noop, rendererStats: noop },
       settings: { get: async () => ({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', theme: 'dark', defaultAgentMode: 'review', codexVersion: 'codex-cli 0.144.1', codexCompatible: true, authenticated: true, authStatus: 'Autenticado', serverStatus: 'ready' }), check: async () => ({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', theme: 'dark', defaultAgentMode: 'review', codexVersion: 'codex-cli 0.144.1', codexCompatible: true, authenticated: true, authStatus: 'Autenticado', serverStatus: 'ready' }), set: async (value: unknown) => value },
+      providers: {
+        list: async () => providerConfigurations.map((item) => ({ ...item })),
+        create: async (configuration: Omit<MockProviderConfiguration, 'id' | 'credentialConfigured' | 'createdAt' | 'updatedAt'>, credential?: string) => {
+          const created = { id: '45ce1afb-ce58-4a26-b549-8e37bd3e1375', ...configuration, credentialConfigured: Boolean(credential), createdAt: now, updatedAt: now }
+          providerConfigurations = [created, ...providerConfigurations]
+          return { ...created }
+        },
+        update: async (id: string, configuration: Omit<MockProviderConfiguration, 'id' | 'credentialConfigured' | 'createdAt' | 'updatedAt'>, options: { credential?: string; clearCredential?: boolean } = {}) => {
+          const current = providerConfigurations.find((item) => item.id === id)
+          if (!current) throw new Error('Provider não encontrado.')
+          const updated = { ...current, ...configuration, credentialConfigured: options.clearCredential ? false : Boolean(options.credential) || current.credentialConfigured, updatedAt: now }
+          providerConfigurations = providerConfigurations.map((item) => item.id === id ? updated : item)
+          return { ...updated }
+        },
+        remove: async (id: string) => {
+          const previousLength = providerConfigurations.length
+          providerConfigurations = providerConfigurations.filter((item) => item.id !== id)
+          return providerConfigurations.length < previousLength
+        },
+        testConnection: async () => ({ status: 'available' as const, message: 'Conexão validada.' }),
+      },
       git: { status: async () => ({ branch: 'master', status: 'M src/App.tsx', diff: '', files: [{ path: 'src/App.tsx', status: 'M' }] }), commit: noop },
       documents: { saveMarkdown: async () => '/tmp/resposta.md', export: async () => '/tmp/resposta.pdf' },
       clipboard: { readText: async () => '', writeText: noop },

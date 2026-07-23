@@ -62,6 +62,12 @@ An initialization failure is logged as a degraded Provider subsystem rather
 than preventing access to the local Workspace; subsequent operations still
 fail through sanitized configuration errors.
 
+The settings interface mirrors this lifecycle. New configurations start as
+disabled drafts, enabling changes the primary action to an explicit validation,
+stored credentials are represented only by a boolean protected state, and
+destructive removal requires confirmation. Unsaved editor state blocks settings
+navigation and closing until the user saves, cancels or confirms discard.
+
 ## Validation
 
 Validation checks:

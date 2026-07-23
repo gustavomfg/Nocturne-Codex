@@ -109,8 +109,11 @@ connection-tested before persistence, and persistent adapters resolve the
 current credential only at request time. Typed configuration IPC now exposes
 named list, create, update, remove and connection-test operations through the
 preload; it returns only sanitized summaries and stable errors. Custom headers
-and renderer forms remain outside this transport slice and must never make the
-resolver or stored plaintext secret renderer-accessible.
+remain outside this transport slice. The renderer form supports global
+OpenAI-compatible drafts, edit, enablement, credential rotation/removal,
+connection tests and deletion. It retains a submitted secret only in the
+mounted form state and must never make the resolver or stored plaintext secret
+renderer-accessible.
 
 ## Testing
 
