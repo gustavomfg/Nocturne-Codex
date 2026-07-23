@@ -14,7 +14,6 @@ export interface ConversationRow {
   id: string
   title: string
   workspace: string
-  codexThreadId: string | null
   createdAt: string
   updatedAt: string
 }
@@ -33,7 +32,7 @@ export interface ArtifactRow { id: string; conversationId: string; workspace: st
 
 const importColumns: Record<string, ReadonlySet<string>> = {
   workspaces: new Set(['path', 'name', 'favorite', 'authorized', 'created_at', 'last_opened_at']),
-  conversations: new Set(['id', 'title', 'workspace', 'codex_thread_id', 'created_at', 'updated_at']),
+  conversations: new Set(['id', 'title', 'workspace', 'created_at', 'updated_at']),
   messages: new Set(['id', 'conversation_id', 'role', 'content', 'metadata', 'created_at']),
   artifacts: new Set(['id', 'conversation_id', 'workspace', 'type', 'title', 'file_path', 'content', 'metadata', 'created_at', 'updated_at']),
   workspace_memory: new Set(['workspace', 'content', 'updated_at']),
@@ -80,18 +79,18 @@ export class LocalDatabase {
   }
 
   listConversations(): ConversationRow[] {
-    return this.db.prepare(`SELECT id, title, workspace, codex_thread_id codexThreadId,
+    return this.db.prepare(`SELECT id, title, workspace,
       created_at createdAt, updated_at updatedAt FROM conversations ORDER BY updated_at DESC`).all() as ConversationRow[]
   }
 
   listConversationPage(offset = 0, limit = 100) {
-    const rows = this.db.prepare(`SELECT id, title, workspace, codex_thread_id codexThreadId,
+    const rows = this.db.prepare(`SELECT id, title, workspace,
       created_at createdAt, updated_at updatedAt FROM conversations ORDER BY updated_at DESC LIMIT ? OFFSET ?`).all(limit + 1, offset) as ConversationRow[]
     return { items: rows.slice(0, limit), hasMore: rows.length > limit }
   }
 
   getConversation(id: string): ConversationRow | null {
-    return this.db.prepare(`SELECT id, title, workspace, codex_thread_id codexThreadId,
+    return this.db.prepare(`SELECT id, title, workspace,
       created_at createdAt, updated_at updatedAt FROM conversations WHERE id=?`).get(id) as ConversationRow | undefined ?? null
   }
 
@@ -115,16 +114,10 @@ export class LocalDatabase {
   createConversation(workspace: string): ConversationRow {
     this.touchWorkspace(workspace)
     const now = new Date().toISOString()
-    const row = { id: randomUUID(), title: 'Nova conversa', workspace, codexThreadId: null, createdAt: now, updatedAt: now }
+    const row = { id: randomUUID(), title: 'Nova conversa', workspace, createdAt: now, updatedAt: now }
     this.db.prepare(`INSERT INTO conversations (id,title,workspace,created_at,updated_at) VALUES (@id,@title,@workspace,@createdAt,@updatedAt)`).run(row)
     return row
   }
-
-  setThread(id: string, threadId: string) {
-    this.db.prepare('UPDATE conversations SET codex_thread_id=?, updated_at=? WHERE id=?').run(threadId, new Date().toISOString(), id)
-  }
-
-  clearThread(id: string) { this.db.prepare('UPDATE conversations SET codex_thread_id=NULL WHERE id=?').run(id) }
 
   listWorkspaces(): WorkspaceRow[] {
     const rows = this.db.prepare(`SELECT path, name, favorite, authorized, created_at createdAt, last_opened_at lastOpenedAt

@@ -36,9 +36,7 @@ export function registerDataIpc(win: BrowserWindow, database: LocalDatabase, log
     if (confirmation.response !== 1) return false
     const startedAt = performance.now()
     const recoveryPath = await database.createRecoverySnapshot()
-    const safeSettings = { ...validated.settings }
-    delete safeSettings.codexPath
-    database.importData({ ...validated, settings: safeSettings })
+    database.importData({ ...validated, settings: validated.settings })
     logger.info('persistence', 'Dados importados', { recoveryPath, records: countBackupRecords(validated), durationMs: Math.round(performance.now() - startedAt) })
     return true
   })

@@ -113,6 +113,10 @@ export const migrations: Migration[] = [
       FOREIGN KEY (workspace_id) REFERENCES workspaces(path) ON DELETE CASCADE
     );
   `) },
+  { version: 11, up: (db) => {
+    if (hasColumn(db, 'conversations', 'codex_thread_id'))
+      db.exec('ALTER TABLE conversations DROP COLUMN codex_thread_id;')
+  } },
 ]
 
 export function migrateDatabase(db: Database.Database, currentVersion: number) {
