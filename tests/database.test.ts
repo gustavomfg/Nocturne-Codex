@@ -15,7 +15,7 @@ afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(direc
 
 describe('persistência SQLite', () => {
   it('mantém migrações incrementais, ordenadas e sem lacunas', () => {
-    expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
     expect(migrations[migrations.length - 1]?.version).toBe(DATABASE_SCHEMA_VERSION)
   })
   it('persiste conversa, thread, mensagens, memória e artefatos', () => {
@@ -25,6 +25,64 @@ describe('persistência SQLite', () => {
     expect(db.listMessages(conversation.id)).toHaveLength(1)
     expect(db.getWorkspaceMemory(workspace).content).toBe('decisão')
     expect(db.listArtifacts(conversation.id)[0].type).toBe('markdown'); db.close()
+  })
+  it('persiste configurações de Provider sem expor a referência da credencial', () => {
+    const db = create()
+    const credentialReference = '9ba7e635-8746-48bd-a8e9-4609ff1690cb'
+    const created = db.providerConfigurations.create({
+      providerType: 'openai-compatible',
+      displayName: 'OpenRouter',
+      source: 'remote',
+      baseUrl: 'https://openrouter.example/v1',
+      enabled: true,
+      requiresAuthentication: true,
+      timeoutMs: 30_000,
+    }, credentialReference)
+    expect(created).toMatchObject({
+      displayName: 'OpenRouter',
+      credentialConfigured: true,
+    })
+    expect(created).not.toHaveProperty('credentialReference')
+    expect(db.providerConfigurations.getCredentialReference(created.id))
+      .toBe(credentialReference)
+    expect(db.providerConfigurations.setCredentialReference(created.id, null))
+      .toMatchObject({ credentialConfigured: false })
+    expect(db.providerConfigurations.setCredentialReference(created.id, credentialReference))
+      .toMatchObject({ credentialConfigured: true })
+    expect(() => db.providerConfigurations.create({
+      providerType: 'openai-compatible',
+      displayName: 'Duplicate credential owner',
+      source: 'remote',
+      baseUrl: 'https://other.example/v1',
+      enabled: false,
+      requiresAuthentication: true,
+      timeoutMs: 30_000,
+    }, credentialReference)).toThrow()
+
+    const updated = db.providerConfigurations.update(created.id, {
+      providerType: 'openai-compatible',
+      displayName: 'OpenRouter local policy',
+      source: 'remote',
+      baseUrl: 'https://openrouter.example/v1',
+      enabled: false,
+      requiresAuthentication: true,
+      timeoutMs: 45_000,
+    })
+    expect(updated).toMatchObject({
+      displayName: 'OpenRouter local policy',
+      enabled: false,
+      credentialConfigured: true,
+    })
+    expect(db.providerConfigurations.list()).toEqual([updated])
+    expect(db.providerConfigurations.delete(created.id)).toEqual({
+      deleted: true,
+      credentialReference,
+    })
+    expect(db.providerConfigurations.delete(created.id)).toEqual({
+      deleted: false,
+      credentialReference: null,
+    })
+    db.close()
   })
   it('persiste, aprova, busca e pagina memórias estruturadas por escopo', () => {
     const db = create(); const workspace = '/tmp/brain'; const conversation = db.createConversation(workspace)
@@ -79,8 +137,10 @@ describe('persistência SQLite', () => {
     recovered.close(); db.close()
   })
   it('exporta e importa um fluxo completo restaurável', () => {
-    const source = create(); const conversation = source.createConversation('/tmp/project'); source.addMessage(conversation.id, 'assistant', 'Resposta simulada'); const memory = source.createBrainMemory('/tmp/project', { kind: 'learning', scope: 'workspace', content: 'Backup preserva o Segundo Cérebro', status: 'active' }); source.setSettings({ theme: 'dark', model: 'modelo-teste' }); const data = source.exportData(); source.close()
-    const target = create(); target.importData(data); expect(target.listConversations()).toHaveLength(1); expect(target.listMessages(conversation.id)[0].content).toBe('Resposta simulada'); expect(target.getBrainMemory(memory.id, '/tmp/project')?.content).toContain('Segundo Cérebro'); expect(target.retrieveBrainMemories('/tmp/project', conversation.id, 'backup')[0].id).toBe(memory.id); expect(target.getSettings().model).toBe('modelo-teste'); expect(target.listWorkspaces()[0].authorized).toBe(false); target.close()
+    const source = create(); const conversation = source.createConversation('/tmp/project'); source.addMessage(conversation.id, 'assistant', 'Resposta simulada'); const memory = source.createBrainMemory('/tmp/project', { kind: 'learning', scope: 'workspace', content: 'Backup preserva o Segundo Cérebro', status: 'active' }); source.setSettings({ theme: 'dark', model: 'modelo-teste' }); const provider = source.providerConfigurations.create({ providerType: 'openai-compatible', displayName: 'Backup Provider', source: 'remote', baseUrl: 'https://provider.example/v1', enabled: true, requiresAuthentication: true, timeoutMs: 30_000 }, '9ba7e635-8746-48bd-a8e9-4609ff1690cb'); const data = source.exportData(); source.close()
+    expect(data.providerConfigs[0]).not.toHaveProperty('credential_ref')
+    expect(JSON.stringify(data)).not.toContain('9ba7e635-8746-48bd-a8e9-4609ff1690cb')
+    const target = create(); target.importData(data); expect(target.listConversations()).toHaveLength(1); expect(target.listMessages(conversation.id)[0].content).toBe('Resposta simulada'); expect(target.getBrainMemory(memory.id, '/tmp/project')?.content).toContain('Segundo Cérebro'); expect(target.retrieveBrainMemories('/tmp/project', conversation.id, 'backup')[0].id).toBe(memory.id); expect(target.getSettings().model).toBe('modelo-teste'); expect(target.listWorkspaces()[0].authorized).toBe(false); expect(target.providerConfigurations.get(provider.id)).toMatchObject({ displayName: 'Backup Provider', credentialConfigured: false }); expect(target.providerConfigurations.getCredentialReference(provider.id)).toBeNull(); target.close()
   })
   it('substitui dados locais ao restaurar em vez de mesclar históricos', () => {
     const source = create(); const restored = source.createConversation('/tmp/restored'); const data = source.exportData(); source.close()
@@ -104,7 +164,7 @@ describe('persistência SQLite', () => {
     const db = new LocalDatabase(directory)
     db.close()
     const migrated = new Sqlite(file, { readonly: true })
-    expect(migrated.pragma('user_version', { simple: true })).toBe(8)
+    expect(migrated.pragma('user_version', { simple: true })).toBe(9)
     const tables = migrated.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>
     expect(tables.map((item) => item.name)).toContain('suggestions')
     expect(tables.map((item) => item.name)).toContain('workspace_memory')
@@ -115,7 +175,7 @@ describe('persistência SQLite', () => {
     const directory = directories[directories.length - 1]
     const sqlite = new Sqlite(path.join(directory, 'nocturne.db'), { readonly: true })
     const indexes = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='index'").all() as Array<{ name: string }>
-    expect(indexes.map((item) => item.name)).toEqual(expect.arrayContaining(['idx_conversations_updated', 'idx_workspaces_recent', 'idx_artifacts_file', 'idx_suggestion_decisions_suggestion', 'idx_brain_memories_workspace', 'idx_brain_memories_conversation']))
+    expect(indexes.map((item) => item.name)).toEqual(expect.arrayContaining(['idx_conversations_updated', 'idx_workspaces_recent', 'idx_artifacts_file', 'idx_suggestion_decisions_suggestion', 'idx_brain_memories_workspace', 'idx_brain_memories_conversation', 'idx_provider_configs_enabled']))
     sqlite.close()
   })
   it('migra o banco real da linha 0.7 sem perder conversas', () => {
@@ -132,7 +192,7 @@ describe('persistência SQLite', () => {
     expect(fs.statSync(path.join(directory, migrationBackups[0])).mode & 0o777).toBe(0o600)
     migrated.close()
     const verified = new Sqlite(file, { readonly: true })
-    expect(verified.pragma('user_version', { simple: true })).toBe(8)
+    expect(verified.pragma('user_version', { simple: true })).toBe(9)
     verified.close()
   })
   it('migra o schema 7 preservando dados e criando o índice do Segundo Cérebro', () => {
@@ -147,15 +207,29 @@ describe('persistência SQLite', () => {
     expect(migrated.retrieveBrainMemories('/tmp/from-7', conversation.id, 'pesquisável')[0].id).toBe(memory.id)
     migrated.close()
   })
+  it('migra o schema 8 preservando dados e criando configurações de Provider', () => {
+    const db = create(); const conversation = db.createConversation('/tmp/from-8'); db.addMessage(conversation.id, 'user', 'Preservar'); db.close()
+    const directory = directories[directories.length - 1]; const file = path.join(directory, 'nocturne.db')
+    const previous = new Sqlite(file)
+    previous.exec('DROP TABLE provider_configs; PRAGMA user_version = 8;')
+    previous.close()
+    const migrated = new LocalDatabase(directory)
+    expect(migrated.listMessages(conversation.id)[0].content).toBe('Preservar')
+    expect(migrated.providerConfigurations.list()).toEqual([])
+    migrated.close()
+    const verified = new Sqlite(file, { readonly: true })
+    expect(verified.pragma('user_version', { simple: true })).toBe(9)
+    verified.close()
+  })
   it('recusa schema futuro antes de executar manutenção ou migrações', () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-test-')); directories.push(directory)
     const file = path.join(directory, 'nocturne.db')
     const future = new Sqlite(file)
-    future.pragma('user_version = 9')
+    future.pragma('user_version = 10')
     future.close()
-    expect(() => new LocalDatabase(directory)).toThrow(/schema 9.*suporta até o schema 8/)
+    expect(() => new LocalDatabase(directory)).toThrow(/schema 10.*suporta até o schema 9/)
     const preserved = new Sqlite(file, { readonly: true })
-    expect(preserved.pragma('user_version', { simple: true })).toBe(9)
+    expect(preserved.pragma('user_version', { simple: true })).toBe(10)
     preserved.close()
   })
   it('reverte integralmente uma restauração inválida', () => {

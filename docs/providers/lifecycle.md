@@ -28,6 +28,17 @@ main process can resolve it at request time. Creation, rotation and deletion
 are atomic vault operations. If operating-system protection is unavailable,
 credential persistence is rejected and the Provider cannot be marked ready.
 
+Non-sensitive configuration is persisted globally in SQLite schema 9. A record
+contains protocol type, display name, source, endpoint, enabled state,
+authentication requirement, timeout and timestamps. Credential references have
+a single owning configuration and are omitted from exports. Backup restoration
+preserves Provider metadata but intentionally returns authenticated Providers
+to a credential-required state.
+
+The persistence repository does not coordinate SQLite and vault mutations by
+itself. The main-process configuration service owns that two-resource workflow,
+including compensation when either side fails.
+
 ## Validation
 
 Validation checks:

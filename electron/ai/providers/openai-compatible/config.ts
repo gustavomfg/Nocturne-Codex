@@ -1,10 +1,9 @@
 import { isIP } from 'node:net'
 import { z } from 'zod'
 import type { ProviderSource } from '../../../../shared/ai/provider'
+import { PROVIDER_CONFIGURATION_LIMITS } from '../../../../shared/ai/providerConfiguration'
 
 export const OPENAI_COMPATIBLE_LIMITS = {
-  minimumTimeoutMs: 1_000,
-  maximumTimeoutMs: 120_000,
   modelsResponseBytes: 2 * 1024 * 1024,
   streamResponseBytes: 10 * 1024 * 1024,
   streamEventBytes: 1024 * 1024,
@@ -16,8 +15,8 @@ const configSchema = z.object({
   source: z.enum(['local', 'remote']),
   baseUrl: z.string().trim().min(1).max(2_048),
   timeoutMs: z.number().int()
-    .min(OPENAI_COMPATIBLE_LIMITS.minimumTimeoutMs)
-    .max(OPENAI_COMPATIBLE_LIMITS.maximumTimeoutMs),
+    .min(PROVIDER_CONFIGURATION_LIMITS.minimumTimeoutMs)
+    .max(PROVIDER_CONFIGURATION_LIMITS.maximumTimeoutMs),
   enabled: z.boolean(),
   requiresAuthentication: z.boolean(),
 }).strict()

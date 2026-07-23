@@ -78,6 +78,24 @@ export const migrations: Migration[] = [
     END;
     INSERT INTO brain_memories_fts(brain_memories_fts) VALUES ('rebuild');
   `) },
+  { version: 9, up: (db) => db.exec(`
+    CREATE TABLE IF NOT EXISTS provider_configs (
+      id TEXT PRIMARY KEY,
+      provider_type TEXT NOT NULL,
+      display_name TEXT NOT NULL CHECK(length(display_name) BETWEEN 1 AND 500),
+      source TEXT NOT NULL CHECK(source IN ('local','remote')),
+      base_url TEXT NOT NULL CHECK(length(base_url) BETWEEN 1 AND 2048),
+      enabled INTEGER NOT NULL CHECK(enabled IN (0,1)),
+      requires_authentication INTEGER NOT NULL CHECK(requires_authentication IN (0,1)),
+      credential_ref TEXT UNIQUE,
+      timeout_ms INTEGER NOT NULL CHECK(timeout_ms BETWEEN 1000 AND 120000),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      CHECK(credential_ref IS NULL OR length(credential_ref) = 36)
+    );
+    CREATE INDEX IF NOT EXISTS idx_provider_configs_enabled
+      ON provider_configs(enabled DESC, updated_at DESC);
+  `) },
 ]
 
 export function migrateDatabase(db: Database.Database, currentVersion: number) {

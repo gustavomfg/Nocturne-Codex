@@ -38,6 +38,21 @@ describe('schema de backup', () => {
   it('rejeita identificadores duplicados antes da restauração', () => {
     const data = valid()
     expect(() => backupSchema.parse({ ...data, conversations: [conversation, conversation] })).toThrow(/duplicados/)
+    const provider = { id: randomUUID(), provider_type: 'openai-compatible', display_name: 'Provider', source: 'remote', base_url: 'https://provider.example/v1', enabled: 1, requires_authentication: 1, timeout_ms: 30_000, created_at: now, updated_at: now }
+    expect(() => backupSchema.parse({ ...data, providerConfigs: [provider, provider] })).toThrow(/duplicados/)
+  })
+
+  it('preserva configuração de Provider sem aceitar referência de credencial', () => {
+    const provider = { id: randomUUID(), provider_type: 'openai-compatible', display_name: 'Provider', source: 'remote', base_url: 'https://provider.example/v1', enabled: 1, requires_authentication: 1, timeout_ms: 30_000, created_at: now, updated_at: now }
+    expect(backupSchema.parse({ ...valid(), providerConfigs: [provider] }))
+      .toMatchObject({ providerConfigs: [{ display_name: 'Provider' }] })
+    expect(() => backupSchema.parse({
+      ...valid(),
+      providerConfigs: [{
+        ...provider,
+        credential_ref: '9ba7e635-8746-48bd-a8e9-4609ff1690cb',
+      }],
+    })).toThrow()
   })
 
   it('rejeita UUIDs, enums e JSON serializado inválidos', () => {

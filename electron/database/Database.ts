@@ -6,6 +6,7 @@ import type { Suggestion, SuggestionStatus } from '../../shared/suggestions'
 import type { BrainMemory, BrainMemoryCandidate, CreateBrainMemoryInput, UpdateBrainMemoryInput } from '../../shared/brainMemory'
 import { DATABASE_SCHEMA_VERSION } from '../../shared/constants'
 import { migrateDatabase } from './migrations'
+import { ProviderConfigurationRepository } from './ProviderConfigurationRepository'
 
 export interface ConversationRow {
   id: string
@@ -37,11 +38,13 @@ const importColumns: Record<string, ReadonlySet<string>> = {
   suggestions: new Set(['id', 'workspace_id', 'conversation_id', 'title', 'description', 'reasoning', 'category', 'severity', 'affected_files', 'proposed_changes', 'expected_benefits', 'complexity', 'risk', 'status', 'result', 'created_at', 'updated_at']),
   suggestion_decisions: new Set(['id', 'suggestion_id', 'status', 'result', 'created_at']),
   brain_memories: new Set(['id', 'workspace_id', 'conversation_id', 'kind', 'scope', 'status', 'content', 'confidence', 'source_type', 'source_id', 'created_at', 'updated_at', 'last_confirmed_at', 'last_used_at', 'use_count']),
+  provider_configs: new Set(['id', 'provider_type', 'display_name', 'source', 'base_url', 'enabled', 'requires_authentication', 'timeout_ms', 'created_at', 'updated_at']),
 }
 
 export class LocalDatabase {
   private db: Database.Database
   private readonly databasePath: string
+  readonly providerConfigurations: ProviderConfigurationRepository
 
   constructor(userDataPath: string) {
     this.databasePath = path.join(userDataPath, 'nocturne.db')
@@ -63,6 +66,7 @@ export class LocalDatabase {
       fs.chmodSync(backupPath, 0o600)
     }
     migrateDatabase(this.db, schemaVersion)
+    this.providerConfigurations = new ProviderConfigurationRepository(this.db)
     this.runScheduledIntegrityCheck()
     this.cleanupOrphans()
   }
@@ -311,10 +315,10 @@ export class LocalDatabase {
   }
 
   exportData() {
-    return { schemaVersion: DATABASE_SCHEMA_VERSION, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), brainMemories: this.db.prepare('SELECT * FROM brain_memories ORDER BY created_at').all(), suggestions: this.db.prepare('SELECT * FROM suggestions').all(), suggestionDecisions: this.db.prepare('SELECT * FROM suggestion_decisions').all(), settings: this.getSettings() }
+    return { schemaVersion: DATABASE_SCHEMA_VERSION, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), brainMemories: this.db.prepare('SELECT * FROM brain_memories ORDER BY created_at').all(), suggestions: this.db.prepare('SELECT * FROM suggestions').all(), suggestionDecisions: this.db.prepare('SELECT * FROM suggestion_decisions').all(), providerConfigs: this.db.prepare(`SELECT id,provider_type,display_name,source,base_url,enabled,requires_authentication,timeout_ms,created_at,updated_at FROM provider_configs ORDER BY created_at`).all(), settings: this.getSettings() }
   }
 
-  importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[]; brainMemories?: unknown[]; suggestions?: unknown[]; suggestionDecisions?: unknown[]; settings?: Record<string, string> }) {
+  importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[]; brainMemories?: unknown[]; suggestions?: unknown[]; suggestionDecisions?: unknown[]; providerConfigs?: unknown[]; settings?: Record<string, string> }) {
     const statements = new Map<string, Database.Statement>()
     const insert = (table: string, rows: unknown[]) => {
       const allowed = importColumns[table]
@@ -334,8 +338,8 @@ export class LocalDatabase {
       }
     }
     this.db.transaction(() => {
-      this.db.exec('DELETE FROM brain_memories; DELETE FROM suggestion_decisions; DELETE FROM suggestions; DELETE FROM artifacts; DELETE FROM messages; DELETE FROM conversations; DELETE FROM workspaces; DELETE FROM workspace_memory; DELETE FROM settings;')
-      insert('workspaces', data.workspaces.map((row) => ({ ...(row as Record<string, unknown>), authorized: 0 }))); insert('conversations', data.conversations); insert('messages', data.messages); insert('artifacts', data.artifacts); insert('workspace_memory', data.memories); insert('brain_memories', data.brainMemories ?? []); insert('suggestions', data.suggestions ?? []); insert('suggestion_decisions', data.suggestionDecisions ?? [])
+      this.db.exec('DELETE FROM provider_configs; DELETE FROM brain_memories; DELETE FROM suggestion_decisions; DELETE FROM suggestions; DELETE FROM artifacts; DELETE FROM messages; DELETE FROM conversations; DELETE FROM workspaces; DELETE FROM workspace_memory; DELETE FROM settings;')
+      insert('workspaces', data.workspaces.map((row) => ({ ...(row as Record<string, unknown>), authorized: 0 }))); insert('conversations', data.conversations); insert('messages', data.messages); insert('artifacts', data.artifacts); insert('workspace_memory', data.memories); insert('brain_memories', data.brainMemories ?? []); insert('suggestions', data.suggestions ?? []); insert('suggestion_decisions', data.suggestionDecisions ?? []); insert('provider_configs', data.providerConfigs ?? [])
       if (data.settings) this.setSettings(data.settings)
       this.cleanupOrphans()
     })()

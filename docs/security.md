@@ -477,6 +477,12 @@ The vault:
 - never lists or returns secrets to the renderer;
 - excludes its encrypted file from ordinary application backup data.
 
+SQLite schema 9 stores only a nullable, unique opaque reference alongside
+non-sensitive Provider configuration. Summaries expose a boolean credential
+state, never the reference. JSON backup export omits the reference entirely, so
+restoration cannot bind configuration imported from another installation to a
+credential already present on the machine.
+
 ## Secret Submission
 
 ```text

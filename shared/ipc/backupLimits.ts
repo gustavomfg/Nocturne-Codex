@@ -1,4 +1,4 @@
-export const BACKUP_COLLECTION_KEYS = ['conversations', 'workspaces', 'messages', 'artifacts', 'memories', 'brainMemories', 'suggestions', 'suggestionDecisions'] as const
+export const BACKUP_COLLECTION_KEYS = ['conversations', 'workspaces', 'messages', 'artifacts', 'memories', 'brainMemories', 'suggestions', 'suggestionDecisions', 'providerConfigs'] as const
 
 export const BACKUP_LIMITS = Object.freeze({
   maxBytes: 25_000_000,

@@ -111,12 +111,27 @@ Represents a configured AI provider.
 Stores:
 
 - identifier
+- adapter/protocol type
 - display name
+- local or remote source
 - endpoint
 - enabled state
-- configuration metadata
+- authentication requirement
+- request timeout
+- opaque credential reference
+- creation and update timestamps
 
 Secrets are stored outside the database.
+
+Schema 9 stores global Provider configurations in `provider_configs`. The
+credential reference is nullable and unique, so one vault entry cannot
+accidentally be owned by multiple configurations. Database queries exposed to
+presentation return only `credentialConfigured`; resolving the opaque reference
+is a main-process responsibility.
+
+Ordinary backups include Provider metadata but deliberately omit
+`credential_ref`. Restored Providers therefore require credential submission
+again before they can become available.
 
 ---
 
@@ -375,6 +390,10 @@ Future migrations must:
 - remain backward compatible when possible;
 - avoid provider-specific columns;
 - introduce normalized tables instead of vendor-specific extensions.
+
+The schema 8 → 9 migration is additive and transactional. It creates Provider
+configuration storage and its enabled-state index without changing existing
+Workspace, conversation, message or memory records.
 
 ---
 
