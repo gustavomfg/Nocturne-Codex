@@ -1,121 +1,428 @@
-# Arquitetura
+# Architecture
 
-## Migrações do banco
+> **The architecture of Nocturne Codex is designed around one principle: the workspace is the product. Artificial intelligence is an interchangeable capability.**
 
-O SQLite usa uma lista ordenada de migrações versionadas. Cada `up` é executado em uma transação exclusiva e atualiza `user_version` somente no fim da transação. Antes de migrar qualquer banco existente de uma versão anterior suportada, o WAL recebe checkpoint e o arquivo atual é preservado como backup restrito. Uma falha reverte integralmente a versão em andamento. Bancos com `user_version` superior ao schema suportado são recusados antes de manutenção ou migração, evitando downgrade destrutivo.
+---
 
-## Visão geral
+# Purpose
 
-O processo principal Electron é a fronteira de confiança. Ele gerencia SQLite, filesystem, Git, Pandoc e o processo filho `codex app-server --stdio`. O preload expõe somente operações nomeadas; o renderer React não possui acesso direto ao Node.js.
+Nocturne Codex is built as a local-first software engineering workspace.
 
-```text
-Renderer React
-    ↓ API tipada do preload
-Electron preload
-    ↓ canais IPC centralizados
-Electron main
-    ├── Codex App Server
-    ├── SQLite
-    ├── filesystem/workspaces
-    ├── Git
-    └── exportação
+Its architecture separates project knowledge from AI execution, allowing the platform to evolve independently from any specific language model or provider.
+
+The system is intentionally modular.
+
+Each subsystem has a single responsibility and communicates through explicit boundaries.
+
+---
+
+# Architectural Principles
+
+Every architectural decision follows these principles.
+
+## Workspace First
+
+The workspace is the central domain.
+
+Artificial intelligence never owns the workflow.
+
+Projects, knowledge, documentation and architecture continue to exist independently of any AI provider.
+
+---
+
+## Provider Agnostic
+
+No business logic depends directly on OpenAI, Anthropic, Codex CLI or any other provider.
+
+Provider-specific logic is isolated behind adapters.
+
+The remainder of the application communicates only with normalized interfaces.
+
+---
+
+## Local First
+
+Workspace data remains local.
+
+Examples include:
+
+- documentation
+- memories
+- sessions
+- architecture decisions
+- statistics
+- settings
+
+Remote providers execute AI tasks but never become the source of truth.
+
+---
+
+## Explicit Trust Boundaries
+
+Renderer processes never receive unrestricted access to the operating system.
+
+Sensitive operations happen inside trusted processes.
+
+Every boundary is explicit.
+
+---
+
+## Human Approval
+
+Persistent knowledge requires approval.
+
+Artificial intelligence may suggest.
+
+Users decide.
+
+---
+
+# High-Level Architecture
+
+```
+                    User
+
+                     │
+
+                     ▼
+
+               Electron Renderer
+
+                     │
+
+             Typed IPC Contracts
+
+                     │
+
+                     ▼
+
+               Electron Main
+
+        ┌────────────┼─────────────┐
+        │            │             │
+        │            │             │
+ Workspace      Second Brain   AI Orchestrator
+        │            │             │
+        │            │             ▼
+        │            │      Provider Registry
+        │            │             │
+        │            ▼             ▼
+ Sessions      Awareness     Provider Adapter
+        │                          │
+        └──────────────┬───────────┘
+                       │
+                       ▼
+                AI Provider
 ```
 
-`CodexClient` associa requests JSON-RPC a responses por `id`, encaminha notificações e mantém threads/turnos. `AgentStateMachine` é a fonte única para o estado operacional. `LocalDatabase` persiste workspaces, conversas, mensagens, artefatos, memória, configurações e auditoria de aprovações.
+No subsystem bypasses these boundaries.
 
-O Segundo Cérebro complementa o documento `.nocturne/memory.md` com memórias individuais no SQLite. Cada registro possui escopo de workspace ou conversa, tipo, estado, confiança, origem e métricas de uso. Somente memórias ativas podem ser recuperadas; candidatas exigem aprovação explícita. A busca usa FTS5 local e o backup preserva os registros, enquanto o índice é reconstruído a partir da fonte de verdade.
+---
 
-Respostas do agente podem carregar um bloco opcional `nocturne-memories`. A extração é limitada, validada e persistida transacionalmente no processo principal; duplicatas e padrões reconhecíveis de credenciais são recusados. O bloco técnico é removido antes da mensagem ser persistida, e falhas nessa captura opcional não descartam a resposta principal.
+# Domain Overview
 
-No renderer, a biblioteca do Segundo Cérebro é um diálogo lazy isolado em `src/domains/memory/`. Seu estado de busca, formulário e paginação permanece local; o `App.tsx` guarda somente se a superfície está aberta. Criação manual produz uma candidata, e aprovação, edição, desatualização, arquivamento e exclusão são ações visíveis do usuário.
+The application is divided into independent domains.
 
-Mensagens, conversas, artefatos e sugestões atravessam IPC em páginas limitadas. O renderer carrega a página inicial e solicita páginas anteriores explicitamente, evitando materializar históricos inteiros nas rotas interativas; os métodos integrais permanecem disponíveis apenas para compatibilidade interna enquanto consumidores antigos são removidos gradualmente.
+## Workspace
 
-Na importação e exportação, leitura, parsing e serialização JSON são delegados a workers. Validação Zod, consultas SQLite e inserções transacionais continuam síncronas no processo principal. A suíte aplica orçamentos de regressão a cargas representativas e os logs registram duração e volume, mas o teto aceito de 25 MB e 200 mil registros não equivale a uma garantia de ausência de bloqueio; mudanças nessa rota devem ser medidas antes de ampliar os limites.
+Responsible for representing software projects.
 
-O Intelligent Review System recebe um bloco estruturado validado com Zod no processo principal. Sugestões e decisões usam tabelas próprias; Review Mode força `readOnly` no sandbox do turno. Aplicação é um novo turno Build confirmado pelo usuário, nunca efeito de abrir uma proposta.
+Responsibilities include:
 
-Dados ficam em `app.getPath('userData')`; logs ficam em `app.getPath('logs')`. Contexto versionável do projeto fica em `<workspace>/.nocturne/`.
+- project configuration
+- metadata
+- workspace settings
+- provider bindings
+- statistics
+- documents
 
-## Renderer por domínio
+The workspace is the root of every operation.
 
-`src/App.tsx` é o composition root do renderer. Ele mantém efeitos de ciclo de vida, coordena o store e conecta handlers de domínio. Elementos visuais e estado local de apresentação ficam fora dele.
+---
 
-```text
-src/
-├── App.tsx                         # orquestração e integração dos domínios
-├── domains/
-│   ├── agent/                      # inspector, plano, atividade, artefatos e estilos locais
-│   ├── chat/ChatContent.tsx        # welcome, mensagens e Markdown
-│   ├── chat/Composer.tsx           # modos, anexos e envio
-│   ├── git/GitPanel.tsx            # status e commit confirmado
-│   ├── settings/                   # configurações, diagnóstico, diálogos e estilos locais
-│   ├── suggestions/                # review, Project Health e proposta
-│   └── workspaces/Sidebar.tsx      # conversas, workspaces e perfil
-├── shared/format.ts                # formatação e normalização do renderer
-├── store.ts                        # estado Zustand e limites de segurança
-└── styles/                         # fundação visual e estilos de componentes
+## Second Brain
+
+Responsible for persistent knowledge.
+
+Stores approved information.
+
+Never stores temporary context.
+
+Never executes AI tasks.
+
+---
+
+## Awareness
+
+Responsible for selecting context.
+
+Awareness consumes:
+
+- memories
+- documents
+- architecture decisions
+- workspace information
+
+It produces temporary context.
+
+It never persists information.
+
+---
+
+## Sessions
+
+Responsible for execution history.
+
+Sessions describe:
+
+- conversations
+- executed tasks
+- provider usage
+- execution metadata
+
+Sessions are historical records.
+
+Not memory.
+
+---
+
+## AI Orchestrator
+
+Coordinates AI execution.
+
+Responsibilities include:
+
+- task preparation
+- provider selection
+- streaming
+- cancellation
+- telemetry
+- normalization
+
+The orchestrator never knows provider-specific protocols.
+
+---
+
+## Provider Layer
+
+Responsible for executing AI requests.
+
+Providers are interchangeable.
+
+Examples:
+
+- Codex CLI
+- OpenAI
+- OpenRouter
+- Ollama
+- LM Studio
+- Anthropic
+- future providers
+
+Each provider exposes the same normalized capabilities whenever possible.
+
+---
+
+# AI Execution Flow
+
+Every AI interaction follows the same pipeline.
+
+```
+User
+
+↓
+
+Workspace
+
+↓
+
+Awareness
+
+↓
+
+Task Builder
+
+↓
+
+AI Orchestrator
+
+↓
+
+Provider Registry
+
+↓
+
+Provider Adapter
+
+↓
+
+Model
+
+↓
+
+Normalized Response
+
+↓
+
+Workspace
 ```
 
-### Regras de dependência
+This guarantees identical behavior regardless of the provider.
 
-- Domínios podem importar tipos compartilhados e utilitários puros.
-- Domínios não importam outros domínios, exceto composição explícita no `AgentPanel` para Git e Suggestions.
-- Acesso a `window.nocturne` permanece nas bordas que executam a ação correspondente.
-- `App.tsx` não deve voltar a acumular markup de componentes.
-- Estado local de UI, como aba ativa e formulário de configurações, pertence ao componente que o apresenta.
-- Estado persistente ou compartilhado entre domínios pertence ao store ou ao processo principal.
+---
 
-## Contratos compartilhados
+# Provider Architecture
 
-```text
-shared/
-├── agentState.ts
-├── suggestions.ts
-├── types.ts
-└── ipc/
-    ├── channels.ts   # nomes de canais usados pelo preload
-    ├── contracts.ts  # NocturneApi exposta ao renderer
-    └── schemas.ts    # schemas Zod reutilizados no main
+Providers are implementation details.
+
+They are never imported directly by domain modules.
+
+```
+AI Orchestrator
+
+↓
+
+AI Provider Interface
+
+↓
+
+Provider Adapter
+
+↓
+
+Remote API
+
+or
+
+↓
+
+Local Runtime
 ```
 
-`src/types.ts` é uma fachada de compatibilidade. Código novo pode importar tipos de `src/types` dentro do renderer; a definição canônica vive em `shared/types.ts`. Isso evita renomeações amplas e mantém as APIs públicas existentes.
+Adding a new provider should not require modifications to Workspace, Awareness or Second Brain.
 
-Os nomes dos canais IPC são definidos uma vez em `shared/ipc/channels.ts`. O preload usa esses valores diretamente. Schemas aplicáveis a mais de um handler ficam em `shared/ipc/schemas.ts`; validações específicas continuam próximas do handler até justificarem compartilhamento.
+---
 
-## Estilos
+# Renderer Isolation
 
-```text
-src/styles/
-├── tokens.css       # cores, espaçamento, escala e elevação
-├── typography.css   # Geist, Geist Mono e regras tipográficas
-├── motion.css       # durações, easing, transições e reduced motion
-├── globals.css      # reset, foco, seleção e scrollbars
-├── components.css           # shell e estilos compartilhados ainda não extraídos
-└── product-constraints.css  # pisos transversais de interação e responsividade
-```
+The renderer is considered untrusted.
 
-Estilos específicos permanecem junto ao domínio, como `domains/agent/agent.css`, `domains/settings/settings.css` e `domains/suggestions/suggestions.css`. A ordem desses arquivos é declarada centralmente em `App.tsx`, evitando que o carregamento lazy altere a cascata. `src/index.css` é apenas o ponto de entrada da fundação global; `styles/product-constraints.css` concentra pisos transversais de interação, tipografia e responsividade. Novos valores globais devem ser tokens e novas animações devem usar o módulo central de motion.
+It never:
 
-## Processo principal
+- accesses filesystem directly;
+- executes commands;
+- stores secrets;
+- communicates with providers.
 
-- `electron/codex`: transporte JSON-RPC e ciclo de vida do App Server.
-- `electron/database`: persistência SQLite e migrações.
-- `electron/ipc`: validação e implementação das operações expostas.
-- `electron/security`: limites de workspace e política de comandos.
-- `electron/logging`: logs estruturados e rotação.
-- `electron/preload.ts`: adaptação mínima entre contratos e `ipcRenderer`.
+All privileged operations pass through IPC contracts.
 
-O renderer nunca recebe credenciais e não executa comandos diretamente.
-Novas janelas são sempre negadas e tentativas de navegação externa iniciadas pelo renderer, inclusive por subframes, são bloqueadas no processo principal.
+---
 
-## Evolução
+# IPC
 
-Ao adicionar trabalho aprovado em versões futuras:
+IPC is the only communication channel between renderer and main.
 
-1. Escolher o domínio responsável antes de criar o componente.
-2. Manter IPC em canais nomeados e argumentos validados.
-3. Reutilizar contratos e tipos canônicos de `shared/`.
-4. Evitar estado duplicado entre `App.tsx`, componente e store.
-5. Adicionar tokens antes de repetir valores visuais.
-6. Validar typecheck, lint, testes e build após cada movimentação estrutural.
+Every IPC endpoint:
+
+- has a typed contract;
+- validates input;
+- validates output;
+- exposes only minimum required capabilities.
+
+---
+
+# Secret Management
+
+Secrets never belong to the renderer.
+
+Examples:
+
+- API keys
+- access tokens
+- provider credentials
+
+Credentials are stored through platform-specific secure storage whenever available.
+
+Renderer receives only configuration state.
+
+Never raw secrets.
+
+---
+
+# Telemetry
+
+Execution telemetry belongs to the workspace.
+
+Examples:
+
+- provider
+- model
+- latency
+- tokens
+- duration
+- estimated cost
+
+Telemetry never contains sensitive credentials.
+
+---
+
+# Design Philosophy
+
+Nocturne Codex intentionally separates:
+
+- knowledge
+- context
+- execution
+- providers
+- presentation
+
+Each domain evolves independently.
+
+This minimizes coupling and maximizes maintainability.
+
+---
+
+# Extensibility
+
+Future providers must integrate through adapters.
+
+The application core should never require modifications when supporting a new provider.
+
+Supported expansion points include:
+
+- providers
+- capabilities
+- model registry
+- execution policies
+- telemetry
+
+The workspace remains unchanged.
+
+---
+
+# Documentation
+
+The architecture is further documented in:
+
+- architecture/ai-provider-system.md
+- architecture/second-brain.md
+- architecture/awareness.md
+- architecture/execution-pipeline.md
+
+Provider-specific documentation lives under:
+
+docs/providers/
+
+Each provider describes only its own implementation.
+
+Architecture documents describe the platform itself.
+
+---
+
+# Summary
+
+The architecture of Nocturne Codex follows one fundamental rule:
+
+> **The workspace is permanent. AI providers are replaceable.**
+
+Everything else is a consequence of this decision.
