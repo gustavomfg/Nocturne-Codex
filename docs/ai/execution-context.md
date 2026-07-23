@@ -26,6 +26,11 @@ Approved memory remains potentially outdated data. It cannot override the curren
 
 Context is bounded by source count, characters and estimated tokens. Provider context windows influence compilation, not retrieval authority.
 
+The initial normalized task accepts at most 100 classified sources, 100,000
+characters per source and 500,000 characters across all selected context.
+These are construction ceilings; Awareness should normally produce a much
+smaller package.
+
 ## Transparency
 
 The user should eventually be able to inspect selected sources, exclusions, truncation and estimated context size.

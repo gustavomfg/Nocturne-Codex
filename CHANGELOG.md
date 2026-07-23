@@ -9,6 +9,8 @@
 - atualização de catálogo por Provider é atômica e preserva modelos pertencentes aos demais Providers;
 - descoberta via adapter preserva o último catálogo válido e impede respostas concorrentes obsoletas de sobrescrever resultados mais recentes;
 - eventos iniciais de execução possuem schemas estritos, identificador estável, sequência monotônica, limites explícitos e um único estado terminal;
+- Task Builder cria solicitações provider-independent com contexto classificado, seleção explícita ou por role, limites agregados e Review Mode obrigatoriamente somente leitura;
+- ferramentas permanecem bloqueadas no contrato inicial até existir validação, política e autorização normalizadas para Tool Calling;
 - geração de imagens permanece fora do conjunto inicial de capacidades e será tratada em uma etapa futura.
 
 ### Estabilidade e compatibilidade
