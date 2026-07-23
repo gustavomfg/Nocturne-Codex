@@ -2,6 +2,8 @@ import { z } from 'zod'
 import { agentModes, suggestionStatuses } from '../suggestions'
 import { PERSISTENCE_LIMITS } from '../constants'
 import { brainMemoryKinds, brainMemoryScopes, brainMemoryStatuses, isSafeBrainMemoryContent } from '../brainMemory'
+import { PROVIDER_CONFIGURATION_LIMITS } from '../ai/providerConfiguration'
+import { providerConfigurationInputSchema } from '../ai/providerConfigurationSchemas'
 
 export const idSchema = z.string().uuid()
 export const pageSchema = z.object({ offset: z.number().int().min(0).max(1_000_000), limit: z.number().int().min(1).max(200) }).strict()
@@ -25,3 +27,18 @@ export const brainMemoryUpdateSchema = z.object({
 }).strict().refine((value) => value.kind !== undefined || value.scope !== undefined || value.content !== undefined || value.confidence !== undefined || value.status !== undefined, 'Informe ao menos uma alteração.')
 export const brainMemoryDeleteSchema = z.object({ conversationId: idSchema, memoryId: idSchema }).strict()
 export const brainMemoryExtractSchema = z.object({ conversationId: idSchema, content: z.string().max(PERSISTENCE_LIMITS.assistantCharacters) }).strict()
+const providerCredentialSchema = z.string().min(1).max(PROVIDER_CONFIGURATION_LIMITS.credentialCharacters)
+export const providerConfigurationCreateSchema = z.object({
+  configuration: providerConfigurationInputSchema,
+  credential: providerCredentialSchema.optional(),
+}).strict()
+export const providerConfigurationUpdateSchema = z.object({
+  id: idSchema,
+  configuration: providerConfigurationInputSchema,
+  credential: providerCredentialSchema.optional(),
+  clearCredential: z.boolean().optional(),
+}).strict().refine(
+  (value) => value.credential === undefined || !value.clearCredential,
+  'A credencial não pode ser definida e removida na mesma operação.',
+)
+export const providerConfigurationIdSchema = z.object({ id: idSchema }).strict()

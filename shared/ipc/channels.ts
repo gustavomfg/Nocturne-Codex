@@ -10,6 +10,7 @@ export const IPC_CHANNELS = {
   data: { export: 'data:export', import: 'data:import' },
   diagnostics: { openLogs: 'diagnostics:openLogs', copy: 'diagnostics:copy', rendererError: 'diagnostics:rendererError', rendererStats: 'diagnostics:rendererStats' },
   settings: { get: 'settings:get', check: 'settings:check', set: 'settings:set' },
+  providers: { list: 'providers:list', create: 'providers:create', update: 'providers:update', remove: 'providers:remove', testConnection: 'providers:testConnection' },
   git: { status: 'git:status', commit: 'git:commit' },
   documents: { saveMarkdown: 'documents:saveMarkdown', export: 'documents:export' },
   clipboard: { readText: 'clipboard:readText', writeText: 'clipboard:writeText' },

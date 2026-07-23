@@ -40,6 +40,11 @@
   exigem health check e credencial válida antes da persistência;
 - rotação cria nova referência opaca, troca o adapter de forma atômica e limpa
   ciphertext antigo ou órfão sem capturar plaintext no adapter persistente;
+- main process inicializa Registry, Model Registry, cofre e configurações antes
+  da janela, preservando o Workspace se o subsistema iniciar degradado;
+- IPC e preload tipados expõem somente operações nomeadas de configuração,
+  validam novamente os payloads e devolvem resumos e erros sanitizados sem
+  credenciais ou referências do cofre;
 - geração de imagens permanece fora do conjunto inicial de capacidades e será tratada em uma etapa futura.
 
 ### Estabilidade e compatibilidade
@@ -79,7 +84,7 @@
 
 ### Qualidade
 
-- 181 testes unitários e de integração;
+- 184 testes unitários e de integração;
 - 28 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints, no Segundo Cérebro e na atualização da Saúde do Projeto;
 - typecheck, ESLint, design system, build de produção, pacote Linux real e audit npm sem vulnerabilidades aprovados;
 - decisões de sugestão precisam persistir antes do turno Build, e o status aplicado exige alterações observadas no escopo aprovado;

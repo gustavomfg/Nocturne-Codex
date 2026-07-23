@@ -7,6 +7,12 @@ import { LocalDatabase } from './database/Database'
 import { registerIpc } from './ipc/registerIpc'
 import { Logger } from './logging/Logger'
 import { startUpdateService } from './updates/UpdateService'
+import { ModelRegistry } from './ai/ModelRegistry'
+import { ProviderRegistry } from './ai/ProviderRegistry'
+import { ProviderConfigurationService } from './ai/ProviderConfigurationService'
+import { OpenAICompatibleAdapterFactory } from './ai/providers/openai-compatible/factory'
+import { ProviderCredentialVault } from './security/ProviderCredentialVault'
+import { ElectronCredentialEncryption } from './security/ElectronCredentialEncryption'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const softwareRendering = process.env.NOCTURNE_DISABLE_GPU === '1' || process.argv.includes('--disable-gpu')
@@ -26,12 +32,14 @@ const codex = new CodexClient()
 let logger: Logger | null = null
 let disposeIpc: (() => void) | null = null
 let disposeUpdates: (() => void) | null = null
+let providerConfigurations: ProviderConfigurationService | null = null
+let providerRegistry: ProviderRegistry | null = null
 
 process.on('uncaughtException', (error) => { logger?.error('app', 'uncaughtException no processo principal', error); console.error(error) })
 process.on('unhandledRejection', (reason) => { logger?.error('app', 'unhandledRejection no processo principal', reason); console.error(reason) })
 
 function createWindow() {
-  if (!database || !logger) throw new Error('Serviços do Nocturne não foram inicializados.')
+  if (!database || !logger || !providerConfigurations) throw new Error('Serviços do Nocturne não foram inicializados.')
   const rendererUrl = VITE_DEV_SERVER_URL || new URL(`file://${path.join(RENDERER_DIST, 'index.html')}`).toString()
   const currentWindow = new BrowserWindow({
     width: 1440, height: 920, minWidth: 720, minHeight: 600,
@@ -64,7 +72,13 @@ function createWindow() {
   })
 
   logger.info('app', 'Janela principal iniciada', { packaged: app.isPackaged, renderer: softwareRendering ? 'software' : 'hardware' })
-  disposeIpc = registerIpc(currentWindow, database, codex, logger)
+  disposeIpc = registerIpc(
+    currentWindow,
+    database,
+    codex,
+    logger,
+    providerConfigurations,
+  )
   if (app.isPackaged && process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT) {
     const output = path.resolve(process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT)
     currentWindow.webContents.once('did-finish-load', () => {
@@ -99,10 +113,32 @@ function createWindow() {
   else void currentWindow.loadFile(path.join(RENDERER_DIST, 'index.html'))
 }
 
-function initializeServices() {
-  if (database || logger) return
-  database = new LocalDatabase(app.getPath('userData'))
+async function initializeServices() {
+  if (database || logger || providerConfigurations) return
+  const userDataPath = app.getPath('userData')
+  database = new LocalDatabase(userDataPath)
   logger = new Logger(app.getPath('logs'), database.getSettings().diagnosticMode === 'true')
+  const models = new ModelRegistry()
+  providerRegistry = new ProviderRegistry()
+  providerConfigurations = new ProviderConfigurationService(
+    database.providerConfigurations,
+    new ProviderCredentialVault(
+      userDataPath,
+      new ElectronCredentialEncryption(),
+    ),
+    providerRegistry,
+    new OpenAICompatibleAdapterFactory(models),
+  )
+  try {
+    const initialized = await providerConfigurations.initialize()
+    logger.info('persistence', 'Configurações de Providers inicializadas', initialized)
+  } catch (error) {
+    logger.error(
+      'persistence',
+      'O subsistema de Providers iniciou em estado degradado',
+      error,
+    )
+  }
 }
 
 async function runPackageSmoke(output: string) {
@@ -152,12 +188,16 @@ app.on('before-quit', () => {
   disposeUpdates?.(); disposeUpdates = null
   disposeIpc?.(); disposeIpc = null
   codex.stop()
+  void providerRegistry?.dispose()
+  providerRegistry = null
+  providerConfigurations = null
   database?.close(); database = null
 })
 app.on('child-process-gone', (_event, details) => logger?.error('app', 'Processo filho do Electron encerrado', details))
 if (!hasSingleInstanceLock) app.quit()
 else void app.whenReady().then(() => {
-  initializeServices()
+  return initializeServices()
+}).then(() => {
   createWindow()
   if (logger) disposeUpdates = startUpdateService(logger, () => win)
 })

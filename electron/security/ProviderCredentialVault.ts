@@ -2,10 +2,10 @@ import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
+import { PROVIDER_CONFIGURATION_LIMITS } from '../../shared/ai/providerConfiguration'
 
 const STORE_VERSION = 1
 const CREDENTIAL_FILE = 'provider-credentials.json'
-const SECRET_CHARACTERS = 64_000
 const ENCRYPTED_CHARACTERS = 256_000
 
 const referenceSchema = z.string().uuid()
@@ -230,7 +230,7 @@ function validateReference(value: string) {
 }
 
 function validateSecret(value: string) {
-  if (typeof value !== 'string' || value.length === 0 || value.length > SECRET_CHARACTERS) {
+  if (typeof value !== 'string' || value.length === 0 || value.length > PROVIDER_CONFIGURATION_LIMITS.credentialCharacters) {
     throw new ProviderCredentialVaultError(
       'invalid-secret',
       'A credencial possui tamanho inválido.',

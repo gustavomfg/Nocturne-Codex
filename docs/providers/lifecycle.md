@@ -56,6 +56,12 @@ Plaintext used by validation exists only in the temporary main-process call. A
 persistent adapter resolves the current opaque reference on demand and never
 captures the submitted secret.
 
+At application startup, the main process constructs the Registry, Model
+Registry, credential vault and configuration service before registering IPC.
+An initialization failure is logged as a degraded Provider subsystem rather
+than preventing access to the local Workspace; subsequent operations still
+fail through sanitized configuration errors.
+
 ## Validation
 
 Validation checks:

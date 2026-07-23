@@ -5,6 +5,11 @@ import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { NocturneApi } from '../shared/ipc/contracts'
 import { DATABASE_SCHEMA_VERSION } from '../shared/constants'
+import type {
+  ProviderConfigurationInput,
+  ProviderConfigurationSummary,
+} from '../shared/ai/providerConfiguration'
+import { ProviderConfigurationServiceError } from '../electron/ai/ProviderConfigurationService'
 
 type IpcHandler = (event: unknown, ...args: unknown[]) => unknown
 
@@ -85,6 +90,68 @@ class SimulatedCodex extends EventEmitter {
   async readConfig() { this.configReads += 1; return {} }
 }
 
+class SimulatedProviderConfigurations {
+  private configurations = new Map<string, ProviderConfigurationSummary>()
+  readonly submittedCredentials: string[] = []
+
+  list() {
+    return [...this.configurations.values()]
+  }
+
+  async create(
+    input: ProviderConfigurationInput,
+    change: { credential?: string } = {},
+  ) {
+    if (input.displayName === 'Falha segura') {
+      throw new ProviderConfigurationServiceError(
+        'validation-failed',
+        'O Provider não passou na validação de conexão.',
+        { status: 'authentication-required', message: 'Credencial recusada.' },
+      )
+    }
+    if (change.credential) this.submittedCredentials.push(change.credential)
+    const timestamp = '2026-07-23T12:00:00.000Z'
+    const configuration = {
+      id: '38fcf76f-15e7-47e6-a68f-c8129acc9d28',
+      ...input,
+      credentialConfigured: Boolean(change.credential),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }
+    this.configurations.set(configuration.id, configuration)
+    return configuration
+  }
+
+  async update(
+    id: string,
+    input: ProviderConfigurationInput,
+    change: { credential?: string; clearCredential?: boolean } = {},
+  ) {
+    const current = this.configurations.get(id)
+    if (!current) throw new Error('missing')
+    if (change.credential) this.submittedCredentials.push(change.credential)
+    const configuration = {
+      ...current,
+      ...input,
+      credentialConfigured: change.clearCredential
+        ? false
+        : Boolean(change.credential) || current.credentialConfigured,
+      updatedAt: '2026-07-23T12:01:00.000Z',
+    }
+    this.configurations.set(id, configuration)
+    return configuration
+  }
+
+  async remove(id: string) {
+    return this.configurations.delete(id)
+  }
+
+  async testConnection(id: string) {
+    if (!this.configurations.has(id)) throw new Error('missing')
+    return { status: 'available' as const }
+  }
+}
+
 describe.sequential('fronteiras Electron E2E', () => {
   let root: string
   let workspace: string
@@ -93,6 +160,7 @@ describe.sequential('fronteiras Electron E2E', () => {
   let api: NocturneApi
   let database: import('../electron/database/Database').LocalDatabase
   let codex: SimulatedCodex
+  let providers: SimulatedProviderConfigurations
   let disposeIpc: (() => void) | null = null
   let registerIpc: typeof import('../electron/ipc/registerIpc').registerIpc
   let logger: import('../electron/logging/Logger').Logger
@@ -118,6 +186,7 @@ describe.sequential('fronteiras Electron E2E', () => {
     fs.mkdirSync(dataDirectory)
     database = new LocalDatabase(dataDirectory)
     codex = new SimulatedCodex()
+    providers = new SimulatedProviderConfigurations()
     registerIpc = ipcModule.registerIpc
     const sent = (channel: string, payload: unknown) => {
       for (const listener of electron.rendererListeners.get(channel) ?? []) listener({}, payload)
@@ -125,7 +194,13 @@ describe.sequential('fronteiras Electron E2E', () => {
     electron.mainWebContents.send = sent
     win = { isDestroyed: () => false, webContents: electron.mainWebContents }
     logger = new loggerModule.Logger(path.join(root, 'test-output'))
-    disposeIpc = registerIpc(win as never, database, codex as never, logger)
+    disposeIpc = registerIpc(
+      win as never,
+      database,
+      codex as never,
+      logger,
+      providers,
+    )
     await import('../electron/preload')
     if (!electron.exposed) throw new Error('O preload não expôs window.nocturne.')
     api = electron.exposed
@@ -138,7 +213,7 @@ describe.sequential('fronteiras Electron E2E', () => {
   })
 
   it('expõe somente a API nomeada e cruza preload, IPC e SQLite', async () => {
-    expect(Object.keys(api).sort()).toEqual(['artifacts', 'brain', 'clipboard', 'codex', 'conversations', 'data', 'diagnostics', 'documents', 'files', 'git', 'memory', 'settings', 'suggestions', 'workspace'])
+    expect(Object.keys(api).sort()).toEqual(['artifacts', 'brain', 'clipboard', 'codex', 'conversations', 'data', 'diagnostics', 'documents', 'files', 'git', 'memory', 'providers', 'settings', 'suggestions', 'workspace'])
     await api.clipboard.writeText('commit sugerido')
     await expect(api.clipboard.readText()).resolves.toBe('commit sugerido')
     const configReads = codex.configReads
@@ -176,6 +251,73 @@ describe.sequential('fronteiras Electron E2E', () => {
     const artifact = database.addArtifact(conversation.id, workspace, 'markdown', 'Temporário', null, '# conteúdo')
     await expect(api.artifacts.delete(conversation.id, artifact.id)).resolves.toBeDefined()
     expect(await api.artifacts.list(conversation.id)).toEqual([])
+  })
+
+  it('submete credenciais por uma API de Providers nomeada sem devolvê-las', async () => {
+    const configuration: ProviderConfigurationInput = {
+      providerType: 'openai-compatible',
+      displayName: 'Provider remoto',
+      source: 'remote',
+      baseUrl: 'https://provider.example/v1',
+      enabled: true,
+      requiresAuthentication: true,
+      timeoutMs: 30_000,
+    }
+    const created = await api.providers.create(configuration, 'renderer-secret')
+    expect(created).toMatchObject({
+      displayName: 'Provider remoto',
+      credentialConfigured: true,
+    })
+    expect(created).not.toHaveProperty('credential')
+    expect(providers.submittedCredentials).toEqual(['renderer-secret'])
+    await expect(api.providers.list()).resolves.toEqual([created])
+    await expect(api.providers.testConnection(created.id)).resolves.toEqual({
+      status: 'available',
+    })
+
+    const updated = await api.providers.update(
+      created.id,
+      { ...configuration, enabled: false },
+      { clearCredential: true },
+    )
+    expect(updated.credentialConfigured).toBe(false)
+    await expect(api.providers.remove(created.id)).resolves.toBe(true)
+  })
+
+  it('normaliza payload inválido de Provider antes de chamar o serviço', async () => {
+    await expect(api.providers.create({
+      providerType: 'openai-compatible',
+      displayName: 'Inválido',
+      source: 'remote',
+      baseUrl: 'https://provider.example/v1',
+      enabled: false,
+      requiresAuthentication: false,
+      timeoutMs: 30_000,
+      unexpected: true,
+    } as ProviderConfigurationInput)).rejects.toMatchObject({
+      code: 'invalid-configuration',
+      message: 'A requisição de configuração do Provider é inválida.',
+    })
+    expect(providers.list()).toEqual([])
+  })
+
+  it('preserva somente o erro normalizado do domínio Provider', async () => {
+    await expect(api.providers.create({
+      providerType: 'openai-compatible',
+      displayName: 'Falha segura',
+      source: 'remote',
+      baseUrl: 'https://provider.example/v1',
+      enabled: true,
+      requiresAuthentication: true,
+      timeoutMs: 30_000,
+    }, 'secret-not-returned')).rejects.toMatchObject({
+      code: 'validation-failed',
+      message: 'O Provider não passou na validação de conexão.',
+      availability: {
+        status: 'authentication-required',
+        message: 'Credencial recusada.',
+      },
+    })
   })
 
   it('rejeita chamadas IPC de outro WebContents ou frame', async () => {
@@ -216,7 +358,13 @@ describe.sequential('fronteiras Electron E2E', () => {
     expect(electron.handlers.size).toBe(0)
     expect(codex.eventNames()).toEqual([])
 
-    disposeIpc = registerIpc(win as never, database, codex as never, logger)
+    disposeIpc = registerIpc(
+      win as never,
+      database,
+      codex as never,
+      logger,
+      providers,
+    )
     expect(electron.handlers.size).toBe(handlerCount)
     expect(codex.eventNames().reduce((total, event) => total + codex.listenerCount(event), 0)).toBe(listenerCount)
   })

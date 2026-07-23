@@ -33,7 +33,14 @@ Return result or safe error
 
 The renderer sees provider summaries, model descriptors, execution identifiers and normalized events. It never sees native OpenAI, Codex, Ollama or other provider payloads.
 
-Secrets may be submitted once but are never returned.
+Configuration operations are exposed as named list, create, update, remove and
+connection-test methods. Their inputs are validated again in the main process.
+Results cross the boundary through a discriminated envelope so the preload can
+reconstruct stable, sanitized domain errors without exposing native failures.
+
+Secrets may be submitted once but are never returned. The preload does not
+retain them, and configuration responses contain only
+`credentialConfigured`.
 
 ## Streaming
 

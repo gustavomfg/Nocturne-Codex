@@ -1,5 +1,21 @@
 import type { AgentMode, Artifact, Attachment, CodexDiagnostics, CodexEvent, CodexSettings, CodexStatus, CollectionPage, Conversation, FilePreview, GitInfo, Message, MessagePage, Suggestion, SuggestionStatus, Workspace, WorkspaceMemory } from '../types'
 import type { BrainMemory, BrainMemoryKind, BrainMemoryScope, BrainMemoryStatus, UpdateBrainMemoryInput } from '../brainMemory'
+import type { ProviderAvailability } from '../ai/provider'
+import type {
+  ProviderConfigurationErrorCode,
+  ProviderConfigurationInput,
+  ProviderConfigurationSummary,
+} from '../ai/providerConfiguration'
+
+export interface ProviderConfigurationIpcError {
+  code: ProviderConfigurationErrorCode
+  message: string
+  availability?: ProviderAvailability
+}
+
+export type ProviderConfigurationIpcResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: ProviderConfigurationIpcError }
 
 export interface NocturneApi {
   workspace: { select(expectedWorkspace?: string): Promise<string | null>; validate(value: string): Promise<string | null>; list(): Promise<Workspace[]>; remove(value: string): Promise<void>; favorite(value: string, favorite: boolean): Promise<void>; openTool(value: string, tool: 'editor' | 'terminal'): Promise<void> }
@@ -19,6 +35,13 @@ export interface NocturneApi {
   data: { export(): Promise<string | null>; import(): Promise<boolean> }
   diagnostics: { openLogs(): Promise<string>; copy(): Promise<string>; rendererError(value: { type: 'error' | 'unhandledRejection'; message: string; stack?: string }): Promise<void>; rendererStats(value: { responseSize: number; activities: number; messages: number }): Promise<void> }
   settings: { get(): Promise<CodexSettings>; check(): Promise<CodexSettings>; set(settings: Pick<CodexSettings, 'model' | 'sandbox' | 'approvalPolicy' | 'codexPath' | 'diagnosticMode' | 'theme' | 'defaultAgentMode'>): Promise<CodexSettings> }
+  providers: {
+    list(): Promise<ProviderConfigurationSummary[]>
+    create(configuration: ProviderConfigurationInput, credential?: string): Promise<ProviderConfigurationSummary>
+    update(id: string, configuration: ProviderConfigurationInput, options?: { credential?: string; clearCredential?: boolean }): Promise<ProviderConfigurationSummary>
+    remove(id: string): Promise<boolean>
+    testConnection(id: string): Promise<ProviderAvailability>
+  }
   git: { status(conversationId: string): Promise<GitInfo>; commit(conversationId: string, message: string, files: string[]): Promise<{ output: string }> }
   documents: { saveMarkdown(conversationId: string, content: string, name?: string): Promise<string | null>; export(conversationId: string, content: string, format: 'docx' | 'pdf' | 'html'): Promise<string | null> }
   clipboard: { readText(): Promise<string>; writeText(value: string): Promise<void> }

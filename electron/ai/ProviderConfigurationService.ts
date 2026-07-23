@@ -1,4 +1,5 @@
 import type {
+  ProviderConfigurationErrorCode,
   ProviderConfigurationInput,
   ProviderConfigurationSummary,
 } from '../../shared/ai/providerConfiguration'
@@ -41,16 +42,9 @@ export interface ProviderCredentialStore {
   prune(allowedReferences: readonly string[]): Promise<number>
 }
 
-export type ProviderConfigurationServiceErrorCode =
-  | 'invalid-configuration'
-  | 'credential-required'
-  | 'validation-failed'
-  | 'configuration-not-found'
-  | 'operation-failed'
-
 export class ProviderConfigurationServiceError extends Error {
   constructor(
-    readonly code: ProviderConfigurationServiceErrorCode,
+    readonly code: ProviderConfigurationErrorCode,
     message: string,
     readonly availability?: ProviderAvailability,
   ) {

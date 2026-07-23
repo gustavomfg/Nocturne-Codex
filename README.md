@@ -251,14 +251,16 @@ Current highlights:
 
 # Roadmap
 
-The next architectural milestone introduces the Provider System.
+The current architectural milestone is implementing the Provider System.
 
-Instead of integrating a single AI service, Nocturne Codex will support multiple providers through a unified execution layer while preserving the same workspace experience.
+Its normalized registries, execution contracts, secure configuration
+persistence and typed IPC foundation are in place. The next slices complete
+the user-facing configuration and workspace model-selection experience while
+preserving the same workspace behavior.
 
 Future work includes:
 
 - Bring Your Own AI
-- Provider abstraction layer
 - AI execution pipeline
 - Model routing
 - Local model support

@@ -514,7 +514,11 @@ Sanitized configuration summary
 
 After storage, the renderer receives only masked state.
 
-The full secret must never be returned.
+The preload accepts the transient secret only for the named create or update
+operation and does not retain it. IPC responses use a discriminated result
+envelope; the preload exposes only a stable error code, sanitized message and,
+when applicable, normalized availability. The full secret, vault reference and
+native failure must never be returned.
 
 ## Custom Endpoints
 

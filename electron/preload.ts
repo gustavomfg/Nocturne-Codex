@@ -1,13 +1,41 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC_CHANNELS as channels } from '../shared/ipc/channels'
 import type { CodexEvent, CodexStatus } from '../shared/types'
-import type { NocturneApi } from '../shared/ipc/contracts'
+import type {
+  NocturneApi,
+  ProviderConfigurationIpcResult,
+} from '../shared/ipc/contracts'
+import type { ProviderAvailability } from '../shared/ai/provider'
+import type { ProviderConfigurationErrorCode } from '../shared/ai/providerConfiguration'
 import { COLLECTION_PAGE_LIMITS } from '../shared/constants'
 
 const on = <T>(channel: string, listener: (payload: T) => void) => {
   const handler = (_event: Electron.IpcRendererEvent, payload: T) => listener(payload)
   ipcRenderer.on(channel, handler)
   return () => ipcRenderer.removeListener(channel, handler)
+}
+
+class ProviderConfigurationClientError extends Error {
+  constructor(
+    readonly code: ProviderConfigurationErrorCode,
+    message: string,
+    readonly availability?: ProviderAvailability,
+  ) {
+    super(message)
+    this.name = 'ProviderConfigurationClientError'
+  }
+}
+
+async function providerResult<T>(
+  result: Promise<ProviderConfigurationIpcResult<T>>,
+): Promise<T> {
+  const response = await result
+  if (response.ok) return response.value
+  throw new ProviderConfigurationClientError(
+    response.error.code,
+    response.error.message,
+    response.error.availability,
+  )
 }
 
 export const nocturneApi: NocturneApi = {
@@ -57,6 +85,25 @@ export const nocturneApi: NocturneApi = {
   data: { export: () => ipcRenderer.invoke(channels.data.export), import: () => ipcRenderer.invoke(channels.data.import) },
   diagnostics: { openLogs: () => ipcRenderer.invoke(channels.diagnostics.openLogs), copy: () => ipcRenderer.invoke(channels.diagnostics.copy), rendererError: (value: unknown) => ipcRenderer.invoke(channels.diagnostics.rendererError, value), rendererStats: (value: unknown) => ipcRenderer.invoke(channels.diagnostics.rendererStats, value) },
   settings: { get: () => ipcRenderer.invoke(channels.settings.get), check: () => ipcRenderer.invoke(channels.settings.check), set: (settings: unknown) => ipcRenderer.invoke(channels.settings.set, settings) },
+  providers: {
+    list: () => providerResult(ipcRenderer.invoke(channels.providers.list)),
+    create: (configuration, credential) => providerResult(ipcRenderer.invoke(
+      channels.providers.create,
+      { configuration, credential },
+    )),
+    update: (id, configuration, options = {}) => providerResult(ipcRenderer.invoke(
+      channels.providers.update,
+      { id, configuration, ...options },
+    )),
+    remove: (id) => providerResult(ipcRenderer.invoke(
+      channels.providers.remove,
+      { id },
+    )),
+    testConnection: (id) => providerResult(ipcRenderer.invoke(
+      channels.providers.testConnection,
+      { id },
+    )),
+  },
   git: { status: (conversationId: string) => ipcRenderer.invoke(channels.git.status, conversationId), commit: (conversationId: string, message: string, files: string[]) => ipcRenderer.invoke(channels.git.commit, { conversationId, message, files }) },
   documents: {
     saveMarkdown: (conversationId: string, content: string, name?: string) => ipcRenderer.invoke(channels.documents.saveMarkdown, { conversationId, content, name }),
