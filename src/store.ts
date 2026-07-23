@@ -1,12 +1,12 @@
 import { create } from 'zustand'
 import { RENDERER_LIMITS } from '../shared/constants'
-import type { Activity, Approval, Artifact, ChangedFile, CodexStatus, Conversation, Message, PlanStep, Suggestion } from './types'
+import type { Activity, Approval, Artifact, ChangedFile, Conversation, Message, PlanStep, Suggestion } from './types'
 
 interface AppState {
   conversations: Conversation[]; activeId: string | null; messages: Message[]
-  status: CodexStatus; finalizing: boolean; streaming: string; diff: string; activities: Activity[]; approvals: Approval[]; files: ChangedFile[]; artifacts: Artifact[]; suggestions: Suggestion[]; plan: PlanStep[]; planExplanation: string; error: string | null
+  status: string; finalizing: boolean; streaming: string; diff: string; activities: Activity[]; approvals: Approval[]; files: ChangedFile[]; artifacts: Artifact[]; suggestions: Suggestion[]; plan: PlanStep[]; planExplanation: string; error: string | null
   setConversations(value: Conversation[]): void; setActive(id: string | null): void; setMessages(value: Message[]): void
-  addMessage(value: Message): void; setStatus(value: CodexStatus): void; setFinalizing(value: boolean): void; appendStream(value: string): void; clearRun(): void
+  addMessage(value: Message): void; setStatus(value: string): void; setFinalizing(value: boolean): void; appendStream(value: string): void; clearRun(): void
   setDiff(value: string): void; upsertActivity(value: Activity): void; addApproval(value: Approval): void
   resolveApproval(key: string, status: 'accepted' | 'declined'): void; setError(value: string | null): void
   setFiles(value: ChangedFile[]): void; addFiles(value: ChangedFile[]): void

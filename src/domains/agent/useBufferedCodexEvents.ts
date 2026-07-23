@@ -4,7 +4,7 @@ import { useAppStore } from '../../store'
 import { describeChanges, humanizeCommand, parseChanges } from '../../shared/format'
 import { UI_TIMING } from '../../../shared/constants'
 
-export function useBufferedCodexEvents() {
+export function useBufferedAgentEvents() {
   const streamBufferRef = useRef('')
   const streamTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const activityBuffersRef = useRef(new Map<string, { type: Activity['type']; label: string; detail: string }>())

@@ -37,7 +37,7 @@ export function useTurnLifecycle({ flushStream, activeTurnRef, refreshGit }: { f
         if (useAppStore.getState().activeId === context.conversationId) store.setSuggestions((await window.nocturne.suggestions.page(context.conversationId)).items)
       }
       const activitySnapshot = current.activities.slice(-100).map((activity) => ({ ...activity, detail: activity.detail?.slice(-4_000) }))
-      const saved = await window.nocturne.codex.saveAssistant(context.conversationId, assistantContent, { diff: current.diff.slice(-500_000), activities: activitySnapshot, files: current.files.slice(-300), plan: current.plan.slice(-100), planExplanation: current.planExplanation.slice(-20_000) })
+      const saved = await window.nocturne.ai.saveAssistant(context.conversationId, assistantContent, { diff: current.diff.slice(-500_000), activities: activitySnapshot, files: current.files.slice(-300), plan: current.plan.slice(-100), planExplanation: current.planExplanation.slice(-20_000) })
       if (useAppStore.getState().activeId === context.conversationId) store.addMessage(saved)
       useAppStore.setState({ streaming: '' })
       if (useAppStore.getState().activeId === context.conversationId) store.setArtifacts((await window.nocturne.artifacts.page(context.conversationId)).items)

@@ -1,7 +1,7 @@
-import type { Activity, CodexEvent, PlanStep } from '../../types'
+import type { Activity, AgentEvent, PlanStep } from '../../types'
 import { normalizePlanStatus } from '../../shared/format'
 
-interface CodexEventHandlers {
+interface AgentEventHandlers {
   stream(delta: string): void
   activityDetail(id: string, type: Activity['type'], label: string, delta: string): void
   diff(value: string): void
@@ -16,7 +16,7 @@ interface CodexEventHandlers {
   warning(message: string): void
 }
 
-export function routeCodexEvent(event: CodexEvent, handlers: CodexEventHandlers) {
+export function routeAgentEvent(event: AgentEvent, handlers: AgentEventHandlers) {
   const p = event.params
   if (event.method === 'item/agentMessage/delta') handlers.stream(String(p.delta ?? ''))
   if (event.method === 'item/reasoning/summaryTextDelta') handlers.activityDetail(String(p.itemId), 'reasoning', 'Analisando o projeto', String(p.delta ?? ''))
@@ -32,8 +32,8 @@ export function routeCodexEvent(event: CodexEvent, handlers: CodexEventHandlers)
   if (event.method === 'item/completed') handlers.itemCompleted(p.item as Record<string, unknown>)
   if (event.method === 'fs/changed') handlers.fsChanged(Array.isArray(p.changedPaths) ? p.changedPaths.map(String) : [])
   if (event.method === 'item/commandExecution/requestApproval') handlers.approval({ key: String(p.approvalKey), kind: 'command', title: 'Executar comando', detail: String(p.command ?? p.reason ?? '') })
-  if (event.method === 'item/fileChange/requestApproval') handlers.approval({ key: String(p.approvalKey), kind: 'file', title: 'Aplicar alterações', detail: 'O Codex solicitou permissão para modificar arquivos.' })
+  if (event.method === 'item/fileChange/requestApproval') handlers.approval({ key: String(p.approvalKey), kind: 'file', title: 'Aplicar alterações', detail: 'O agente solicitou permissão para modificar arquivos.' })
   if (event.method === 'turn/completed') handlers.turnCompleted(p)
-  if (event.method === 'error') handlers.error(String((p.error as Record<string, unknown>)?.message ?? p.message ?? 'Erro no Codex'))
+  if (event.method === 'error') handlers.error(String((p.error as Record<string, unknown>)?.message ?? p.message ?? 'Erro na execução'))
   if (event.method === 'warning') handlers.warning(String(p.message ?? p))
 }

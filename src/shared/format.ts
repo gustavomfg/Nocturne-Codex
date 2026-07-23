@@ -11,7 +11,6 @@ export function describeChanges(value: unknown) { if (!Array.isArray(value)) ret
 export function parseChanges(value: unknown): ChangedFile[] { if (!Array.isArray(value)) return []; return value.map((item) => { const change = item as Record<string, unknown>; const rawKind = String(change.kind ?? 'modified').toLowerCase(); return { path: String(change.path ?? ''), kind: (rawKind.includes('add') ? 'created' : rawKind.includes('delete') ? 'deleted' : 'modified') as ChangedFile['kind'], status: String(change.status ?? 'completed') } }).filter((item) => item.path) }
 export function normalizePlanStatus(value: unknown): PlanStep['status'] { const status = String(value).toLowerCase(); return status.includes('complete') ? 'completed' : status.includes('progress') ? 'inProgress' : 'pending' }
 export function isBusy(status: string) { return ['planning', 'running', 'waiting-approval', 'cancelling'].includes(status) }
-export function statusText(status: string) { return ({ disconnected: 'Codex desconectado', starting: 'Conectando', ready: 'Codex pronto', planning: 'Planejando', running: 'Executando', 'waiting-approval': 'Aguardando aprovação', cancelling: 'Cancelando', completed: 'Concluído', failed: 'Falha no Codex' } as Record<string, string>)[status] ?? status }
 
 export function humanizeCommand(command: string) {
   const lower = command.toLowerCase()

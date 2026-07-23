@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import type { CodexSettings, CodexStatus, FilePreview, Workspace, WorkspaceMemory } from '../../types'
+import type { AppSettings, FilePreview, Workspace, WorkspaceMemory } from '../../types'
 import { loadSettingsDialog } from './loadSettingsDialog'
 
 const SettingsDialog = lazy(loadSettingsDialog)
@@ -9,8 +9,8 @@ const PreviewDialog = lazy(() => import('./Dialogs').then((module) => ({ default
 
 interface AppOverlaysProps {
   settingsOpen: boolean
-  settings: CodexSettings
-  status: CodexStatus
+  settings: AppSettings
+  status: string
   workspaces: Workspace[]
   memoryOpen: boolean
   memory: WorkspaceMemory
@@ -19,7 +19,7 @@ interface AppOverlaysProps {
   activeId: string | null
   workspace: string
   onSettingsClose(): void
-  onSaveSettings(value: CodexSettings): Promise<void>
+  onSaveSettings(value: AppSettings): Promise<void>
   onNotify(message: string): void
   onOpenOnboarding(): void
   onMemoryClose(): void
@@ -29,16 +29,15 @@ interface AppOverlaysProps {
   onError(message: string | null): void
   onWorkspace(): Promise<void>
   onOpenSettings(): void
-  onRecheck(): Promise<void>
   onDismissOnboarding(): void
   onCompleteOnboarding(): void
 }
 
-export function AppOverlays({ settingsOpen, settings, status, workspaces, memoryOpen, memory, preview, onboardingOpen, activeId, workspace, onSettingsClose, onSaveSettings, onNotify, onOpenOnboarding, onMemoryClose, onOpenBrain, onSaveMemory, onPreviewClose, onError, onWorkspace, onOpenSettings, onRecheck, onDismissOnboarding, onCompleteOnboarding }: AppOverlaysProps) {
+export function AppOverlays({ settingsOpen, settings, status, workspaces, memoryOpen, memory, preview, onboardingOpen, activeId, workspace, onSettingsClose, onSaveSettings, onNotify, onOpenOnboarding, onMemoryClose, onOpenBrain, onSaveMemory, onPreviewClose, onError, onWorkspace, onOpenSettings, onDismissOnboarding, onCompleteOnboarding }: AppOverlaysProps) {
   return <Suspense fallback={null}>
-    {settingsOpen && <SettingsDialog value={settings} status={status} workspace={workspace} workspaces={workspaces} onClose={onSettingsClose} onSave={onSaveSettings} onNotify={onNotify} onOnboarding={onOpenOnboarding} onRecheck={onRecheck}/>}
+    {settingsOpen && <SettingsDialog value={settings} status={status} workspace={workspace} workspaces={workspaces} onClose={onSettingsClose} onSave={onSaveSettings} onNotify={onNotify} onOnboarding={onOpenOnboarding}/>}
     {memoryOpen && <MemoryDialog value={memory} onClose={onMemoryClose} onOpenBrain={onOpenBrain} onSave={onSaveMemory}/>}
     {preview && <PreviewDialog preview={preview} activeId={activeId} onClose={onPreviewClose} onError={onError} onNotify={onNotify}/>}
-    {onboardingOpen && <OnboardingDialog settings={settings} status={status} workspace={workspace} onWorkspace={onWorkspace} onSettings={onOpenSettings} onRecheck={onRecheck} onDismiss={onDismissOnboarding} onComplete={onCompleteOnboarding}/>}
+    {onboardingOpen && <OnboardingDialog settings={settings} status={status} workspace={workspace} onWorkspace={onWorkspace} onSettings={onOpenSettings} onDismiss={onDismissOnboarding} onComplete={onCompleteOnboarding}/>}
   </Suspense>
 }

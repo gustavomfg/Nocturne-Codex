@@ -1,15 +1,15 @@
 import { useEffect, type RefObject } from 'react'
 import { ChevronRight, Code2, Folder, FolderOpen, History, Laptop, Menu, MessageSquarePlus, Search, Settings, Star, Trash2, X } from 'lucide-react'
-import type { CodexSettings, Conversation, Workspace } from '../../types'
+import type { AppSettings, Conversation, Workspace } from '../../types'
 import { relativeTime } from '../../shared/format'
 import { useOffCanvasPanel } from '../../shared/useOffCanvasPanel'
 
 interface SidebarProps {
-  open: boolean; compact: boolean; triggerRef: RefObject<HTMLElement | null>; conversations: Conversation[]; hasConversations: boolean; hasMore: boolean; loadingMore: boolean; activeId: string | null; search: string; searchRef: RefObject<HTMLInputElement | null>; workspace: string; workspaces: Workspace[]; settings: CodexSettings; status: string;
+  open: boolean; compact: boolean; triggerRef: RefObject<HTMLElement | null>; conversations: Conversation[]; hasConversations: boolean; hasMore: boolean; loadingMore: boolean; activeId: string | null; search: string; searchRef: RefObject<HTMLInputElement | null>; workspace: string; workspaces: Workspace[]; settings: AppSettings; status: string;
   onClose(): void; onNew(): void; onSearch(value: string): void; onLoadMore(): void; onConversation(id: string): void; onDelete(id: string): void; onWorkspace(): void; onSavedWorkspace(path: string): void; onFavorite(item: Workspace): void; onSettings(): void
 }
 
-export function Sidebar({ open, compact, triggerRef, conversations, hasConversations, hasMore, loadingMore, activeId, search, searchRef, workspace, workspaces, settings, status, onClose, onNew, onSearch, onLoadMore, onConversation, onDelete, onWorkspace, onSavedWorkspace, onFavorite, onSettings }: SidebarProps) {
+export function Sidebar({ open, compact, triggerRef, conversations, hasConversations, hasMore, loadingMore, activeId, search, searchRef, workspace, workspaces, status, onClose, onNew, onSearch, onLoadMore, onConversation, onDelete, onWorkspace, onSavedWorkspace, onFavorite, onSettings }: SidebarProps) {
   const sidebarRef = useOffCanvasPanel<HTMLElement>({ open, modal: compact, onClose, triggerRef })
   const newShortcut = navigator.platform.toLowerCase().includes('mac') ? '⌘ N' : 'Ctrl N'
   useEffect(() => { if (sidebarRef.current) sidebarRef.current.inert = !open }, [open, sidebarRef])
@@ -29,7 +29,7 @@ export function Sidebar({ open, compact, triggerRef, conversations, hasConversat
     <div className="sidebar-footer">
       {workspaces.slice(0, 4).map((item) => <div key={item.path} className={`workspace-mini ${workspace === item.path ? 'active' : ''}`}><button className="workspace-open" onClick={() => onSavedWorkspace(item.path)}><Folder size={13}/><span>{item.name}</span></button><button className="workspace-favorite" aria-label={item.favorite ? `Remover ${item.name} dos favoritos` : `Favoritar ${item.name}`} aria-pressed={item.favorite} title={item.favorite ? 'Remover dos favoritos' : 'Favoritar'} onClick={() => onFavorite(item)}><Star size={12} fill={item.favorite ? 'currentColor' : 'none'}/></button></div>)}
       <button className="workspace-card" onClick={onWorkspace}><span className="workspace-icon"><FolderOpen size={17}/></span><span><small>Workspace</small><strong>{workspace ? workspace.split(/[/\\]/).pop() : 'Selecionar projeto'}</strong></span><ChevronRight size={15}/></button>
-      <div className="profile"><div className="avatar"><Laptop size={15}/></div><span><strong>Ambiente local</strong><small>{settings.codexVersion || 'Codex CLI'}</small></span><span className={`status-dot ${status}`} role="status" aria-label={`Codex: ${status}`}/><button className="settings-button" aria-label="Abrir configurações" title="Abrir configurações" onClick={onSettings}><Settings size={14}/></button></div>
+      <div className="profile"><div className="avatar"><Laptop size={15}/></div><span><strong>Ambiente local</strong></span><span className={`status-dot ${status}`} role="status" aria-label={status}/><button className="settings-button" aria-label="Abrir configurações" title="Abrir configurações" onClick={onSettings}><Settings size={14}/></button></div>
     </div>
   </aside>
 }

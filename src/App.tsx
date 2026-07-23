@@ -2,7 +2,7 @@ import { FormEvent, lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { X } from 'lucide-react'
 import { useAppStore } from './store'
-import type { Activity, AgentMode, Artifact, Attachment, ChangedFile, CodexEvent, CodexSettings, FilePreview, GitInfo, PlanStep, Suggestion, SuggestionStatus, Workspace, WorkspaceMemory } from './types'
+import type { Activity, AgentEvent, AgentMode, AppSettings, Attachment, ChangedFile, FilePreview, GitInfo, PlanStep, Suggestion, SuggestionStatus, Workspace, WorkspaceMemory } from './types'
 import { Sidebar } from './domains/workspaces/Sidebar'
 import { WorkspaceTopbar } from './domains/workspaces/WorkspaceTopbar'
 import { Composer } from './domains/chat/Composer'
@@ -10,8 +10,8 @@ import { ChatViewport } from './domains/chat/ChatViewport'
 import { errorMessage, isBusy } from './shared/format'
 import { UI_TIMING } from '../shared/constants'
 import { useTurnLifecycle, type ActiveTurnContext } from './domains/agent/useTurnLifecycle'
-import { routeCodexEvent } from './domains/agent/routeCodexEvent'
-import { useBufferedCodexEvents } from './domains/agent/useBufferedCodexEvents'
+import { routeAgentEvent } from './domains/agent/routeCodexEvent'
+import { useBufferedAgentEvents } from './domains/agent/useBufferedCodexEvents'
 import { useConfirmDialog } from './shared/ConfirmDialog'
 import { useResponsivePanels } from './shared/useResponsivePanels'
 import { AppOverlays } from './domains/settings/AppOverlays'
@@ -43,7 +43,7 @@ function App() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [settings, setSettings] = useState<CodexSettings>({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', theme: 'dark', defaultAgentMode: 'review' })
+  const [settings, setSettings] = useState<AppSettings>({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', theme: 'dark' })
   const [gitInfo, setGitInfo] = useState<GitInfo | null>(null)
   const [preview, setPreview] = useState<FilePreview | null>(null)
   const [memory, setMemory] = useState<WorkspaceMemory>({ content: '', rules: '', updatedAt: '' })
@@ -63,7 +63,7 @@ function App() {
   const searchRef = useRef<HTMLInputElement>(null)
   const sidebarTriggerRef = useRef<HTMLButtonElement>(null)
   const inspectorTriggerRef = useRef<HTMLButtonElement>(null)
-  const { queueStreamDelta, flushStream, appendActivityDetail, addItemActivity, completeItem } = useBufferedCodexEvents()
+  const { queueStreamDelta, flushStream, appendActivityDetail, addItemActivity, completeItem } = useBufferedAgentEvents()
   const activeTurnRef = useRef<ActiveTurnContext | null>(null)
   const applyingSuggestionRef = useRef<{ id: string; affectedFiles: string[] } | null>(null)
   const conversationRequestRef = useRef(0)
@@ -79,18 +79,13 @@ function App() {
   useEffect(() => {
     void Promise.all([window.nocturne.conversations.page(), window.nocturne.workspace.list(), window.nocturne.settings.get()]).then(async ([conversationPage, savedWorkspaces, savedSettings]) => {
       const conversations = conversationPage.items
-      const normalized = { ...savedSettings, model: savedSettings.model || '', sandbox: savedSettings.sandbox || 'workspace-write', approvalPolicy: savedSettings.approvalPolicy === 'untrusted' ? 'untrusted' : 'on-request', theme: 'dark', defaultAgentMode: savedSettings.defaultAgentMode || 'review' } as CodexSettings
-      store.setConversations(conversations); void collections.initializeConversationHasMore(conversationPage.hasMore); store.setStatus(normalized.serverStatus || 'disconnected'); setWorkspaces(savedWorkspaces); setSettings(normalized); setAgentMode(normalized.defaultAgentMode || 'review')
-      void window.nocturne.codex.start().then(async () => {
-        const readiness = await window.nocturne.settings.check()
-        setSettings((current) => ({ ...current, ...readiness })); store.setStatus(readiness.serverStatus || useAppStore.getState().status)
-      }).catch((error) => store.setError(errorMessage(error)))
+      const normalized = { model: savedSettings.model || '', sandbox: savedSettings.sandbox || 'workspace-write', approvalPolicy: savedSettings.approvalPolicy === 'untrusted' ? 'untrusted' : 'on-request', theme: 'dark' } as AppSettings
+      store.setConversations(conversations); void collections.initializeConversationHasMore(conversationPage.hasMore); setWorkspaces(savedWorkspaces); setSettings(normalized)
       if (conversations[0]) await openConversation(conversations[0].id, conversations, savedWorkspaces)
     }).catch((error) => store.setError(error.message))
-    const offStatus = window.nocturne.codex.onStatus(({ status, error }) => { store.setStatus(status); if (status === 'completed' && activeTurnRef.current) store.setFinalizing(true); if (error) store.setError(error) })
-    const offEvent = window.nocturne.codex.onEvent(handleCodexEvent)
+    const offStatus = window.nocturne.ai.onStatus(({ status, error }) => { store.setStatus(status); if (status === 'completed' && activeTurnRef.current) store.setFinalizing(true); if (error) store.setError(error) })
+    const offEvent = window.nocturne.ai.onEvent(handleAgentEvent)
     return () => { offStatus(); offEvent() }
-    // A ponte IPC deve ser registrada uma única vez; os handlers consultam o estado atual do Zustand.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -171,7 +166,7 @@ function App() {
     const workspaceEntry = conversation && availableWorkspaces.find((item) => item.path === conversation.workspace)
     if (conversation && !workspaceEntry?.authorized) {
       setMemory({ content: '', rules: '', updatedAt: '' }); setGitInfo(null)
-      const accepted = await confirmation.confirm({ title: 'Reautorizar workspace?', description: `Esta conversa veio de um backup. Para proteger seus arquivos, confirme novamente a pasta antes de usar memória, Git ou Codex.\n\n${conversation.workspace}`, confirmLabel: 'Selecionar pasta' })
+      const accepted = await confirmation.confirm({ title: 'Reautorizar workspace?', description: `Esta conversa veio de um backup. Para proteger seus arquivos, confirme novamente a pasta antes de usar memória, Git ou IA.\n\n${conversation.workspace}`, confirmLabel: 'Selecionar pasta' })
       if (requestId !== conversationRequestRef.current || useAppStore.getState().activeId !== id) return
       if (!accepted) { store.setError('Workspace não autorizado. A conversa permanece disponível somente para leitura do histórico.'); return }
       try {
@@ -184,7 +179,6 @@ function App() {
     const savedMemory = await window.nocturne.memory.get(id)
     if (requestId !== conversationRequestRef.current || useAppStore.getState().activeId !== id) return
     setMemory(savedMemory)
-    try { await window.nocturne.codex.resume(id) } catch (error) { store.setError(`Não foi possível restaurar a thread: ${errorMessage(error)}`) }
     void refreshGit(id)
   }
 
@@ -228,7 +222,7 @@ function App() {
     applyingSuggestionRef.current = null
     setAttachments([])
     store.addMessage({ id: fakeId(), conversationId, role: 'user', content, metadata: JSON.stringify({ attachments: selectedAttachments.map((item) => item.path) }), createdAt: now() })
-    try { const result = await window.nocturne.codex.send(conversationId, content, selectedAttachments.map((item) => item.path), mode); if (result.recreated) store.setError('A thread anterior não pôde ser restaurada. Uma nova thread foi criada para esta conversa.'); await refresh() }
+    try { await window.nocturne.ai.send(conversationId, content, selectedAttachments.map((item) => item.path), mode); await refresh() }
     catch (error) { activeTurnRef.current = null; applyingSuggestionRef.current = null; store.setFinalizing(false); store.setStatus('failed'); store.setError(error instanceof Error ? error.message : String(error)) }
   }
 
@@ -276,16 +270,20 @@ function App() {
 
   async function cancelRun() {
     if (!store.activeId) return
-    try { await window.nocturne.codex.interrupt(store.activeId) }
-    catch (error) { store.setError(errorMessage(error)) }
+    store.setStatus('cancelling')
+    store.setFinalizing(true)
+    activeTurnRef.current = null
+    applyingSuggestionRef.current = null
+    store.setStatus('ready')
+    store.setFinalizing(false)
   }
 
-  function handleCodexEvent(event: CodexEvent) {
-    routeCodexEvent(event, { stream: queueStreamDelta, activityDetail: appendActivityDetail, diff: store.setDiff, plan: store.setPlan, hasPlan: () => Boolean(useAppStore.getState().plan.length), itemStarted: addItemActivity, itemCompleted: completeItem, fsChanged: (paths) => { if (paths.length) store.upsertActivity({ id: 'fs-summary', type: 'file', label: `${paths.length} arquivo(s) observado(s)`, detail: paths.slice(-50).join('\n'), status: 'completed' }) }, approval: (value) => store.addApproval({ ...value, status: 'pending' }), turnCompleted: (params) => { void finishTurn(params).catch((error) => { store.setStatus('failed'); store.setError(`Falha ao finalizar a resposta: ${errorMessage(error)}`) }) }, error: (message) => { store.setError(message); store.upsertActivity({ id: `error-${Date.now()}`, type: 'error', label: 'Erro na execução', detail: message, status: 'failed' }) }, warning: (message) => store.upsertActivity({ id: `warning-${Date.now()}`, type: 'error', label: 'Aviso do Codex', detail: message, status: 'failed' }) })
+  function handleAgentEvent(event: AgentEvent) {
+    routeAgentEvent(event, { stream: queueStreamDelta, activityDetail: appendActivityDetail, diff: store.setDiff, plan: store.setPlan, hasPlan: () => Boolean(useAppStore.getState().plan.length), itemStarted: addItemActivity, itemCompleted: completeItem, fsChanged: (paths) => { if (paths.length) store.upsertActivity({ id: 'fs-summary', type: 'file', label: `${paths.length} arquivo(s) observado(s)`, detail: paths.slice(-50).join('\n'), status: 'completed' }) }, approval: (value) => store.addApproval({ ...value, status: 'pending' }), turnCompleted: (params) => { void finishTurn(params).catch((error) => { store.setStatus('failed'); store.setError(`Falha ao finalizar a resposta: ${errorMessage(error)}`) }) }, error: (message) => { store.setError(message); store.upsertActivity({ id: `error-${Date.now()}`, type: 'error', label: 'Erro na execução', detail: message, status: 'failed' }) }, warning: (message) => store.upsertActivity({ id: `warning-${Date.now()}`, type: 'error', label: 'Aviso', detail: message, status: 'failed' }) })
   }
 
   async function decide(key: string, accepted: boolean) {
-    try { await window.nocturne.codex.approve(key, accepted); store.resolveApproval(key, accepted ? 'accepted' : 'declined') }
+    try { await window.nocturne.ai.approve(key, accepted); store.resolveApproval(key, accepted ? 'accepted' : 'declined') }
     catch (error) { store.setError(errorMessage(error)) }
   }
 
@@ -320,7 +318,7 @@ function App() {
   async function removeConversation(id: string) {
     if (interactionLocked()) { store.setError('Aguarde a resposta ser concluída antes de excluir conversas.'); return }
     const conversation = store.conversations.find((item) => item.id === id)
-    if (!await confirmation.confirm({ title: 'Excluir conversa?', description: `“${conversation?.title || 'Esta conversa'}” e seu histórico local serão removidos. Esta ação não pode ser desfeita.`, confirmLabel: 'Excluir conversa', danger: true })) return
+    if (!await confirmation.confirm({ title: 'Excluir conversa?', description: `"${conversation?.title || 'Esta conversa'}" e seu histórico local serão removidos. Esta ação não pode ser desfeita.`, confirmLabel: 'Excluir conversa', danger: true })) return
     await window.nocturne.conversations.delete(id)
     if (store.activeId === id) { store.setActive(null); store.setMessages([]); store.setArtifacts([]); historyOffsetRef.current = 0; setHistoryHasMore(false); setPreview(null) }
     await refresh()
@@ -342,8 +340,8 @@ function App() {
     catch { setGitInfo(null) }
   }
 
-  async function saveSettings(next: CodexSettings) {
-    try { const saved = await window.nocturne.settings.set(next); setSettings({ ...next, ...saved }); setAgentMode(next.defaultAgentMode || 'review'); setSettingsOpen(false); notify('Configurações salvas.') }
+  async function saveSettings(next: AppSettings) {
+    try { const saved = await window.nocturne.settings.set(next); setSettings({ ...next, ...saved }); setSettingsOpen(false); notify('Configurações salvas.') }
     catch (error) { throw new Error(errorMessage(error)) }
   }
 
@@ -353,7 +351,7 @@ function App() {
     catch (error) { store.setError(errorMessage(error)) }
   }
 
-  function showArtifact(artifact: Artifact) {
+  function showArtifact(artifact: import('./types').Artifact) {
     if (artifact.filePath) {
       if (/\.(pdf|docx)$/i.test(artifact.filePath)) { if (store.activeId) void window.nocturne.files.open(store.activeId, artifact.filePath, 'file').catch((error) => store.setError(errorMessage(error))); return }
       void showFilePreview(artifact.filePath); return
@@ -385,21 +383,6 @@ function App() {
     catch (error) { throw new Error(errorMessage(error)) }
   }
 
-  async function reconnect() {
-    try { store.setError(null); await window.nocturne.codex.start(); if (store.activeId) await window.nocturne.codex.resume(store.activeId); notify('Conexão com o Codex restabelecida.') }
-    catch (error) { store.setError(errorMessage(error)) }
-  }
-
-  async function recheckReadiness() {
-    try {
-      await window.nocturne.codex.start()
-      const refreshed = await window.nocturne.settings.check()
-      const normalized = { ...refreshed, model: refreshed.model || '', sandbox: refreshed.sandbox || 'workspace-write', approvalPolicy: refreshed.approvalPolicy === 'untrusted' ? 'untrusted' : 'on-request', theme: 'dark', defaultAgentMode: refreshed.defaultAgentMode || 'review' } as CodexSettings
-      setSettings(normalized); store.setStatus(normalized.serverStatus || useAppStore.getState().status)
-      notify('Verificações de prontidão atualizadas.')
-    } catch (error) { store.setError(errorMessage(error)) }
-  }
-
   async function openWorkspaceTool(tool: 'editor' | 'terminal') {
     if (!pathLabel) return
     try { await window.nocturne.workspace.openTool(pathLabel, tool); notify(tool === 'editor' ? 'Workspace aberto no editor.' : 'Terminal aberto no workspace.') }
@@ -419,16 +402,16 @@ function App() {
     <Sidebar open={sidebarOpen} compact={compactLayout} triggerRef={sidebarTriggerRef} conversations={filtered} hasConversations={store.conversations.length > 0} hasMore={collections.conversationHasMore} loadingMore={collections.loading === 'conversations'} activeId={store.activeId} search={search} searchRef={searchRef} workspace={workspace} workspaces={workspaces} settings={settings} status={store.status} onClose={() => setSidebarVisibility(false)} onNew={() => void createConversation().finally(() => { if (compactLayout) setSidebarVisibility(false) })} onSearch={setSearch} onLoadMore={() => void collections.loadMoreConversations()} onConversation={(id) => void openConversation(id).finally(() => { if (compactLayout) setSidebarVisibility(false) })} onDelete={(id) => void removeConversation(id)} onWorkspace={() => void selectWorkspace().finally(() => { if (compactLayout) setSidebarVisibility(false) })} onSavedWorkspace={(path) => void chooseSavedWorkspace(path).finally(() => { if (compactLayout) setSidebarVisibility(false) })} onFavorite={(item) => void favoriteWorkspace(item)} onSettings={() => { if (compactLayout) setSidebarVisibility(false); setSettingsOpen(true) }}/>
 
     <main className="main-panel">
-      <WorkspaceTopbar title={title} pathLabel={pathLabel} gitInfo={gitInfo} status={store.status} sidebarOpen={sidebarOpen} inspectorOpen={rightOpen} compact={compactLayout} hasMemory={Boolean(memory.content)} sidebarTriggerRef={sidebarTriggerRef} inspectorTriggerRef={inspectorTriggerRef} onOpenSidebar={() => setSidebarVisibility(true)} onSelectWorkspace={() => void selectWorkspace()} onOpenTool={(tool) => void openWorkspaceTool(tool)} onReconnect={() => void reconnect()} onMemory={() => store.activeId ? setMemoryOpen(true) : store.setError('Abra uma conversa para configurar a memória do workspace.')} onSettings={() => setSettingsOpen(true)} onToggleInspector={() => setInspectorVisibility(!rightOpen)}/>
+      <WorkspaceTopbar title={title} pathLabel={pathLabel} gitInfo={gitInfo} status={store.status} sidebarOpen={sidebarOpen} inspectorOpen={rightOpen} compact={compactLayout} hasMemory={Boolean(memory.content)} sidebarTriggerRef={sidebarTriggerRef} inspectorTriggerRef={inspectorTriggerRef} onOpenSidebar={() => setSidebarVisibility(true)} onSelectWorkspace={() => void selectWorkspace()} onOpenTool={(tool) => void openWorkspaceTool(tool)} onMemory={() => store.activeId ? setMemoryOpen(true) : store.setError('Abra uma conversa para configurar a memória do workspace.')} onSettings={() => setSettingsOpen(true)} onToggleInspector={() => setInspectorVisibility(!rightOpen)}/>
 
       <ChatViewport active={Boolean(store.activeId)} messages={store.messages} error={store.error} historyHasMore={historyHasMore} historyLoading={historyLoading} newContent={newContent} chatScrollRef={chatScrollRef} endRef={endRef} stickToBottomRef={stickToBottomRef} onNew={() => void createConversation()} onWorkspace={() => void selectWorkspace()} onPrompt={preparePrompt} onLoadOlder={() => void loadOlderMessages()} onScroll={handleChatScroll} onNewContent={setNewContent} onDismissError={() => store.setError(null)} onJumpLatest={jumpToLatest}/>
 
-      <Composer agentMode={agentMode} attachments={attachments} prompt={prompt} status={store.status} finalizing={store.finalizing} settings={settings} active={Boolean(store.activeId)} pendingApprovals={store.approvals.filter((item) => item.status === 'pending').length} composerRef={composerRef} onMode={setAgentMode} onPrompt={setPrompt} onRemoveAttachment={(path) => setAttachments((current) => current.filter((file) => file.path !== path))} onAttach={attachFiles} onCancel={cancelRun} onSubmit={send} onQuick={preparePrompt}/>
+      <Composer agentMode={agentMode} attachments={attachments} prompt={prompt} status={store.status} finalizing={store.finalizing} active={Boolean(store.activeId)} pendingApprovals={store.approvals.filter((item) => item.status === 'pending').length} composerRef={composerRef} onMode={setAgentMode} onPrompt={setPrompt} onRemoveAttachment={(path) => setAttachments((current) => current.filter((file) => file.path !== path))} onAttach={attachFiles} onCancel={cancelRun} onSubmit={send} onQuick={preparePrompt}/>
     </main>
     {compactLayout && rightOpen && <button tabIndex={-1} className="panel-backdrop inspector-backdrop" aria-label="Fechar painel do agente" onClick={() => setInspectorVisibility(false)}/>}
 
     <Suspense fallback={null}><AgentPanel open={rightOpen} compact={compactLayout} triggerRef={inspectorTriggerRef} gitInfo={gitInfo} artifactsHaveMore={collections.artifactHasMore} suggestionsHaveMore={collections.suggestionHasMore} loadingCollection={collections.loading} onClose={() => setInspectorVisibility(false)} onDecide={decide} onError={store.setError} onNotify={notify} onGitRefresh={refreshGit} onArtifactsRefresh={refreshArtifacts} onLoadMoreArtifacts={() => void collections.loadMoreArtifacts()} onLoadMoreSuggestions={() => void collections.loadMoreSuggestions()} onPreview={showFilePreview} onArtifact={showArtifact} onDeleteArtifact={deleteArtifact} onSuggestionStatus={updateSuggestion} onSuggestionApply={applySuggestion} onPlanChange={(plan) => store.setPlan(plan, useAppStore.getState().planExplanation)} onPlanExecute={(plan) => preparePrompt(`Execute o plano aprovado abaixo. Siga os passos na ordem, atualize o progresso e teste as alterações.\n\n${plan.map((item, index) => `${index + 1}. ${item.step}`).join('\n')}`, 'build')}/></Suspense>
-    {confirmation.dialog}<AppOverlays settingsOpen={settingsOpen} settings={settings} status={store.status} workspaces={workspaces} memoryOpen={memoryOpen} memory={memory} preview={preview} onboardingOpen={onboardingOpen} activeId={store.activeId} workspace={workspace} onSettingsClose={() => setSettingsOpen(false)} onSaveSettings={saveSettings} onNotify={notify} onOpenOnboarding={() => { setSettingsOpen(false); setOnboardingOpen(true) }} onMemoryClose={() => setMemoryOpen(false)} onOpenBrain={() => { setMemoryOpen(false); setBrainOpen(true) }} onSaveMemory={saveMemory} onPreviewClose={() => setPreview(null)} onError={store.setError} onWorkspace={selectWorkspace} onOpenSettings={() => { setOnboardingOpen(false); setSettingsOpen(true) }} onRecheck={recheckReadiness} onDismissOnboarding={() => { setOnboardingOpen(false); composerRef.current?.focus() }} onCompleteOnboarding={() => { localStorage.setItem('nocturne.onboarding.completed', 'true'); setOnboardingOpen(false); notify('Nocturne pronto para trabalhar.'); composerRef.current?.focus() }}/><Suspense fallback={null}>{brainOpen && store.activeId && <BrainMemoryDialog conversationId={store.activeId} onClose={() => setBrainOpen(false)} onNotify={notify}/>}</Suspense>{notice && <div className="product-toast" role="status" aria-live="polite"><span>{notice}</span><button aria-label="Fechar notificação" onClick={() => setNotice(null)}><X size={14}/></button></div>}
+    {confirmation.dialog}<AppOverlays settingsOpen={settingsOpen} settings={settings} status={store.status} workspaces={workspaces} memoryOpen={memoryOpen} memory={memory} preview={preview} onboardingOpen={onboardingOpen} activeId={store.activeId} workspace={workspace} onSettingsClose={() => setSettingsOpen(false)} onSaveSettings={saveSettings} onNotify={notify} onOpenOnboarding={() => { setSettingsOpen(false); setOnboardingOpen(true) }} onMemoryClose={() => setMemoryOpen(false)} onOpenBrain={() => { setMemoryOpen(false); setBrainOpen(true) }} onSaveMemory={saveMemory} onPreviewClose={() => setPreview(null)} onError={store.setError} onWorkspace={selectWorkspace} onOpenSettings={() => { setOnboardingOpen(false); setSettingsOpen(true) }} onDismissOnboarding={() => { setOnboardingOpen(false); composerRef.current?.focus() }} onCompleteOnboarding={() => { localStorage.setItem('nocturne.onboarding.completed', 'true'); setOnboardingOpen(false); notify('Nocturne pronto para trabalhar.'); composerRef.current?.focus() }}/><Suspense fallback={null}>{brainOpen && store.activeId && <BrainMemoryDialog conversationId={store.activeId} onClose={() => setBrainOpen(false)} onNotify={notify}/>}</Suspense>{notice && <div className="product-toast" role="status" aria-live="polite"><span>{notice}</span><button aria-label="Fechar notificação" onClick={() => setNotice(null)}><X size={14}/></button></div>}
   </div>
 }
 
