@@ -232,12 +232,7 @@ function ModelSelect({
 }
 
 function emptyBindings(workspaceId: string): WorkspaceModelBindings {
-  return {
-    workspaceId,
-    roleBindings: {},
-    fallbackPolicy: 'disabled',
-    fallbackBindings: [],
-  }
+  return { workspaceId }
 }
 
 function providerChoices(

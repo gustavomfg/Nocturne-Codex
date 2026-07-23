@@ -196,9 +196,6 @@ export function ProviderSettingsPage({
                 await window.nocturne.models.setBindings({
                   workspaceId,
                   defaultBinding: { providerId: saved.id, modelId: available[0].modelId },
-                  roleBindings: {},
-                  fallbackPolicy: 'disabled',
-                  fallbackBindings: [],
                 })
                 onNotify(editor.id
                   ? `Provider atualizado e modelo ${available[0].displayName} vinculado.`
@@ -249,9 +246,6 @@ export function ProviderSettingsPage({
                 await window.nocturne.models.setBindings({
                   workspaceId,
                   defaultBinding: { providerId: id, modelId: available[0].modelId },
-                  roleBindings: {},
-                  fallbackPolicy: 'disabled',
-                  fallbackBindings: [],
                 })
                 onNotify(`Conexão validada e modelo ${available[0].displayName} vinculado.`)
               } else {
