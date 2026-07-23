@@ -45,6 +45,10 @@ Convert `NormalizedTask` into the provider request. Emit normalized stream event
 - completed;
 - failed.
 
+Adapters emit validated event payloads. The Orchestrator owns the common
+execution envelope, event sequence and terminal lifecycle, preventing native
+provider identifiers or late events from redefining application state.
+
 ## Error mapping
 
 Map authentication, rate limit, timeout, unavailable model, invalid response and cancellation into shared error codes.

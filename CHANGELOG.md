@@ -8,6 +8,7 @@
 - Model Registry normalizado identifica modelos por `providerId + modelId`, valida descriptors e preços em runtime e filtra candidatos apenas por capacidades declaradas;
 - atualização de catálogo por Provider é atômica e preserva modelos pertencentes aos demais Providers;
 - descoberta via adapter preserva o último catálogo válido e impede respostas concorrentes obsoletas de sobrescrever resultados mais recentes;
+- eventos iniciais de execução possuem schemas estritos, identificador estável, sequência monotônica, limites explícitos e um único estado terminal;
 - geração de imagens permanece fora do conjunto inicial de capacidades e será tratada em uma etapa futura.
 
 ### Estabilidade e compatibilidade

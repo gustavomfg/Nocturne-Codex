@@ -27,6 +27,19 @@
 - `execution.failed`
 - `execution.cancelled`
 
+The initial executable contract covers `execution.started`, `message.delta`,
+`usage.updated` and the completed, failed and cancelled terminal events.
+Plan and tool events join the same union when their normalized domain contracts
+are introduced.
+
+The Orchestrator adds the stable execution identifier, monotonic sequence and
+timestamp. Adapters provide validated payloads; they do not control ordering or
+terminal state. A stream starts exactly once and rejects every event after its
+first terminal event.
+
+Initial limits are 512 characters for normalized identifiers, 100,000
+characters per message delta and 4,000 characters for safe error text.
+
 ## Error mapping
 
 Adapters map native failures to shared codes such as:
