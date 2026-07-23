@@ -5,13 +5,12 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
     localStorage.setItem('nocturne.onboarding.completed', 'true')
     const now = '2026-07-13T20:00:00.000Z'
     const workspace = '/workspace/nocturne-codex'
-    const conversation = { id: 'conversation-1', title: 'Lapidação da experiência', workspace, codexThreadId: 'thread-1', createdAt: now, updatedAt: now }
+    const conversation = { id: 'conversation-1', title: 'Lapidação da experiência', workspace, createdAt: now, updatedAt: now }
     const eventListeners: Array<(payload: unknown) => void> = []
     const statusListeners: Array<(payload: unknown) => void> = []
     let authorized = !unauthorized
     let selectedExpected: string | undefined
     let memoryReads = 0
-    let resumes = 0
     type MockBrainMemory = { id: string; workspaceId: string; conversationId: string | null; kind: 'fact' | 'decision' | 'preference' | 'constraint' | 'learning'; scope: 'workspace' | 'conversation'; status: 'candidate' | 'active' | 'outdated' | 'archived'; content: string; confidence: number; sourceType: 'manual' | 'agent'; sourceId: string | null; createdAt: string; updatedAt: string; lastConfirmedAt: string | null; lastUsedAt: string | null; useCount: number }
     type MockProviderConfiguration = { id: string; providerType: 'openai-compatible'; displayName: string; source: 'local' | 'remote'; baseUrl: string; enabled: boolean; requiresAuthentication: boolean; credentialConfigured: boolean; timeoutMs: number; createdAt: string; updatedAt: string }
     type MockModelReference = { providerId: string; modelId: string }
@@ -41,9 +40,10 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
         ], hasMore: false }),
         delete: noop,
       },
-      codex: {
-        start: noop, restart: noop, diagnostics: async () => ({ executable: 'codex', pid: 42, state: 'ready', lastFailure: null, logsPath: '/tmp/nocturne' }), send: noop, resume: async () => { resumes += 1 }, interrupt: noop,
-        saveAssistant: async (conversationId: string, content: string) => ({ id: 'saved-message', conversationId, role: 'assistant', content, metadata: null, createdAt: now }), approve: noop,
+      ai: {
+        send: noop,
+        saveAssistant: async (conversationId: string, content: string) => ({ id: 'saved-message', conversationId, role: 'assistant', content, metadata: null, createdAt: now }),
+        approve: noop,
         onEvent: (listener: (payload: unknown) => void) => { eventListeners.push(listener); return () => { const index = eventListeners.indexOf(listener); if (index >= 0) eventListeners.splice(index, 1) } },
         onStatus: (listener: (payload: unknown) => void) => { statusListeners.push(listener); return () => { const index = statusListeners.indexOf(listener); if (index >= 0) statusListeners.splice(index, 1) } },
       },
@@ -83,7 +83,7 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       suggestions: { list: async () => [], page: async () => ({ items: [], hasMore: false }), create: async (_id: string, content: string) => ({ suggestions: [], content }), status: noop },
       data: { export: async () => '/tmp/backup.json', import: async () => true },
       diagnostics: { openLogs: noop, copy: async () => 'diagnóstico', rendererError: noop, rendererStats: noop },
-      settings: { get: async () => ({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', theme: 'dark', defaultAgentMode: 'review', codexVersion: 'codex-cli 0.144.1', codexCompatible: true, authenticated: !signedOut, authStatus: signedOut ? 'Login necessário' : 'Autenticado', serverStatus: 'ready' }), check: async () => ({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', theme: 'dark', defaultAgentMode: 'review', codexVersion: 'codex-cli 0.144.1', codexCompatible: true, authenticated: !signedOut, authStatus: signedOut ? 'Login necessário' : 'Autenticado', serverStatus: 'ready' }), set: async (value: unknown) => value },
+      settings: { get: async () => ({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', theme: 'dark', defaultAgentMode: 'review', authenticated: !signedOut, authStatus: signedOut ? 'Login necessário' : 'Autenticado', serverStatus: 'ready' }), check: async () => ({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', theme: 'dark', defaultAgentMode: 'review', authenticated: !signedOut, authStatus: signedOut ? 'Login necessário' : 'Autenticado', serverStatus: 'ready' }), set: async (value: unknown) => value },
       providers: {
         list: async () => providerConfigurations.map((item) => ({ ...item })),
         create: async (configuration: Omit<MockProviderConfiguration, 'id' | 'credentialConfigured' | 'createdAt' | 'updatedAt'>, credential?: string) => {
@@ -122,7 +122,7 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
     Object.defineProperty(window, '__nocturneTest', { configurable: true, value: {
       emitEvent: (payload: unknown) => eventListeners.forEach((listener) => listener(payload)),
       emitStatus: (payload: unknown) => statusListeners.forEach((listener) => listener(payload)),
-      calls: () => ({ selectedExpected, memoryReads, resumes }),
+      calls: () => ({ selectedExpected, memoryReads }),
     } })
   }, { empty: Boolean(options.empty), unauthorized: Boolean(options.unauthorized), signedOut: Boolean(options.signedOut) })
 }
