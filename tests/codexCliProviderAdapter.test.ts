@@ -32,11 +32,11 @@ function task(overrides: Partial<NormalizedTask> = {}): NormalizedTask {
     messages: [{ role: 'user', content: 'Considere os limites atuais.' }],
     context: [{
       id: 'adr-1',
-      type: 'adr',
+      type: 'memory',
       title: 'Workspace First',
       content: 'O Workspace é o produto.',
       scope: 'workspace',
-      potentiallyOutdated: false,
+      potentiallyOutdated: true,
     }],
     constraints: ['Não modifique arquivos.'],
     requirements: ['chat', 'streaming'],
@@ -365,7 +365,7 @@ describe('CodexCliProviderAdapter', () => {
   it('produz um prompt determinístico sem conceitos nativos do Provider', () => {
     const prompt = compileCodexPrompt(task())
     expect(prompt).toContain('# Solicitação atual\n\nRevise a arquitetura.')
-    expect(prompt).toContain('Potencialmente desatualizado: não')
+    expect(prompt).toContain('Potencialmente desatualizado: sim')
     expect(prompt).toContain('- Não modifique arquivos.')
     expect(prompt).not.toContain('thread/start')
   })

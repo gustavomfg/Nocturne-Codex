@@ -257,9 +257,6 @@ describe.sequential('fronteiras Electron E2E', () => {
         providerId: simulatedModel.providerId,
         modelId: simulatedModel.modelId,
       },
-      roleBindings: {},
-      fallbackPolicy: 'disabled' as const,
-      fallbackBindings: [],
     }
     await expect(api.models.setBindings(bindings)).resolves.toEqual(bindings)
     await expect(api.models.bindings(workspace)).resolves.toEqual(bindings)

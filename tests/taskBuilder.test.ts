@@ -10,16 +10,16 @@ function input(overrides: Partial<NormalizedTaskInput> = {}): NormalizedTaskInpu
     mode: 'review',
     messages: [],
     context: [{
-      id: 'adr-1',
-      type: 'adr',
+      id: 'memory-1',
+      type: 'memory',
       title: 'Workspace First',
       content: 'O Workspace é o produto.',
       scope: 'workspace',
-      potentiallyOutdated: false,
+      potentiallyOutdated: true,
     }],
     constraints: ['Não modifique arquivos.'],
     requirements: ['chat', 'streaming'],
-    selection: { type: 'role', role: 'review' },
+    selection: { type: 'workspace-default' },
     output: { format: 'markdown' },
     permissions: { workspaceAccess: 'read-only' },
     tools: [],
@@ -111,12 +111,12 @@ describe('TaskBuilder', () => {
   it('aplica limite agregado ao contexto antes da compilação do Provider', () => {
     const content = 'x'.repeat(AI_TASK_LIMITS.contextSourceCharacters)
     const context = Array.from({ length: 6 }, (_, index) => ({
-      id: `document-${index}`,
-      type: 'document' as const,
-      title: `Documento ${index}`,
+      id: `memory-${index}`,
+      type: 'memory' as const,
+      title: `Memória ${index}`,
       content,
       scope: 'workspace',
-      potentiallyOutdated: false,
+      potentiallyOutdated: true,
     }))
 
     expect(() => new TaskBuilder().build(input({ context }))).toThrow(TaskBuilderError)

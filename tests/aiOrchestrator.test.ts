@@ -21,9 +21,6 @@ const descriptor: ModelDescriptor = {
 const bindings: WorkspaceModelBindings = {
   workspaceId: 'workspace-1',
   defaultBinding: { providerId: 'fake', modelId: 'model' },
-  roleBindings: {},
-  fallbackPolicy: 'disabled',
-  fallbackBindings: [],
 }
 
 function task() {

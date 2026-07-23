@@ -15,7 +15,7 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
     type MockBrainMemory = { id: string; workspaceId: string; conversationId: string | null; kind: 'fact' | 'decision' | 'preference' | 'constraint' | 'learning'; scope: 'workspace' | 'conversation'; status: 'candidate' | 'active' | 'outdated' | 'archived'; content: string; confidence: number; sourceType: 'manual' | 'agent'; sourceId: string | null; createdAt: string; updatedAt: string; lastConfirmedAt: string | null; lastUsedAt: string | null; useCount: number }
     type MockProviderConfiguration = { id: string; providerType: 'openai-compatible'; displayName: string; source: 'local' | 'remote'; baseUrl: string; enabled: boolean; requiresAuthentication: boolean; credentialConfigured: boolean; timeoutMs: number; createdAt: string; updatedAt: string }
     type MockModelReference = { providerId: string; modelId: string }
-    type MockModelBindings = { workspaceId: string; defaultBinding?: MockModelReference; roleBindings: Record<string, MockModelReference | undefined>; fallbackPolicy: 'disabled'; fallbackBindings: MockModelReference[] }
+    type MockModelBindings = { workspaceId: string; defaultBinding?: MockModelReference }
     let brainMemories: MockBrainMemory[] = []
     let providerConfigurations: MockProviderConfiguration[] = []
     const modelDescriptors = [

@@ -14,7 +14,7 @@ const conversation = { id: randomUUID(), title: 'Teste', workspace: workspace.pa
 const valid = () => ({ schemaVersion: 5, exportedAt: now, workspaces: [workspace], conversations: [conversation], messages: [], artifacts: [], memories: [], suggestions: [], suggestionDecisions: [], settings: { theme: 'dark' as const } })
 const modelDescriptor = { providerId: 'provider-1', modelId: 'model-1', displayName: 'Model 1', source: 'remote' as const, capabilities: ['chat'] as const, availability: 'available' as const }
 const modelCatalogItem = { provider_id: modelDescriptor.providerId, model_id: modelDescriptor.modelId, descriptor: JSON.stringify(modelDescriptor), updated_at: now }
-const modelBindings = { workspaceId: workspace.path, defaultBinding: { providerId: modelDescriptor.providerId, modelId: modelDescriptor.modelId }, roleBindings: {}, fallbackPolicy: 'disabled' as const, fallbackBindings: [] }
+const modelBindings = { workspaceId: workspace.path, defaultBinding: { providerId: modelDescriptor.providerId, modelId: modelDescriptor.modelId } }
 const workspaceModelBinding = { workspace_id: workspace.path, bindings: JSON.stringify(modelBindings), updated_at: now }
 const temporaryFiles: string[] = []
 
