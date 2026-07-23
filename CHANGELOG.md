@@ -32,6 +32,9 @@
   `basic_text` e backends desconhecidos;
 - schema SQLite 9 adiciona configurações globais de Provider com tipo,
   endpoint, origem, timeout, estado e referência opaca de proprietário único;
+- schema SQLite 10 persiste snapshots normalizados do catálogo por Provider e
+  bindings de modelos por Workspace, com substituição atômica, migração
+  preventiva e restauração validada;
 - backups preservam metadados de Providers, mas removem referências do cofre e
   exigem nova credencial após restauração;
 - serviço de configuração do main process coordena validação, SQLite, cofre e
@@ -87,7 +90,7 @@
 
 ### Qualidade
 
-- 184 testes unitários e de integração;
+- 187 testes unitários e de integração;
 - 30 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints, Providers, Segundo Cérebro e atualização da Saúde do Projeto;
 - typecheck, ESLint, design system, build de produção, pacote Linux real e audit npm sem vulnerabilidades aprovados;
 - decisões de sugestão precisam persistir antes do turno Build, e o status aplicado exige alterações observadas no escopo aprovado;

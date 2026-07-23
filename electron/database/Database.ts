@@ -7,6 +7,8 @@ import type { BrainMemory, BrainMemoryCandidate, CreateBrainMemoryInput, UpdateB
 import { DATABASE_SCHEMA_VERSION } from '../../shared/constants'
 import { migrateDatabase } from './migrations'
 import { ProviderConfigurationRepository } from './ProviderConfigurationRepository'
+import { ModelCatalogRepository } from './ModelCatalogRepository'
+import { WorkspaceModelBindingRepository } from './WorkspaceModelBindingRepository'
 
 export interface ConversationRow {
   id: string
@@ -39,12 +41,16 @@ const importColumns: Record<string, ReadonlySet<string>> = {
   suggestion_decisions: new Set(['id', 'suggestion_id', 'status', 'result', 'created_at']),
   brain_memories: new Set(['id', 'workspace_id', 'conversation_id', 'kind', 'scope', 'status', 'content', 'confidence', 'source_type', 'source_id', 'created_at', 'updated_at', 'last_confirmed_at', 'last_used_at', 'use_count']),
   provider_configs: new Set(['id', 'provider_type', 'display_name', 'source', 'base_url', 'enabled', 'requires_authentication', 'timeout_ms', 'created_at', 'updated_at']),
+  model_catalog: new Set(['provider_id', 'model_id', 'descriptor', 'updated_at']),
+  workspace_model_bindings: new Set(['workspace_id', 'bindings', 'updated_at']),
 }
 
 export class LocalDatabase {
   private db: Database.Database
   private readonly databasePath: string
   readonly providerConfigurations: ProviderConfigurationRepository
+  readonly modelCatalog: ModelCatalogRepository
+  readonly workspaceModelBindings: WorkspaceModelBindingRepository
 
   constructor(userDataPath: string) {
     this.databasePath = path.join(userDataPath, 'nocturne.db')
@@ -67,6 +73,8 @@ export class LocalDatabase {
     }
     migrateDatabase(this.db, schemaVersion)
     this.providerConfigurations = new ProviderConfigurationRepository(this.db)
+    this.modelCatalog = new ModelCatalogRepository(this.db)
+    this.workspaceModelBindings = new WorkspaceModelBindingRepository(this.db)
     this.runScheduledIntegrityCheck()
     this.cleanupOrphans()
   }
@@ -315,10 +323,10 @@ export class LocalDatabase {
   }
 
   exportData() {
-    return { schemaVersion: DATABASE_SCHEMA_VERSION, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), brainMemories: this.db.prepare('SELECT * FROM brain_memories ORDER BY created_at').all(), suggestions: this.db.prepare('SELECT * FROM suggestions').all(), suggestionDecisions: this.db.prepare('SELECT * FROM suggestion_decisions').all(), providerConfigs: this.db.prepare(`SELECT id,provider_type,display_name,source,base_url,enabled,requires_authentication,timeout_ms,created_at,updated_at FROM provider_configs ORDER BY created_at`).all(), settings: this.getSettings() }
+    return { schemaVersion: DATABASE_SCHEMA_VERSION, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), brainMemories: this.db.prepare('SELECT * FROM brain_memories ORDER BY created_at').all(), suggestions: this.db.prepare('SELECT * FROM suggestions').all(), suggestionDecisions: this.db.prepare('SELECT * FROM suggestion_decisions').all(), providerConfigs: this.db.prepare(`SELECT id,provider_type,display_name,source,base_url,enabled,requires_authentication,timeout_ms,created_at,updated_at FROM provider_configs ORDER BY created_at`).all(), modelCatalog: this.db.prepare('SELECT provider_id,model_id,descriptor,updated_at FROM model_catalog ORDER BY provider_id,model_id').all(), workspaceModelBindings: this.db.prepare('SELECT workspace_id,bindings,updated_at FROM workspace_model_bindings ORDER BY workspace_id').all(), settings: this.getSettings() }
   }
 
-  importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[]; brainMemories?: unknown[]; suggestions?: unknown[]; suggestionDecisions?: unknown[]; providerConfigs?: unknown[]; settings?: Record<string, string> }) {
+  importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[]; brainMemories?: unknown[]; suggestions?: unknown[]; suggestionDecisions?: unknown[]; providerConfigs?: unknown[]; modelCatalog?: unknown[]; workspaceModelBindings?: unknown[]; settings?: Record<string, string> }) {
     const statements = new Map<string, Database.Statement>()
     const insert = (table: string, rows: unknown[]) => {
       const allowed = importColumns[table]
@@ -338,15 +346,15 @@ export class LocalDatabase {
       }
     }
     this.db.transaction(() => {
-      this.db.exec('DELETE FROM provider_configs; DELETE FROM brain_memories; DELETE FROM suggestion_decisions; DELETE FROM suggestions; DELETE FROM artifacts; DELETE FROM messages; DELETE FROM conversations; DELETE FROM workspaces; DELETE FROM workspace_memory; DELETE FROM settings;')
-      insert('workspaces', data.workspaces.map((row) => ({ ...(row as Record<string, unknown>), authorized: 0 }))); insert('conversations', data.conversations); insert('messages', data.messages); insert('artifacts', data.artifacts); insert('workspace_memory', data.memories); insert('brain_memories', data.brainMemories ?? []); insert('suggestions', data.suggestions ?? []); insert('suggestion_decisions', data.suggestionDecisions ?? []); insert('provider_configs', data.providerConfigs ?? [])
+      this.db.exec('DELETE FROM workspace_model_bindings; DELETE FROM model_catalog; DELETE FROM provider_configs; DELETE FROM brain_memories; DELETE FROM suggestion_decisions; DELETE FROM suggestions; DELETE FROM artifacts; DELETE FROM messages; DELETE FROM conversations; DELETE FROM workspaces; DELETE FROM workspace_memory; DELETE FROM settings;')
+      insert('workspaces', data.workspaces.map((row) => ({ ...(row as Record<string, unknown>), authorized: 0 }))); insert('conversations', data.conversations); insert('messages', data.messages); insert('artifacts', data.artifacts); insert('workspace_memory', data.memories); insert('brain_memories', data.brainMemories ?? []); insert('suggestions', data.suggestions ?? []); insert('suggestion_decisions', data.suggestionDecisions ?? []); insert('provider_configs', data.providerConfigs ?? []); insert('model_catalog', data.modelCatalog ?? []); insert('workspace_model_bindings', data.workspaceModelBindings ?? [])
       if (data.settings) this.setSettings(data.settings)
       this.cleanupOrphans()
     })()
   }
 
   private cleanupOrphans() {
-    this.db.exec(`DELETE FROM messages WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM artifacts WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM suggestions WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM suggestion_decisions WHERE suggestion_id NOT IN (SELECT id FROM suggestions); DELETE FROM brain_memories WHERE workspace_id NOT IN (SELECT path FROM workspaces) OR (conversation_id IS NOT NULL AND conversation_id NOT IN (SELECT id FROM conversations));`)
+    this.db.exec(`DELETE FROM messages WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM artifacts WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM suggestions WHERE conversation_id NOT IN (SELECT id FROM conversations); DELETE FROM suggestion_decisions WHERE suggestion_id NOT IN (SELECT id FROM suggestions); DELETE FROM brain_memories WHERE workspace_id NOT IN (SELECT path FROM workspaces) OR (conversation_id IS NOT NULL AND conversation_id NOT IN (SELECT id FROM conversations)); DELETE FROM workspace_model_bindings WHERE workspace_id NOT IN (SELECT path FROM workspaces);`)
   }
 
   private runScheduledIntegrityCheck() {

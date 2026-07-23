@@ -12,6 +12,10 @@ const now = new Date().toISOString()
 const workspace = { path: '/tmp/project', name: 'project', favorite: 0 as const, created_at: now, last_opened_at: now }
 const conversation = { id: randomUUID(), title: 'Teste', workspace: workspace.path, codex_thread_id: null, created_at: now, updated_at: now }
 const valid = () => ({ schemaVersion: 5, exportedAt: now, workspaces: [workspace], conversations: [conversation], messages: [], artifacts: [], memories: [], suggestions: [], suggestionDecisions: [], settings: { theme: 'dark' as const } })
+const modelDescriptor = { providerId: 'provider-1', modelId: 'model-1', displayName: 'Model 1', source: 'remote' as const, capabilities: ['chat'] as const, availability: 'available' as const }
+const modelCatalogItem = { provider_id: modelDescriptor.providerId, model_id: modelDescriptor.modelId, descriptor: JSON.stringify(modelDescriptor), updated_at: now }
+const modelBindings = { workspaceId: workspace.path, defaultBinding: { providerId: modelDescriptor.providerId, modelId: modelDescriptor.modelId }, roleBindings: {}, fallbackPolicy: 'disabled' as const, fallbackBindings: [] }
+const workspaceModelBinding = { workspace_id: workspace.path, bindings: JSON.stringify(modelBindings), updated_at: now }
 const temporaryFiles: string[] = []
 
 afterEach(() => { for (const file of temporaryFiles.splice(0)) fs.rmSync(file, { force: true }) })
@@ -40,6 +44,8 @@ describe('schema de backup', () => {
     expect(() => backupSchema.parse({ ...data, conversations: [conversation, conversation] })).toThrow(/duplicados/)
     const provider = { id: randomUUID(), provider_type: 'openai-compatible', display_name: 'Provider', source: 'remote', base_url: 'https://provider.example/v1', enabled: 1, requires_authentication: 1, timeout_ms: 30_000, created_at: now, updated_at: now }
     expect(() => backupSchema.parse({ ...data, providerConfigs: [provider, provider] })).toThrow(/duplicados/)
+    expect(() => backupSchema.parse({ ...data, modelCatalog: [modelCatalogItem, modelCatalogItem] })).toThrow(/duplicados/)
+    expect(() => backupSchema.parse({ ...data, workspaceModelBindings: [workspaceModelBinding, workspaceModelBinding] })).toThrow(/duplicados/)
   })
 
   it('preserva configuração de Provider sem aceitar referência de credencial', () => {
@@ -53,6 +59,34 @@ describe('schema de backup', () => {
         credential_ref: '9ba7e635-8746-48bd-a8e9-4609ff1690cb',
       }],
     })).toThrow()
+  })
+
+  it('valida snapshots normalizados de modelos e bindings do workspace', () => {
+    expect(backupSchema.parse({
+      ...valid(),
+      modelCatalog: [modelCatalogItem],
+      workspaceModelBindings: [workspaceModelBinding],
+    })).toMatchObject({
+      modelCatalog: [{ model_id: modelDescriptor.modelId }],
+      workspaceModelBindings: [{ workspace_id: workspace.path }],
+    })
+    expect(() => backupSchema.parse({
+      ...valid(),
+      modelCatalog: [{ ...modelCatalogItem, model_id: 'another-model' }],
+    })).toThrow(/Descriptor de modelo inconsistente/)
+    expect(() => backupSchema.parse({
+      ...valid(),
+      workspaceModelBindings: [{
+        ...workspaceModelBinding,
+        workspace_id: '/tmp/another-workspace',
+      }],
+    })).toThrow(/Bindings de modelos inconsistentes/)
+    expect(() => backupSchema.parse({
+      ...valid(),
+      workspaces: [],
+      conversations: [],
+      workspaceModelBindings: [workspaceModelBinding],
+    })).toThrow(/Workspace dos bindings não existe/)
   })
 
   it('rejeita UUIDs, enums e JSON serializado inválidos', () => {

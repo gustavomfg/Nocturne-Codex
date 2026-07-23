@@ -37,6 +37,10 @@ Provider discovery replaces only that Provider's catalog, and only after every
 descriptor passes normalized validation. A failed or superseded refresh
 preserves the last valid catalog.
 
+The last valid normalized snapshot is persisted locally. Startup may hydrate
+the in-memory Registry from that snapshot before a new discovery, without
+treating persisted availability as a successful live health check.
+
 ## Pricing
 
 Pricing is time-sensitive metadata. Execution records store the pricing snapshot used for the estimate so history remains explainable.
@@ -48,6 +52,9 @@ A model can be available, disabled, offline, missing credentials, incompatible o
 ## Workspace bindings
 
 Workspaces bind roles to model references. A user may override the binding for one task.
+Bindings are persisted as Workspace policy and may remain unresolved when a
+Provider or model is unavailable. Resolution must surface that state; it must
+not silently replace the user's selection.
 
 ## Core rule
 

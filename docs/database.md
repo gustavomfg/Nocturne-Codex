@@ -148,6 +148,12 @@ Stores:
 - pricing metadata
 - availability
 
+Schema 10 persists the last valid normalized descriptor snapshot in
+`model_catalog`, keyed by `provider_id + model_id`. Provider-native discovery
+payloads are never stored. Replacing a Provider catalog validates every
+descriptor before atomically replacing only that Provider's rows, so a failed
+refresh cannot erase the last usable snapshot or affect other Providers.
+
 ---
 
 # Provider Binding
@@ -173,6 +179,14 @@ Anthropic
 ```
 
 Bindings are workspace policy.
+
+Schema 10 stores one validated policy document per Workspace in
+`workspace_model_bindings`. It contains only normalized model references,
+role/default selection and explicit fallback policy. The record is deleted with
+the Workspace, but it is not constrained to a live Provider configuration or
+catalog row: removing or temporarily losing a Provider leaves the binding
+unresolved and visible for remediation instead of silently selecting another
+model.
 
 ---
 
@@ -394,6 +408,13 @@ Future migrations must:
 The schema 8 → 9 migration is additive and transactional. It creates Provider
 configuration storage and its enabled-state index without changing existing
 Workspace, conversation, message or memory records.
+
+The schema 9 → 10 migration is also additive and transactional. It creates the
+normalized model catalog and Workspace binding storage. Opening an existing
+schema 9 database produces a restrictive preventive copy before migration.
+Ordinary JSON backups validate and preserve both collections; bindings must
+reference a Workspace present in the backup. Databases with a schema newer than
+the application supports are rejected before maintenance or migration.
 
 ---
 

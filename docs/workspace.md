@@ -923,10 +923,14 @@ Backup and restore should preserve:
 - conversation relationships;
 - memory lifecycle;
 - provider bindings without secrets;
+- normalized model catalog snapshots;
 - execution metadata;
 - schema version.
 
 Restoration must not imply that provider credentials exist on the destination machine.
+It also must not imply that a persisted model is currently available. Restored
+bindings remain Workspace policy and are resolved again against the active
+Registry before execution.
 
 A restored workspace may display:
 

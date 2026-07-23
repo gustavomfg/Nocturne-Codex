@@ -96,6 +96,23 @@ export const migrations: Migration[] = [
     CREATE INDEX IF NOT EXISTS idx_provider_configs_enabled
       ON provider_configs(enabled DESC, updated_at DESC);
   `) },
+  { version: 10, up: (db) => db.exec(`
+    CREATE TABLE IF NOT EXISTS model_catalog (
+      provider_id TEXT NOT NULL CHECK(length(provider_id) BETWEEN 1 AND 512),
+      model_id TEXT NOT NULL CHECK(length(model_id) BETWEEN 1 AND 512),
+      descriptor TEXT NOT NULL CHECK(length(descriptor) BETWEEN 2 AND 100000),
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY(provider_id, model_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_model_catalog_provider
+      ON model_catalog(provider_id, updated_at DESC);
+    CREATE TABLE IF NOT EXISTS workspace_model_bindings (
+      workspace_id TEXT PRIMARY KEY,
+      bindings TEXT NOT NULL CHECK(length(bindings) BETWEEN 2 AND 50000),
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (workspace_id) REFERENCES workspaces(path) ON DELETE CASCADE
+    );
+  `) },
 ]
 
 export function migrateDatabase(db: Database.Database, currentVersion: number) {

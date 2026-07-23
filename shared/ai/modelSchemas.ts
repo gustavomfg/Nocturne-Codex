@@ -1,11 +1,11 @@
 import { z } from 'zod'
-import { modelAvailabilityStatuses, modelCapabilities } from './model'
+import { MODEL_LIMITS, modelAvailabilityStatuses, modelCapabilities } from './model'
 
 export const modelCapabilitySchema = z.enum(modelCapabilities)
 export const modelAvailabilitySchema = z.enum(modelAvailabilityStatuses)
 export const modelReferenceSchema = z.object({
-  providerId: z.string().trim().min(1),
-  modelId: z.string().trim().min(1),
+  providerId: z.string().trim().min(1).max(MODEL_LIMITS.identifierCharacters),
+  modelId: z.string().trim().min(1).max(MODEL_LIMITS.identifierCharacters),
 }).strict()
 
 const priceSchema = z.number().finite().nonnegative()
@@ -15,7 +15,7 @@ export const modelPricingSchema = z.object({
   inputPerMillionTokens: priceSchema.optional(),
   cachedInputPerMillionTokens: priceSchema.optional(),
   outputPerMillionTokens: priceSchema.optional(),
-  effectiveAt: z.string().trim().min(1),
+  effectiveAt: z.string().trim().min(1).max(MODEL_LIMITS.pricingEffectiveAtCharacters),
 }).strict().refine(
   (pricing) => pricing.inputPerMillionTokens !== undefined
     || pricing.cachedInputPerMillionTokens !== undefined
@@ -24,11 +24,11 @@ export const modelPricingSchema = z.object({
 )
 
 export const modelDescriptorSchema = z.object({
-  providerId: z.string().trim().min(1),
-  modelId: z.string().trim().min(1),
-  displayName: z.string().trim().min(1),
-  family: z.string().trim().min(1).optional(),
-  version: z.string().trim().min(1).optional(),
+  providerId: z.string().trim().min(1).max(MODEL_LIMITS.identifierCharacters),
+  modelId: z.string().trim().min(1).max(MODEL_LIMITS.identifierCharacters),
+  displayName: z.string().trim().min(1).max(MODEL_LIMITS.displayNameCharacters),
+  family: z.string().trim().min(1).max(MODEL_LIMITS.familyCharacters).optional(),
+  version: z.string().trim().min(1).max(MODEL_LIMITS.versionCharacters).optional(),
   source: z.enum(['local', 'remote']),
   capabilities: z.array(modelCapabilitySchema),
   contextWindow: z.number().int().positive().optional(),

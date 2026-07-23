@@ -1,5 +1,13 @@
 import type { ProviderSource } from './provider'
 
+export const MODEL_LIMITS = {
+  identifierCharacters: 512,
+  displayNameCharacters: 500,
+  familyCharacters: 500,
+  versionCharacters: 200,
+  pricingEffectiveAtCharacters: 100,
+} as const
+
 export const modelCapabilities = [
   'chat',
   'streaming',

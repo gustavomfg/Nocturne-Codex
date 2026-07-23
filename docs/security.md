@@ -483,6 +483,11 @@ state, never the reference. JSON backup export omits the reference entirely, so
 restoration cannot bind configuration imported from another installation to a
 credential already present on the machine.
 
+SQLite schema 10 adds only normalized model descriptors and Workspace model
+bindings. Neither table stores Provider secrets, authorization headers or
+native discovery payloads. Backup validation checks descriptor identity,
+binding identity, duplicate keys and Workspace ownership before restoration.
+
 The main-process configuration service is the transaction coordinator across
 SQLite, the credential vault and the Provider Registry. It validates enabled
 configurations before persistence, compensates newly created vault entries when

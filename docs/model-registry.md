@@ -122,6 +122,12 @@ Discovery should not assume every provider exposes the same metadata.
 
 Missing fields are acceptable.
 
+Only normalized descriptors are persisted. Discovery validates the complete
+result before atomically replacing the snapshot for that Provider, preserving
+the last valid snapshot on failure and leaving every other Provider untouched.
+Persisted availability is descriptive cache state, not proof that a Provider
+is currently reachable.
+
 ---
 
 # Capabilities
@@ -179,6 +185,11 @@ OpenRouter
 ```
 
 Changing providers should not require changing the workspace role.
+
+Bindings are persisted as Workspace-owned policy. They intentionally survive a
+Provider becoming unavailable or being removed, at which point they are
+reported as unresolved for explicit remediation. This preserves user intent
+and prevents a silent cross-Provider fallback.
 
 ---
 

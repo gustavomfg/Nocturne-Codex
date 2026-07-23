@@ -1,7 +1,7 @@
 import compatibility from './codex-compatibility.json'
 
 export const CODEX_COMPATIBILITY = compatibility
-export const DATABASE_SCHEMA_VERSION = 9
+export const DATABASE_SCHEMA_VERSION = 10
 
 export type CodexCompatibilityStatus = 'unsupported' | 'minimum-compatible-unverified' | 'verified'
 
