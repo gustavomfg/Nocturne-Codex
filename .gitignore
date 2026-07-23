@@ -27,6 +27,8 @@ coverage
 .env
 .env.*
 !.env.example
+provider-credentials.json
+.provider-credentials.json.*.tmp
 
 # Local application data
 *.db

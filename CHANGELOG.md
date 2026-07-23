@@ -25,6 +25,11 @@
   cancelamento e erros sem expor payloads nativos;
 - limites de catálogo, stream e evento, recusa de redirects e confirmação dos
   modelos configurados protegem o primeiro transporte HTTP de Provider;
+- cofre de credenciais do main process persiste somente ciphertext atômico com
+  referências opacas, permissões `0600` e serialização de mutações concorrentes;
+- `safeStorage` usa proteção do sistema operacional e falha fechado no Linux
+  quando Secret Service ou KWallet não estão disponíveis, recusando
+  `basic_text` e backends desconhecidos;
 - geração de imagens permanece fora do conjunto inicial de capacidades e será tratada em uma etapa futura.
 
 ### Estabilidade e compatibilidade
@@ -64,7 +69,7 @@
 
 ### Qualidade
 
-- 158 testes unitários e de integração;
+- 166 testes unitários e de integração;
 - 28 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints, no Segundo Cérebro e na atualização da Saúde do Projeto;
 - typecheck, ESLint, design system, build de produção, pacote Linux real e audit npm sem vulnerabilidades aprovados;
 - decisões de sugestão precisam persistir antes do turno Build, e o status aplicado exige alterações observadas no escopo aprovado;

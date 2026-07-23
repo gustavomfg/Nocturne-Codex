@@ -46,11 +46,19 @@ SQLite
 ├── project.json
 ├── memory.md
 └── rules.md
+
+Encrypted credential vault
+│
+└── Opaque provider credential references and ciphertext
 ```
 
 SQLite stores structured state.
 
 `.nocturne` stores versionable project metadata.
+
+The credential vault is main-process state under the Electron user-data
+directory. It is not part of SQLite, `.nocturne/` or ordinary backup exports.
+Provider records store only an opaque reference.
 
 ---
 

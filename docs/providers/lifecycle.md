@@ -22,6 +22,12 @@ Disabled or removed
 
 The user supplies non-sensitive settings and, when required, a secret. Secrets are written to secure storage; the renderer receives only masked state.
 
+The secure-storage foundation uses opaque credential references. Provider
+configuration may retain a reference and a boolean/masked summary, but only the
+main process can resolve it at request time. Creation, rotation and deletion
+are atomic vault operations. If operating-system protection is unavailable,
+credential persistence is rejected and the Provider cannot be marked ready.
+
 ## Validation
 
 Validation checks:

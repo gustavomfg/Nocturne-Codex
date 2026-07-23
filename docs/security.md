@@ -457,6 +457,26 @@ Examples:
 
 Persistent provider configuration should store only a secret reference.
 
+The main-process credential vault stores opaque references separately from
+provider configuration. Ciphertext is written atomically under the Electron
+user-data directory with mode `0600`; plaintext is never written to disk,
+SQLite, workspace files or backups.
+
+Encryption uses Electron `safeStorage`, which delegates key protection to the
+operating system. On Linux, persistence is enabled only when Secret Service or
+KWallet is selected explicitly. The `basic_text` and `unknown` backends fail
+closed and the application must report secure storage as unavailable rather
+than persist a weakly protected credential.
+
+The vault:
+
+- validates and bounds secrets and opaque references;
+- serializes concurrent mutations;
+- refuses corrupted files and symbolic links;
+- preserves the previous ciphertext when encryption or an atomic write fails;
+- never lists or returns secrets to the renderer;
+- excludes its encrypted file from ordinary application backup data.
+
 ## Secret Submission
 
 ```text
