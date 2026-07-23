@@ -42,7 +42,7 @@ process.on('uncaughtException', (error) => { logger?.error('app', 'uncaughtExcep
 process.on('unhandledRejection', (reason) => { logger?.error('app', 'unhandledRejection no processo principal', reason); console.error(reason) })
 
 function createWindow() {
-  if (!database || !logger || !providerConfigurations || !modelRegistry || !modelCatalog) throw new Error('Serviços do Nocturne não foram inicializados.')
+  if (!database || !logger || !providerConfigurations || !modelRegistry || !providerRegistry || !modelCatalog) throw new Error('Serviços do Nocturne não foram inicializados.')
   const rendererUrl = VITE_DEV_SERVER_URL || new URL(`file://${path.join(RENDERER_DIST, 'index.html')}`).toString()
   const currentWindow = new BrowserWindow({
     width: 1440, height: 920, minWidth: 720, minHeight: 600,
@@ -88,6 +88,8 @@ function createWindow() {
         return modelCatalog.refresh(providerId)
       },
     },
+    modelRegistry,
+    providerRegistry,
   )
   if (app.isPackaged && process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT) {
     const output = path.resolve(process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT)

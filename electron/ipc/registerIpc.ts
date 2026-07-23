@@ -28,6 +28,10 @@ import {
   registerModelIpc,
   type ModelCatalogOperations,
 } from './registerModelIpc'
+import { ModelRegistry } from '../ai/ModelRegistry'
+import { ProviderRegistry } from '../ai/ProviderRegistry'
+import { executeAiTurn } from '../ai/executeAiTurn'
+import type { NormalizedTaskInput } from '../../shared/ai/task'
 
 const execFileAsync = promisify(execFile)
 
@@ -38,6 +42,8 @@ export function registerIpc(
   logger: Logger,
   providerConfigurations: ProviderConfigurationOperations,
   modelCatalog: ModelCatalogOperations,
+  modelRegistry: ModelRegistry,
+  providerRegistry: ProviderRegistry,
 ) {
   const ipcMain = safeIpcMain(win)
   const disposeData = registerDataIpc(win, database, logger)
@@ -117,6 +123,54 @@ export function registerIpc(
     const { conversationId, prompt, attachments, mode } = codexSendSchema.parse(value)
     const conversation = getAuthorizedConversation(database, conversationId)
     attachments.forEach((filePath) => assertInsideWorkspace(filePath, conversation.workspace))
+
+    const bindings = database.workspaceModelBindings.get(conversation.workspace)
+    const enabledExternalProviders = providerConfigurations.list().filter(
+      (p) => p.enabled && p.id !== 'codex-cli',
+    )
+    const canUseExternalAi = enabledExternalProviders.length > 0 && bindings?.defaultBinding
+
+    if (canUseExternalAi) {
+      database.addMessage(conversationId, 'user', prompt, { attachments })
+      if (conversation.title === 'Nova conversa') database.renameFromPrompt(conversationId, prompt)
+
+      const workspaceMemory = database.getWorkspaceMemory(conversation.workspace)
+      const projectPath = path.join(conversation.workspace, '.nocturne', 'project.json')
+      let projectName = path.basename(conversation.workspace)
+      try {
+        const projectData = JSON.parse(await fs.promises.readFile(projectPath, 'utf8')) as { name?: string }
+        if (projectData.name) projectName = projectData.name
+      } catch { /* use directory name */ }
+
+      const contextSources: NormalizedTaskInput['context'] = []
+      if (workspaceMemory.content) {
+        contextSources.push({
+          id: 'workspace-memory',
+          type: 'memory',
+          title: 'Memória do workspace',
+          content: workspaceMemory.content,
+          scope: 'workspace',
+          potentiallyOutdated: false,
+        })
+      }
+
+      const taskInput: NormalizedTaskInput = {
+        workspace: { id: conversation.workspace, name: projectName },
+        intent: prompt,
+        mode: mode === 'review' ? 'review' : 'build',
+        messages: [],
+        context: contextSources,
+        constraints: [],
+        requirements: ['chat', 'streaming'],
+        selection: { type: 'workspace-default' },
+        output: { format: 'markdown' },
+        permissions: { workspaceAccess: mode === 'review' ? 'read-only' : 'workspace-write' },
+        tools: [],
+      }
+
+      await executeAiTurn(win, modelRegistry, providerRegistry, taskInput, bindings)
+      return { threadId: randomUUID(), recreated: false }
+    }
 
     let threadId = conversation.codexThreadId
     let recreated = false
