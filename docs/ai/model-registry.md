@@ -58,6 +58,10 @@ Bindings are persisted as Workspace policy and may remain unresolved when a
 Provider or model is unavailable. Resolution must surface that state; it must
 not silently replace the user's selection.
 
+The renderer accesses catalog and binding operations only through the typed
+`models.*` preload surface. Workspace binding reads and writes require current
+Workspace authorization; Provider-native discovery data never crosses IPC.
+
 ## Core rule
 
 > **The registry describes models. The orchestrator executes tasks.**

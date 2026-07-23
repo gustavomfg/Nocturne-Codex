@@ -42,6 +42,15 @@ Secrets may be submitted once but are never returned. The preload does not
 retain them, and configuration responses contain only
 `credentialConfigured`.
 
+## Model IPC
+
+The renderer can list normalized descriptors, request discovery for one named
+Provider and read or update Workspace model bindings through `models.*`
+operations. Discovery responses contain no Provider-native payloads. Binding
+reads and writes require the Workspace to be currently authorized, validate the
+same strict shared contract in the main process and return sanitized error
+envelopes.
+
 ## Streaming
 
 Start returns an execution ID. Events include the ID and are delivered only to authorized consumers. Subscriptions are narrow and return exact unsubscribe functions.

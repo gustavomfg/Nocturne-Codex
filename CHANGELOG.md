@@ -51,6 +51,9 @@
 - IPC e preload tipados expõem somente operações nomeadas de configuração,
   validam novamente os payloads e devolvem resumos e erros sanitizados sem
   credenciais ou referências do cofre;
+- API `models.*` expõe somente catálogo normalizado, discovery por Provider e
+  bindings validados, exigindo autorização atual do Workspace para ler ou
+  alterar sua política;
 - Configurações ganha gerenciamento acessível de Providers OpenAI-compatible,
   com drafts offline, credencial transitória, validação explícita, edição,
   teste de conexão e remoção confirmada em layouts desktop e compacto;

@@ -3,6 +3,7 @@ import { IPC_CHANNELS as channels } from '../shared/ipc/channels'
 import type { CodexEvent, CodexStatus } from '../shared/types'
 import type {
   NocturneApi,
+  ModelIpcResult,
   ProviderConfigurationIpcResult,
 } from '../shared/ipc/contracts'
 import type { ProviderAvailability } from '../shared/ai/provider'
@@ -36,6 +37,14 @@ async function providerResult<T>(
     response.error.message,
     response.error.availability,
   )
+}
+
+async function modelResult<T>(result: Promise<ModelIpcResult<T>>): Promise<T> {
+  const response = await result
+  if (response.ok) return response.value
+  const error = new Error(response.error.message)
+  error.name = response.error.code
+  throw error
 }
 
 export const nocturneApi: NocturneApi = {
@@ -102,6 +111,21 @@ export const nocturneApi: NocturneApi = {
     testConnection: (id) => providerResult(ipcRenderer.invoke(
       channels.providers.testConnection,
       { id },
+    )),
+  },
+  models: {
+    list: () => modelResult(ipcRenderer.invoke(channels.models.list)),
+    refresh: (providerId) => modelResult(ipcRenderer.invoke(
+      channels.models.refresh,
+      { providerId },
+    )),
+    bindings: (workspaceId) => modelResult(ipcRenderer.invoke(
+      channels.models.bindings,
+      { workspaceId },
+    )),
+    setBindings: (bindings) => modelResult(ipcRenderer.invoke(
+      channels.models.setBindings,
+      bindings,
     )),
   },
   git: { status: (conversationId: string) => ipcRenderer.invoke(channels.git.status, conversationId), commit: (conversationId: string, message: string, files: string[]) => ipcRenderer.invoke(channels.git.commit, { conversationId, message, files }) },

@@ -35,12 +35,14 @@ let disposeIpc: (() => void) | null = null
 let disposeUpdates: (() => void) | null = null
 let providerConfigurations: ProviderConfigurationService | null = null
 let providerRegistry: ProviderRegistry | null = null
+let modelRegistry: ModelRegistry | null = null
+let modelCatalog: ModelCatalogService | null = null
 
 process.on('uncaughtException', (error) => { logger?.error('app', 'uncaughtException no processo principal', error); console.error(error) })
 process.on('unhandledRejection', (reason) => { logger?.error('app', 'unhandledRejection no processo principal', reason); console.error(reason) })
 
 function createWindow() {
-  if (!database || !logger || !providerConfigurations) throw new Error('Serviços do Nocturne não foram inicializados.')
+  if (!database || !logger || !providerConfigurations || !modelRegistry || !modelCatalog) throw new Error('Serviços do Nocturne não foram inicializados.')
   const rendererUrl = VITE_DEV_SERVER_URL || new URL(`file://${path.join(RENDERER_DIST, 'index.html')}`).toString()
   const currentWindow = new BrowserWindow({
     width: 1440, height: 920, minWidth: 720, minHeight: 600,
@@ -79,6 +81,13 @@ function createWindow() {
     codex,
     logger,
     providerConfigurations,
+    {
+      list: () => modelRegistry?.list() ?? [],
+      refresh: (providerId) => {
+        if (!modelCatalog) throw new Error('Catálogo de modelos indisponível.')
+        return modelCatalog.refresh(providerId)
+      },
+    },
   )
   if (app.isPackaged && process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT) {
     const output = path.resolve(process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT)
@@ -119,11 +128,11 @@ async function initializeServices() {
   const userDataPath = app.getPath('userData')
   database = new LocalDatabase(userDataPath)
   logger = new Logger(app.getPath('logs'), database.getSettings().diagnosticMode === 'true')
-  const models = new ModelRegistry()
+  modelRegistry = new ModelRegistry()
   providerRegistry = new ProviderRegistry()
-  const modelCatalog = new ModelCatalogService(
+  modelCatalog = new ModelCatalogService(
     providerRegistry,
-    models,
+    modelRegistry,
     database.modelCatalog,
   )
   try {
@@ -146,7 +155,7 @@ async function initializeServices() {
       new ElectronCredentialEncryption(),
     ),
     providerRegistry,
-    new OpenAICompatibleAdapterFactory(models),
+    new OpenAICompatibleAdapterFactory(modelRegistry),
   )
   try {
     const initialized = await providerConfigurations.initialize()
@@ -210,6 +219,8 @@ app.on('before-quit', () => {
   void providerRegistry?.dispose()
   providerRegistry = null
   providerConfigurations = null
+  modelCatalog = null
+  modelRegistry = null
   database?.close(); database = null
 })
 app.on('child-process-gone', (_event, details) => logger?.error('app', 'Processo filho do Electron encerrado', details))

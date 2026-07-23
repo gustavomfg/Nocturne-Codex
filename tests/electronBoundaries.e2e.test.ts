@@ -10,6 +10,7 @@ import type {
   ProviderConfigurationSummary,
 } from '../shared/ai/providerConfiguration'
 import { ProviderConfigurationServiceError } from '../electron/ai/ProviderConfigurationService'
+import type { ModelDescriptor } from '../shared/ai/model'
 
 type IpcHandler = (event: unknown, ...args: unknown[]) => unknown
 
@@ -152,6 +153,20 @@ class SimulatedProviderConfigurations {
   }
 }
 
+const simulatedModel: ModelDescriptor = {
+  providerId: 'provider-simulated',
+  modelId: 'model-simulated',
+  displayName: 'Modelo simulado',
+  source: 'remote',
+  capabilities: ['chat'],
+  availability: 'available',
+}
+
+const simulatedModelCatalog = {
+  list: () => [simulatedModel],
+  refresh: async () => ({ status: 'applied' as const, models: [simulatedModel] }),
+}
+
 describe.sequential('fronteiras Electron E2E', () => {
   let root: string
   let workspace: string
@@ -200,6 +215,7 @@ describe.sequential('fronteiras Electron E2E', () => {
       codex as never,
       logger,
       providers,
+      simulatedModelCatalog,
     )
     await import('../electron/preload')
     if (!electron.exposed) throw new Error('O preload não expôs window.nocturne.')
@@ -213,7 +229,7 @@ describe.sequential('fronteiras Electron E2E', () => {
   })
 
   it('expõe somente a API nomeada e cruza preload, IPC e SQLite', async () => {
-    expect(Object.keys(api).sort()).toEqual(['artifacts', 'brain', 'clipboard', 'codex', 'conversations', 'data', 'diagnostics', 'documents', 'files', 'git', 'memory', 'providers', 'settings', 'suggestions', 'workspace'])
+    expect(Object.keys(api).sort()).toEqual(['artifacts', 'brain', 'clipboard', 'codex', 'conversations', 'data', 'diagnostics', 'documents', 'files', 'git', 'memory', 'models', 'providers', 'settings', 'suggestions', 'workspace'])
     await api.clipboard.writeText('commit sugerido')
     await expect(api.clipboard.readText()).resolves.toBe('commit sugerido')
     const configReads = codex.configReads
@@ -222,6 +238,23 @@ describe.sequential('fronteiras Electron E2E', () => {
     electron.dialogs.open.push({ canceled: false, filePaths: [workspace] })
     await expect(api.workspace.select()).resolves.toBe(workspace)
     expect(fs.existsSync(path.join(workspace, '.nocturne', 'project.json'))).toBe(true)
+    await expect(api.models.list()).resolves.toEqual([simulatedModel])
+    await expect(api.models.refresh(simulatedModel.providerId)).resolves.toMatchObject({
+      status: 'applied',
+      models: [simulatedModel],
+    })
+    const bindings = {
+      workspaceId: workspace,
+      defaultBinding: {
+        providerId: simulatedModel.providerId,
+        modelId: simulatedModel.modelId,
+      },
+      roleBindings: {},
+      fallbackPolicy: 'disabled' as const,
+      fallbackBindings: [],
+    }
+    await expect(api.models.setBindings(bindings)).resolves.toEqual(bindings)
+    await expect(api.models.bindings(workspace)).resolves.toEqual(bindings)
 
     const conversation = await api.conversations.create(workspace)
     const remembered = database.createBrainMemory(workspace, { kind: 'decision', scope: 'workspace', content: 'O Primeiro turno deve preservar a arquitetura aprovada.', status: 'active' })
@@ -364,6 +397,7 @@ describe.sequential('fronteiras Electron E2E', () => {
       codex as never,
       logger,
       providers,
+      simulatedModelCatalog,
     )
     expect(electron.handlers.size).toBe(handlerCount)
     expect(codex.eventNames().reduce((total, event) => total + codex.listenerCount(event), 0)).toBe(listenerCount)
@@ -388,7 +422,7 @@ describe.sequential('fronteiras Electron E2E', () => {
   it('exporta e restaura o backup atravessando diálogos e IPC', async () => {
     electron.dialogs.save.push({ canceled: false, filePath: backupPath })
     await expect(api.data.export()).resolves.toBe(backupPath)
-    const backup = JSON.parse(fs.readFileSync(backupPath, 'utf8')) as { schemaVersion: number; conversations: Array<Record<string, unknown>>; workspaces: Array<Record<string, unknown>>; messages: unknown[]; artifacts: Array<Record<string, unknown>>; memories: Array<Record<string, unknown>>; brainMemories: Array<Record<string, unknown>>; suggestions: Array<Record<string, unknown>>; providerConfigs: Array<Record<string, unknown>>; settings: Record<string, string> }
+    const backup = JSON.parse(fs.readFileSync(backupPath, 'utf8')) as { schemaVersion: number; conversations: Array<Record<string, unknown>>; workspaces: Array<Record<string, unknown>>; messages: unknown[]; artifacts: Array<Record<string, unknown>>; memories: Array<Record<string, unknown>>; brainMemories: Array<Record<string, unknown>>; suggestions: Array<Record<string, unknown>>; providerConfigs: Array<Record<string, unknown>>; modelCatalog: Array<Record<string, unknown>>; workspaceModelBindings: Array<{ workspace_id: string; bindings: string }>; settings: Record<string, string> }
     expect(backup.schemaVersion).toBe(DATABASE_SCHEMA_VERSION)
     expect(backup.brainMemories).toEqual([])
     expect(backup.providerConfigs).toEqual([])
@@ -402,6 +436,12 @@ describe.sequential('fronteiras Electron E2E', () => {
     manipulated.memories.forEach((item) => { item.workspace = outside })
     manipulated.brainMemories.forEach((item) => { item.workspace_id = outside })
     manipulated.suggestions.forEach((item) => { item.workspace_id = outside })
+    manipulated.workspaceModelBindings.forEach((item) => {
+      item.workspace_id = outside
+      const bindings = JSON.parse(item.bindings) as { workspaceId: string }
+      bindings.workspaceId = outside
+      item.bindings = JSON.stringify(bindings)
+    })
     fs.writeFileSync(backupPath, JSON.stringify(manipulated))
 
     electron.dialogs.open.push({ canceled: false, filePaths: [backupPath] })
@@ -414,6 +454,7 @@ describe.sequential('fronteiras Electron E2E', () => {
     await expect(api.suggestions.list(restored.id)).resolves.not.toThrow()
     await expect(api.memory.get(restored.id)).rejects.toThrow(/Workspace não autorizado/)
     await expect(api.brain.page(restored.id)).rejects.toThrow(/Workspace não autorizado/)
+    await expect(api.models.bindings(outside)).rejects.toThrow(/Workspace não autorizado/)
     await expect(api.codex.resume(restored.id)).rejects.toThrow(/Workspace não autorizado/)
     await expect(api.files.preview(restored.id, path.join(outside, 'secret.md'))).rejects.toThrow(/Workspace não autorizado/)
     await expect(api.git.status(restored.id)).rejects.toThrow(/Workspace não autorizado/)

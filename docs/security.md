@@ -229,6 +229,11 @@ window.nocturne.providers.testConnection(input);
 
 The preload exposes intent-oriented operations, not implementation primitives.
 
+Model discovery and binding configuration follow the same boundary. The
+renderer receives normalized descriptors only, while binding reads and writes
+are revalidated and require a currently authorized Workspace in the main
+process.
+
 ## Runtime Validation
 
 All renderer-controlled data must be treated as untrusted.

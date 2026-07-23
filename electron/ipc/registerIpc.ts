@@ -24,6 +24,10 @@ import {
   registerProviderIpc,
   type ProviderConfigurationOperations,
 } from './registerProviderIpc'
+import {
+  registerModelIpc,
+  type ModelCatalogOperations,
+} from './registerModelIpc'
 
 const execFileAsync = promisify(execFile)
 
@@ -33,6 +37,7 @@ export function registerIpc(
   codex: CodexClient,
   logger: Logger,
   providerConfigurations: ProviderConfigurationOperations,
+  modelCatalog: ModelCatalogOperations,
 ) {
   const ipcMain = safeIpcMain(win)
   const disposeData = registerDataIpc(win, database, logger)
@@ -40,6 +45,7 @@ export function registerIpc(
   const disposeWorkspace = registerWorkspaceIpc(win, database, { ensureWorkspace: ensureNocturneWorkspace, assertKnownWorkspace: (value) => getAuthorizedWorkspace(database, value), run })
   const disposeKnowledge = registerKnowledgeIpc(win, database, logger, { workspace: (id) => getConversation(database, id).workspace, authorizedWorkspace: (id) => getAuthorizedConversation(database, id).workspace, read: readWorkspaceContext, write: writeWorkspaceContext, recordDecision: recordSuggestionDecision })
   const disposeProviders = registerProviderIpc(win, providerConfigurations)
+  const disposeModels = registerModelIpc(win, database, modelCatalog)
   ipcMain.handle('clipboard:readText', () => clipboard.readText().slice(0, 2_000_000))
   ipcMain.handle('clipboard:writeText', (_event, value: unknown) => { clipboard.writeText(z.string().max(2_000_000).parse(value)) })
   const approvalDetails = new Map<string, { command?: string; risk?: string }>()
@@ -221,6 +227,7 @@ export function registerIpc(
     disposeGit()
     disposeData()
     disposeProviders()
+    disposeModels()
   }
 }
 

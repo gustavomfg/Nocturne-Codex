@@ -6,6 +6,8 @@ import type {
   ProviderConfigurationInput,
   ProviderConfigurationSummary,
 } from '../ai/providerConfiguration'
+import type { ModelDescriptor } from '../ai/model'
+import type { WorkspaceModelBindings } from '../ai/bindings'
 
 export interface ProviderConfigurationIpcError {
   code: ProviderConfigurationErrorCode
@@ -16,6 +18,16 @@ export interface ProviderConfigurationIpcError {
 export type ProviderConfigurationIpcResult<T> =
   | { ok: true; value: T }
   | { ok: false; error: ProviderConfigurationIpcError }
+
+export type ModelIpcErrorCode =
+  | 'invalid-request'
+  | 'not-found'
+  | 'workspace-not-authorized'
+  | 'operation-failed'
+
+export type ModelIpcResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: { code: ModelIpcErrorCode; message: string } }
 
 export interface NocturneApi {
   workspace: { select(expectedWorkspace?: string): Promise<string | null>; validate(value: string): Promise<string | null>; list(): Promise<Workspace[]>; remove(value: string): Promise<void>; favorite(value: string, favorite: boolean): Promise<void>; openTool(value: string, tool: 'editor' | 'terminal'): Promise<void> }
@@ -41,6 +53,12 @@ export interface NocturneApi {
     update(id: string, configuration: ProviderConfigurationInput, options?: { credential?: string; clearCredential?: boolean }): Promise<ProviderConfigurationSummary>
     remove(id: string): Promise<boolean>
     testConnection(id: string): Promise<ProviderAvailability>
+  }
+  models: {
+    list(): Promise<ModelDescriptor[]>
+    refresh(providerId: string): Promise<{ status: 'applied' | 'superseded'; models: ModelDescriptor[] }>
+    bindings(workspaceId: string): Promise<WorkspaceModelBindings | null>
+    setBindings(bindings: WorkspaceModelBindings): Promise<WorkspaceModelBindings>
   }
   git: { status(conversationId: string): Promise<GitInfo>; commit(conversationId: string, message: string, files: string[]): Promise<{ output: string }> }
   documents: { saveMarkdown(conversationId: string, content: string, name?: string): Promise<string | null>; export(conversationId: string, content: string, format: 'docx' | 'pdf' | 'html'): Promise<string | null> }

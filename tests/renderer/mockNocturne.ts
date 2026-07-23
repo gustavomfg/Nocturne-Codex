@@ -97,6 +97,12 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
         },
         testConnection: async () => ({ status: 'available' as const, message: 'Conexão validada.' }),
       },
+      models: {
+        list: async () => [],
+        refresh: async () => ({ status: 'applied' as const, models: [] }),
+        bindings: async () => null,
+        setBindings: async (bindings: unknown) => bindings,
+      },
       git: { status: async () => ({ branch: 'master', status: 'M src/App.tsx', diff: '', files: [{ path: 'src/App.tsx', status: 'M' }] }), commit: noop },
       documents: { saveMarkdown: async () => '/tmp/resposta.md', export: async () => '/tmp/resposta.pdf' },
       clipboard: { readText: async () => '', writeText: noop },

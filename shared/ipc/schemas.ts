@@ -4,6 +4,7 @@ import { PERSISTENCE_LIMITS } from '../constants'
 import { brainMemoryKinds, brainMemoryScopes, brainMemoryStatuses, isSafeBrainMemoryContent } from '../brainMemory'
 import { PROVIDER_CONFIGURATION_LIMITS } from '../ai/providerConfiguration'
 import { providerConfigurationInputSchema } from '../ai/providerConfigurationSchemas'
+import { MODEL_LIMITS } from '../ai/model'
 
 export const idSchema = z.string().uuid()
 export const pageSchema = z.object({ offset: z.number().int().min(0).max(1_000_000), limit: z.number().int().min(1).max(200) }).strict()
@@ -42,3 +43,6 @@ export const providerConfigurationUpdateSchema = z.object({
   'A credencial não pode ser definida e removida na mesma operação.',
 )
 export const providerConfigurationIdSchema = z.object({ id: idSchema }).strict()
+export const modelProviderIdSchema = z.object({
+  providerId: z.string().trim().min(1).max(MODEL_LIMITS.identifierCharacters),
+}).strict()
