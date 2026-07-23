@@ -35,12 +35,20 @@ Local providers execute through endpoints such as Ollama or LM Studio. Local doe
 
 The user should be able to:
 
+- start from a curated company catalog instead of entering protocol details;
+- see which connection methods are actually supported;
 - add, edit, disable and remove providers;
 - test connectivity;
 - inspect discovered models;
 - see local or remote status;
 - choose workspace defaults and role bindings;
 - view usage, cost and errors.
+
+The catalog is onboarding metadata, not execution authority. A preset may
+produce a validated draft only when an implemented adapter supports its
+protocol. Account subscriptions must not be presented as API access unless the
+Provider exposes an official account authorization flow implemented by
+Nocturne. Custom OpenAI-compatible configuration remains an advanced option.
 
 ## Initial implementation strategy
 

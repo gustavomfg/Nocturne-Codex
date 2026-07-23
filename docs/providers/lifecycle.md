@@ -22,6 +22,18 @@ Disabled or removed
 
 The user supplies non-sensitive settings and, when required, a secret. Secrets are written to secure storage; the renderer receives only masked state.
 
+The primary setup flow starts from the shared Provider Catalog. Catalog entries
+declare source, protocol, safe default endpoint and available connection
+methods, then produce the same normalized configuration accepted by the
+configuration service. The catalog itself is not persisted and cannot bypass
+validation. Providers whose native protocol has no adapter remain visible but
+cannot produce a configuration.
+
+Consumer subscriptions and developer API access are distinct unless an
+official Provider-specific authorization contract says otherwise. Account
+connection methods remain unavailable until their OAuth or SDK flow, scopes,
+token lifecycle and revocation behavior are implemented and reviewed.
+
 The secure-storage foundation uses opaque credential references. Provider
 configuration may retain a reference and a boolean/masked summary, but only the
 main process can resolve it at request time. Creation, rotation and deletion

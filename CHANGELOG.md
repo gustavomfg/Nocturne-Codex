@@ -62,6 +62,8 @@
   referências sem resolução e atualiza discovery por Provider;
 - Codex CLI passa a aparecer como integração opcional, sem ocupar a entrada
   principal das configurações de IA;
+- catálogo compartilhado diferencia empresas, protocolos e métodos de conexão
+  realmente disponíveis sem tratar assinaturas de consumo como acesso à API;
 - geração de imagens permanece fora do conjunto inicial de capacidades e será tratada em uma etapa futura.
 
 ### Estabilidade e compatibilidade
