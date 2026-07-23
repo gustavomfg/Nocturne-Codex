@@ -2,8 +2,6 @@ import type { ProviderConfigurationInput } from './providerConfiguration'
 
 export type ProviderCatalogId =
   | 'openai'
-  | 'anthropic'
-  | 'google'
   | 'openrouter'
   | 'deepseek'
   | 'ollama'
@@ -53,52 +51,6 @@ export const providerCatalog: readonly ProviderCatalogEntry[] = [
         label: 'Conta ChatGPT',
         status: 'unavailable',
         detail: 'Planos ChatGPT não concedem acesso geral à API.',
-      },
-    ],
-  },
-  {
-    id: 'anthropic',
-    displayName: 'Anthropic',
-    description: 'Claude via integração oficial da Anthropic.',
-    source: 'remote',
-    integrationStatus: 'adapter-required',
-    protocol: 'Messages API',
-    requiresAuthentication: true,
-    connectionMethods: [
-      {
-        kind: 'api-key',
-        label: 'Chave da Console',
-        status: 'unavailable',
-        detail: 'Requer o adapter dedicado da Messages API.',
-      },
-      {
-        kind: 'account',
-        label: 'Conta Claude',
-        status: 'unavailable',
-        detail: 'Somente fluxos oficiais de conta poderão ser habilitados.',
-      },
-    ],
-  },
-  {
-    id: 'google',
-    displayName: 'Google',
-    description: 'Gemini via Google AI Studio ou Vertex AI.',
-    source: 'remote',
-    integrationStatus: 'adapter-required',
-    protocol: 'Gemini API',
-    requiresAuthentication: true,
-    connectionMethods: [
-      {
-        kind: 'api-key',
-        label: 'Google AI Studio',
-        status: 'unavailable',
-        detail: 'Requer o adapter dedicado e discovery de capabilities do Gemini.',
-      },
-      {
-        kind: 'account',
-        label: 'Conta Google',
-        status: 'unavailable',
-        detail: 'OAuth será oferecido somente com escopos oficiais e mínimos.',
       },
     ],
   },
