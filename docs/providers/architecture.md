@@ -62,6 +62,18 @@ closed for workspace writes and App Server approval requests until the common
 Tool Calling policy is implemented. This prevents a local Provider protocol
 from silently becoming application authority.
 
+## OpenAI-compatible transport
+
+The generic HTTP adapter uses the platform `fetch` implementation instead of a
+provider SDK. Endpoint policy, request timeouts, response limits, SSE parsing,
+usage mapping and safe error conversion stay in the main process. Credentials
+are supplied by an injected resolver and are never part of normalized tasks,
+model descriptors or events.
+
+The transport supports explicit remote HTTPS endpoints and local loopback
+runtimes. It does not follow redirects or infer model capabilities from native
+catalogs.
+
 ## Core rule
 
 > **Provider code ends where normalized Nocturne contracts begin.**

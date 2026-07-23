@@ -20,6 +20,11 @@
   Workspace por uma dependência autorizada em vez de aceitar paths do renderer;
 - a primeira fatia do adapter Codex executa somente tarefas read-only e recusa
   escrita ou aprovações nativas até existir o contrato comum de Tool Calling;
+- adapter OpenAI-compatible reutilizável valida endpoints remotos e loopback,
+  resolve credenciais somente no main process e normaliza streaming SSE, uso,
+  cancelamento e erros sem expor payloads nativos;
+- limites de catálogo, stream e evento, recusa de redirects e confirmação dos
+  modelos configurados protegem o primeiro transporte HTTP de Provider;
 - geração de imagens permanece fora do conjunto inicial de capacidades e será tratada em uma etapa futura.
 
 ### Estabilidade e compatibilidade
@@ -59,7 +64,7 @@
 
 ### Qualidade
 
-- 146 testes unitários e de integração;
+- 158 testes unitários e de integração;
 - 28 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints, no Segundo Cérebro e na atualização da Saúde do Projeto;
 - typecheck, ESLint, design system, build de produção, pacote Linux real e audit npm sem vulnerabilidades aprovados;
 - decisões de sugestão precisam persistir antes do turno Build, e o status aplicado exige alterações observadas no escopo aprovado;

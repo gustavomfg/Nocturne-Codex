@@ -78,6 +78,34 @@ and native approval requests fail closed until Tool Calling and approval have a
 normalized authorization contract. The existing conversation-specific Codex
 compatibility flow remains available while that migration is incomplete.
 
+## OpenAI-compatible adapter
+
+The generic OpenAI-compatible adapter is a main-process transport shared by
+remote APIs and loopback runtimes. Its initial contract:
+
+- validates provider identity, source, endpoint, timeout and configured models;
+- permits plaintext HTTP only for a local Provider on an explicit loopback
+  address;
+- rejects embedded credentials, URL queries, fragments, reserved remote
+  addresses and every redirect;
+- resolves an optional bearer credential only when a request starts;
+- sends only the normalized task, selected context and model identifier;
+- bounds model-catalog responses, complete streams and individual SSE events;
+- accepts only `text/event-stream`, filters provider-native identifiers and
+  ignores data after `[DONE]`;
+- maps HTTP, timeout, cancellation and protocol failures to sanitized errors;
+- rejects native tool-call completion until the common Tool Calling contract is
+  available.
+
+Configured model descriptors remain explicit. The connection check confirms
+that each configured model exists in `/models`; automatic capability inference
+is not performed because OpenAI-compatible catalogs do not expose a portable
+capability contract.
+
+Credential persistence, custom headers, configuration IPC and renderer forms
+are intentionally outside this transport slice. They require the secure-storage
+boundary before becoming user-facing behavior.
+
 ## Testing
 
 Use deterministic adapter tests. Real provider calls belong in opt-in contract smoke workflows with isolated credentials and temporary workspaces.
