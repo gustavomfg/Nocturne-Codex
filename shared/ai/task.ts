@@ -1,24 +1,9 @@
 import type { ModelCapability, ModelReference } from './model'
 
-export const executionModes = ['build', 'review', 'docs'] as const
-export const contextSourceTypes = [
-  'memory',
-  'document',
-  'adr',
-  'rule',
-  'session',
-  'user-selection',
-] as const
-export const modelRoles = [
-  'default',
-  'planning',
-  'coding',
-  'review',
-  'documentation',
-  'summarization',
-  'embedding',
-] as const
-export const taskOutputFormats = ['text', 'markdown', 'json'] as const
+export const executionModes = ['build', 'review'] as const
+export const contextSourceTypes = ['memory'] as const
+export const modelRoles = ['default'] as const
+export const taskOutputFormats = ['markdown'] as const
 
 export const AI_TASK_LIMITS = {
   intentCharacters: 100_000,
@@ -54,7 +39,6 @@ export interface ContextSource {
 
 export type TaskModelSelection =
   | { type: 'explicit'; model: ModelReference }
-  | { type: 'role'; role: ModelRole }
   | { type: 'workspace-default' }
 
 export interface PermissionEnvelope {

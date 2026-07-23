@@ -4,7 +4,6 @@ import {
   AI_TASK_LIMITS,
   contextSourceTypes,
   executionModes,
-  modelRoles,
   taskOutputFormats,
 } from './task'
 
@@ -32,10 +31,6 @@ const modelSelectionSchema = z.discriminatedUnion('type', [
       providerId: identifierSchema,
       modelId: identifierSchema,
     }).strict(),
-  }).strict(),
-  z.object({
-    type: z.literal('role'),
-    role: z.enum(modelRoles),
   }).strict(),
   z.object({
     type: z.literal('workspace-default'),
