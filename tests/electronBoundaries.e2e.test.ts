@@ -180,6 +180,8 @@ describe.sequential('fronteiras Electron E2E', () => {
   let registerIpc: typeof import('../electron/ipc/registerIpc').registerIpc
   let logger: import('../electron/logging/Logger').Logger
   let win: { isDestroyed(): boolean; webContents: typeof electron.mainWebContents }
+  let testModelRegistry: import('../electron/ai/ModelRegistry').ModelRegistry
+  let testProviderRegistry: import('../electron/ai/ProviderRegistry').ProviderRegistry
 
   beforeAll(async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-electron-e2e-'))
@@ -192,10 +194,12 @@ describe.sequential('fronteiras Electron E2E', () => {
     fs.writeFileSync(path.join(outside, 'secret.md'), '# segredo\n')
     fs.symlinkSync(outside, path.join(workspace, 'escape'))
 
-    const [{ LocalDatabase }, loggerModule, ipcModule] = await Promise.all([
+    const [{ LocalDatabase }, loggerModule, ipcModule, { ModelRegistry }, { ProviderRegistry }] = await Promise.all([
       import('../electron/database/Database'),
       import('../electron/logging/Logger'),
       import('../electron/ipc/registerIpc'),
+      import('../electron/ai/ModelRegistry'),
+      import('../electron/ai/ProviderRegistry'),
     ])
     const dataDirectory = path.join(root, 'data')
     fs.mkdirSync(dataDirectory)
@@ -203,6 +207,8 @@ describe.sequential('fronteiras Electron E2E', () => {
     codex = new SimulatedCodex()
     providers = new SimulatedProviderConfigurations()
     registerIpc = ipcModule.registerIpc
+    testModelRegistry = new ModelRegistry()
+    testProviderRegistry = new ProviderRegistry()
     const sent = (channel: string, payload: unknown) => {
       for (const listener of electron.rendererListeners.get(channel) ?? []) listener({}, payload)
     }
@@ -216,6 +222,8 @@ describe.sequential('fronteiras Electron E2E', () => {
       logger,
       providers,
       simulatedModelCatalog,
+      testModelRegistry,
+      testProviderRegistry,
     )
     await import('../electron/preload')
     if (!electron.exposed) throw new Error('O preload não expôs window.nocturne.')
@@ -398,6 +406,8 @@ describe.sequential('fronteiras Electron E2E', () => {
       logger,
       providers,
       simulatedModelCatalog,
+      testModelRegistry,
+      testProviderRegistry,
     )
     expect(electron.handlers.size).toBe(handlerCount)
     expect(codex.eventNames().reduce((total, event) => total + codex.listenerCount(event), 0)).toBe(listenerCount)
