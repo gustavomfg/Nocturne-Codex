@@ -74,7 +74,12 @@ export class CodexClient extends EventEmitter {
     } finally { this.starting = null }
   }
 
-  async createThread(workspace: string, settings: Record<string, string> = {}, memory = '') {
+  async createThread(
+    workspace: string,
+    settings: Record<string, string> = {},
+    memory = '',
+    ephemeral = false,
+  ) {
     await this.start()
     try {
       const result = await this.call('thread/start', {
@@ -85,7 +90,7 @@ export class CodexClient extends EventEmitter {
         sandbox: settings.sandbox || 'workspace-write',
         model: settings.model || undefined,
         developerInstructions: memory ? workspaceMemoryInstructions(memory) : undefined,
-        ephemeral: false,
+        ephemeral,
       }) as { thread?: { id?: unknown } }
       const threadId = typeof result.thread?.id === 'string' ? result.thread.id : ''
       if (!threadId) throw new Error('thread/start não retornou um identificador válido.')

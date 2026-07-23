@@ -15,6 +15,11 @@
 - fallback desabilitado, dependente de confirmação ou previamente configurado possui comportamento distinto e auditável;
 - AI Orchestrator executa tarefas normalizadas por adapters substituíveis, centralizando início, terminal, validação de streaming e falhas seguras;
 - cancelamento usa `AbortSignal`, é idempotente e prevalece sobre resultados tardios; Provider falso cobre conclusão, falha, payload inválido e interrupção;
+- adapter de compatibilidade do Codex CLI confina JSON-RPC, threads efêmeras,
+  streaming, uso, falhas e cancelamento ao processo principal, resolvendo o
+  Workspace por uma dependência autorizada em vez de aceitar paths do renderer;
+- a primeira fatia do adapter Codex executa somente tarefas read-only e recusa
+  escrita ou aprovações nativas até existir o contrato comum de Tool Calling;
 - geração de imagens permanece fora do conjunto inicial de capacidades e será tratada em uma etapa futura.
 
 ### Estabilidade e compatibilidade
@@ -54,7 +59,7 @@
 
 ### Qualidade
 
-- 98 testes unitários e de integração;
+- 146 testes unitários e de integração;
 - 28 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints, no Segundo Cérebro e na atualização da Saúde do Projeto;
 - typecheck, ESLint, design system, build de produção, pacote Linux real e audit npm sem vulnerabilidades aprovados;
 - decisões de sugestão precisam persistir antes do turno Build, e o status aplicado exige alterações observadas no escopo aprovado;

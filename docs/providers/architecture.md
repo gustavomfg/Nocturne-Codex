@@ -56,6 +56,12 @@ They may not:
 
 The current Codex App Server remains valuable, but its JSON-RPC concepts become internal to the Codex adapter. `thread/*`, `turn/*`, approvals and deltas are normalized before leaving that boundary.
 
+The first executable adapter uses authorized Workspace roots and ephemeral
+threads. It exposes normalized streaming and usage, but deliberately fails
+closed for workspace writes and App Server approval requests until the common
+Tool Calling policy is implemented. This prevents a local Provider protocol
+from silently becoming application authority.
+
 ## Core rule
 
 > **Provider code ends where normalized Nocturne contracts begin.**

@@ -99,6 +99,18 @@ describe('CodexClient', () => {
     await expect(config).rejects.toThrow('configuração inválida')
   })
 
+  it('cria threads efêmeras somente quando solicitado pelo adapter', async () => {
+    const { client, process } = await readyClient()
+    const created = client.createThread('/workspace', {}, '', true)
+    await waitForRequest(process, 'thread/start')
+    expect(process.pendingRequest('thread/start')?.params).toMatchObject({
+      cwd: '/workspace',
+      ephemeral: true,
+    })
+    process.respond('thread/start', { thread: { id: 'thread-ephemeral' } })
+    await expect(created).resolves.toBe('thread-ephemeral')
+  })
+
   it('estabiliza o estado quando thread/start falha ou retorna um contrato inválido', async () => {
     const { client, process } = await readyClient()
     const failed = client.createThread('/workspace')
