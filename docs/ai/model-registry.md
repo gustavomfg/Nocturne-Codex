@@ -62,6 +62,11 @@ The renderer accesses catalog and binding operations only through the typed
 `models.*` preload surface. Workspace binding reads and writes require current
 Workspace authorization; Provider-native discovery data never crosses IPC.
 
+The settings interface exposes the Workspace default plus planning, coding,
+review and documentation roles. Search bounds the rendered option set while
+preserving the current selection, including an unresolved reference that needs
+remediation. Catalog refresh is explicit and scoped to one Provider.
+
 ## Core rule
 
 > **The registry describes models. The orchestrator executes tasks.**

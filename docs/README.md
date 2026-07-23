@@ -36,7 +36,10 @@ Version 0.8 introduced the local Second Brain with:
 - bounded retrieval;
 - credential-pattern rejection.
 
-The next architectural milestone is the Provider System: users will connect their own remote or local AI providers and select models without coupling the workspace to a vendor.
+The Provider System foundation now includes secure OpenAI-compatible
+configuration, normalized model discovery and persistent model bindings per
+Workspace. The next slices connect these choices to the complete normalized
+execution experience without coupling the Workspace to a vendor.
 
 ## Documentation map
 

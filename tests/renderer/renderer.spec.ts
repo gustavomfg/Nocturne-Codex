@@ -158,6 +158,7 @@ test.describe('renderer do produto', () => {
     await ready(page)
     await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
     await expect(page.getByRole('dialog', { name: 'Configurações' })).toBeVisible()
+    await page.getByRole('button', { name: /Codex CLI/ }).click()
     await page.getByRole('textbox', { name: 'Modelo' }).fill('modelo-local')
     await page.keyboard.press('Escape')
     await expect(page.getByText('Descartar alterações?')).toBeVisible()
@@ -173,6 +174,7 @@ test.describe('renderer do produto', () => {
     const navigation = dialog.getByRole('navigation', { name: 'Seções das configurações' })
     const codex = navigation.getByRole('button', { name: /Codex/ })
     const workspaces = navigation.getByRole('button', { name: /Workspaces/ })
+    await codex.click()
     const before = await Promise.all([codex.boundingBox(), workspaces.boundingBox()])
     await workspaces.hover()
     await page.waitForTimeout(180)
@@ -251,11 +253,51 @@ test.describe('renderer do produto', () => {
     await ready(page)
     await page.evaluate(() => { window.nocturne.settings.set = async () => { throw new Error('Não foi possível salvar as configurações.') } })
     await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
+    await page.getByRole('button', { name: /Codex CLI/ }).click()
     await page.getByRole('textbox', { name: 'Modelo' }).fill('modelo-local')
     await page.getByRole('button', { name: 'Salvar alterações' }).click()
     const dialog = page.getByRole('dialog', { name: 'Configurações' })
     await expect(dialog.getByRole('alert')).toContainText('Não foi possível salvar as configurações.')
     await expect(dialog).toBeVisible()
+  })
+
+  test('configura modelos por workspace sem depender do Codex', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await ready(page)
+    await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
+    const dialog = page.getByRole('dialog', { name: 'Configurações' })
+    await expect(dialog.getByRole('heading', { name: 'Modelos' })).toBeVisible()
+    await expect(dialog.getByText('3 modelos')).toBeVisible()
+    await expect(dialog).toHaveScreenshot('model-settings.png', {
+      animations: 'disabled',
+      caret: 'hide',
+    })
+    await page.setViewportSize({ width: 720, height: 800 })
+    await expect(dialog).toHaveScreenshot('model-settings-compact.png', {
+      animations: 'disabled',
+      caret: 'hide',
+    })
+    await page.setViewportSize({ width: 1440, height: 900 })
+
+    await dialog.getByLabel('Modelo padrão').selectOption({
+      label: 'Claude Sonnet · openrouter',
+    })
+    await dialog.getByLabel('Review').selectOption({
+      label: 'Qwen3 14B · ollama',
+    })
+    await expect(dialog.getByText('Alterações pendentes')).toBeVisible()
+    await expect(dialog.getByRole('button', { name: /Codex CLI/ })).toBeDisabled()
+    await dialog.getByRole('button', { name: 'Salvar bindings' }).click()
+    await expect(page.locator('.product-toast')).toContainText('Modelos do workspace atualizados.')
+    await expect(dialog.getByText('Sincronizado')).toBeVisible()
+
+    await dialog.getByLabel('Filtrar modelos').fill('qwen')
+    await expect(dialog.getByText('1 resultados disponíveis.')).toBeVisible()
+    await dialog.getByRole('button', { name: 'Atualizar catálogo' }).click()
+    await expect(page.locator('.product-toast')).toContainText('Catálogo de modelos atualizado.')
+    await expect(dialog.getByLabel('Modelo padrão')).toHaveValue(
+      JSON.stringify(['openrouter', 'anthropic/claude-sonnet']),
+    )
   })
 
   test('gerencia Providers com credencial transitória e estados explícitos', async ({ page }) => {

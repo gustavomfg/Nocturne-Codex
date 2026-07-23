@@ -211,6 +211,13 @@ focus-within boundary, drafts state that no network request occurs, and enabled
 submissions state that validation will run. Unsaved Provider edits prevent
 silent navigation away.
 
+Model settings put Workspace policy before any specific integration. The
+default model and role bindings use searchable normalized descriptors, preserve
+unresolved references for remediation and materialize at most 200 filtered
+options per selector. Discovery is an explicit secondary action scoped to one
+Provider. Unsaved bindings prevent silent navigation, and Codex CLI remains an
+optional integration alongside other Providers.
+
 ### Segundo Cérebro
 
 The memory dialog separates capture from review on desktop and uses explicit Library and Create tabs at 720 px and below. Confidence, origin, scope, and lifecycle state remain legible without competing with memory content; pending candidates retain a visible review count. Human approval is stated in the header and new entries remain visually identified as candidates until activation. Loading, empty, filtered, editing, disabled, and destructive states must preserve the same dialog geometry and keyboard behavior.

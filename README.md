@@ -246,18 +246,19 @@ Current highlights:
 - Electron secure architecture
 - IPC isolation
 - Secure OpenAI-compatible Provider configuration
-- Provider-agnostic architecture in development
+- Persistent model catalog and Workspace role bindings
+- Provider-agnostic configuration interface
 
 ---
 
 # Roadmap
 
-The current architectural milestone is implementing the Provider System.
+The current architectural milestone is completing the Provider System.
 
-Its normalized registries, execution contracts, secure configuration
-persistence and typed IPC foundation are in place. The next slices complete
-the user-facing configuration and workspace model-selection experience while
-preserving the same workspace behavior.
+Its normalized registries, execution contracts, secure configuration,
+persistent catalog, typed IPC and first Workspace model-selection experience
+are in place. The next slices connect these choices to the complete product
+execution flow while preserving the same Workspace behavior.
 
 Future work includes:
 

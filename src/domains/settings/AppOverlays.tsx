@@ -36,7 +36,7 @@ interface AppOverlaysProps {
 
 export function AppOverlays({ settingsOpen, settings, status, workspaces, memoryOpen, memory, preview, onboardingOpen, activeId, workspace, onSettingsClose, onSaveSettings, onNotify, onOpenOnboarding, onMemoryClose, onOpenBrain, onSaveMemory, onPreviewClose, onError, onWorkspace, onOpenSettings, onRecheck, onDismissOnboarding, onCompleteOnboarding }: AppOverlaysProps) {
   return <Suspense fallback={null}>
-    {settingsOpen && <SettingsDialog value={settings} status={status} workspaces={workspaces} onClose={onSettingsClose} onSave={onSaveSettings} onNotify={onNotify} onOnboarding={onOpenOnboarding}/>}
+    {settingsOpen && <SettingsDialog value={settings} status={status} workspace={workspace} workspaces={workspaces} onClose={onSettingsClose} onSave={onSaveSettings} onNotify={onNotify} onOnboarding={onOpenOnboarding}/>}
     {memoryOpen && <MemoryDialog value={memory} onClose={onMemoryClose} onOpenBrain={onOpenBrain} onSave={onSaveMemory}/>}
     {preview && <PreviewDialog preview={preview} activeId={activeId} onClose={onPreviewClose} onError={onError} onNotify={onNotify}/>}
     {onboardingOpen && <OnboardingDialog settings={settings} status={status} hasWorkspace={Boolean(workspace)} onWorkspace={onWorkspace} onSettings={onOpenSettings} onRecheck={onRecheck} onDismiss={onDismissOnboarding} onComplete={onCompleteOnboarding}/>}

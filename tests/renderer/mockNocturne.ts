@@ -14,8 +14,16 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
     let resumes = 0
     type MockBrainMemory = { id: string; workspaceId: string; conversationId: string | null; kind: 'fact' | 'decision' | 'preference' | 'constraint' | 'learning'; scope: 'workspace' | 'conversation'; status: 'candidate' | 'active' | 'outdated' | 'archived'; content: string; confidence: number; sourceType: 'manual' | 'agent'; sourceId: string | null; createdAt: string; updatedAt: string; lastConfirmedAt: string | null; lastUsedAt: string | null; useCount: number }
     type MockProviderConfiguration = { id: string; providerType: 'openai-compatible'; displayName: string; source: 'local' | 'remote'; baseUrl: string; enabled: boolean; requiresAuthentication: boolean; credentialConfigured: boolean; timeoutMs: number; createdAt: string; updatedAt: string }
+    type MockModelReference = { providerId: string; modelId: string }
+    type MockModelBindings = { workspaceId: string; defaultBinding?: MockModelReference; roleBindings: Record<string, MockModelReference | undefined>; fallbackPolicy: 'disabled'; fallbackBindings: MockModelReference[] }
     let brainMemories: MockBrainMemory[] = []
     let providerConfigurations: MockProviderConfiguration[] = []
+    const modelDescriptors = [
+      { providerId: 'openrouter', modelId: 'anthropic/claude-sonnet', displayName: 'Claude Sonnet', family: 'Claude', source: 'remote' as const, capabilities: ['chat', 'streaming', 'reasoning'] as const, contextWindow: 200_000, availability: 'available' as const },
+      { providerId: 'ollama', modelId: 'qwen3:14b', displayName: 'Qwen3 14B', family: 'Qwen', source: 'local' as const, capabilities: ['chat', 'tool-calling'] as const, contextWindow: 32_768, availability: 'available' as const },
+      { providerId: 'legacy-provider', modelId: 'offline-model', displayName: 'Modelo anterior', source: 'remote' as const, capabilities: ['chat'] as const, availability: 'offline' as const },
+    ]
+    let modelBindings: MockModelBindings | null = null
     const noop = async () => undefined
     const api = {
       workspace: { select: async (expected?: string) => { selectedExpected = expected; authorized = true; return workspace }, validate: async () => true, list: async () => [{ path: workspace, name: 'nocturne-codex', favorite: true, authorized, createdAt: now, lastOpenedAt: now }], remove: noop, favorite: noop, openTool: noop },
@@ -98,10 +106,13 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
         testConnection: async () => ({ status: 'available' as const, message: 'Conexão validada.' }),
       },
       models: {
-        list: async () => [],
-        refresh: async () => ({ status: 'applied' as const, models: [] }),
-        bindings: async () => null,
-        setBindings: async (bindings: unknown) => bindings,
+        list: async () => modelDescriptors.map((item) => ({ ...item, capabilities: [...item.capabilities] })),
+        refresh: async (providerId: string) => ({ status: 'applied' as const, models: modelDescriptors.filter((item) => item.providerId === providerId) }),
+        bindings: async () => modelBindings ? structuredClone(modelBindings) : null,
+        setBindings: async (bindings: MockModelBindings) => {
+          modelBindings = structuredClone(bindings)
+          return structuredClone(bindings)
+        },
       },
       git: { status: async () => ({ branch: 'master', status: 'M src/App.tsx', diff: '', files: [{ path: 'src/App.tsx', status: 'M' }] }), commit: noop },
       documents: { saveMarkdown: async () => '/tmp/resposta.md', export: async () => '/tmp/resposta.pdf' },
