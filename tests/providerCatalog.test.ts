@@ -8,6 +8,7 @@ import { providerConfigurationInputSchema } from '../shared/ai/providerConfigura
 describe('providerCatalog', () => {
   it('mantém empresas e métodos de conexão com identidades únicas', () => {
     expect(new Set(providerCatalog.map(({ id }) => id)).size).toBe(providerCatalog.length)
+    expect(providerCatalog.map(({ id }) => id)).not.toContain('codex-cli')
     for (const provider of providerCatalog) {
       expect(provider.connectionMethods.length).toBeGreaterThan(0)
       expect(new Set(provider.connectionMethods.map(({ kind }) => kind)).size)

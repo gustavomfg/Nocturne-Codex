@@ -138,7 +138,7 @@ The orchestrator contains no provider-specific code.
 
 ## Provider Registry
 
-Keeps track of every installed provider.
+Keeps track of every explicitly configured provider.
 
 Responsibilities:
 
@@ -154,14 +154,15 @@ Providers
 
 ✓ OpenAI
 
-✓ Codex CLI
-
 ✓ Ollama
 
 ✓ OpenRouter
 
 ✓ LM Studio
 ```
+
+The Registry starts empty. Bundled adapter code does not imply an active
+Provider, and Codex CLI is not registered automatically.
 
 ---
 

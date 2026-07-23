@@ -19,6 +19,11 @@ Examples:
 
 No provider is mandatory.
 
+An adapter implementation does not register or connect a Provider by itself.
+The default Provider Registry starts empty and receives only configurations
+that the user explicitly creates. Codex CLI is not part of the curated
+connection catalog and is not registered automatically.
+
 ## Global configuration and workspace use
 
 Provider configurations are application-level resources. Workspaces reference them through model bindings.
@@ -55,9 +60,13 @@ Nocturne. Custom OpenAI-compatible configuration remains an advanced option.
 Start with:
 
 1. a generic OpenAI-compatible adapter;
-2. Codex CLI as an adapter over App Server;
+2. Codex CLI as an isolated compatibility adapter over App Server;
 3. Ollama;
 4. LM Studio through compatibility where sufficient.
+
+The Codex compatibility adapter remains inactive outside its legacy
+compatibility flow until an explicit, user-controlled connection lifecycle is
+implemented for it.
 
 Add dedicated adapters only when provider-specific capabilities justify them.
 

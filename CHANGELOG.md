@@ -4,7 +4,7 @@
 
 ### Fundação Provider Agnostic
 
-- Provider Registry inicial registra adapters substituíveis, consulta disponibilidade e garante descarte determinístico sem alterar a integração Codex existente;
+- Provider Registry inicial começa vazio, registra somente configurações explícitas com adapters substituíveis, consulta disponibilidade e garante descarte determinístico sem alterar a integração Codex existente;
 - Model Registry normalizado identifica modelos por `providerId + modelId`, valida descriptors e preços em runtime e filtra candidatos apenas por capacidades declaradas;
 - atualização de catálogo por Provider é atômica e preserva modelos pertencentes aos demais Providers;
 - descoberta via adapter preserva o último catálogo válido e impede respostas concorrentes obsoletas de sobrescrever resultados mais recentes;
@@ -60,8 +60,8 @@
 - nova seção Modelos coloca o Workspace antes do Provider, permite buscar e
   vincular modelo padrão, planejamento, código, Review e documentação, preserva
   referências sem resolução e atualiza discovery por Provider;
-- Codex CLI passa a aparecer como integração opcional, sem ocupar a entrada
-  principal das configurações de IA;
+- Codex CLI permanece como compatibilidade legada opcional, fora do catálogo e
+  sem registro automático no novo Provider Registry;
 - catálogo compartilhado diferencia empresas, protocolos e métodos de conexão
   realmente disponíveis sem tratar assinaturas de consumo como acesso à API;
 - discovery OpenAI-compatible consulta `/models` com os mesmos limites de rede,

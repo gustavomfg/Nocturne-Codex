@@ -24,6 +24,10 @@ The registry owns provider definitions and adapter instances. It can:
 - expose supported capabilities;
 - create an execution client.
 
+The Registry starts empty. Having adapter code in the application is not
+equivalent to registration: adapters enter the Registry only through an
+explicit user configuration lifecycle.
+
 ## Adapter contract
 
 An adapter should support only the capabilities it actually provides. Typical operations include:
@@ -55,6 +59,12 @@ They may not:
 ## Codex CLI
 
 The current Codex App Server remains valuable, but its JSON-RPC concepts become internal to the Codex adapter. `thread/*`, `turn/*`, approvals and deltas are normalized before leaving that boundary.
+
+The adapter is not registered at startup and Codex CLI is not a default
+Provider. It remains an isolated compatibility implementation while the legacy
+conversation path is migrated. Any future normalized Codex connection must be
+explicitly initiated by the user and follow the same lifecycle as other
+Providers.
 
 The first executable adapter uses authorized Workspace roots and ephemeral
 threads. It exposes normalized streaming and usage, but deliberately fails
