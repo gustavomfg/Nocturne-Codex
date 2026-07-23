@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 
-export async function installNocturneMock(page: Page, options: { empty?: boolean; unauthorized?: boolean } = {}) {
-  await page.addInitScript(({ empty, unauthorized }) => {
+export async function installNocturneMock(page: Page, options: { empty?: boolean; unauthorized?: boolean; signedOut?: boolean } = {}) {
+  await page.addInitScript(({ empty, unauthorized, signedOut }) => {
     localStorage.setItem('nocturne.onboarding.completed', 'true')
     const now = '2026-07-13T20:00:00.000Z'
     const workspace = '/workspace/nocturne-codex'
@@ -83,7 +83,7 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       suggestions: { list: async () => [], page: async () => ({ items: [], hasMore: false }), create: async (_id: string, content: string) => ({ suggestions: [], content }), status: noop },
       data: { export: async () => '/tmp/backup.json', import: async () => true },
       diagnostics: { openLogs: noop, copy: async () => 'diagnóstico', rendererError: noop, rendererStats: noop },
-      settings: { get: async () => ({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', theme: 'dark', defaultAgentMode: 'review', codexVersion: 'codex-cli 0.144.1', codexCompatible: true, authenticated: true, authStatus: 'Autenticado', serverStatus: 'ready' }), check: async () => ({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', theme: 'dark', defaultAgentMode: 'review', codexVersion: 'codex-cli 0.144.1', codexCompatible: true, authenticated: true, authStatus: 'Autenticado', serverStatus: 'ready' }), set: async (value: unknown) => value },
+      settings: { get: async () => ({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', theme: 'dark', defaultAgentMode: 'review', codexVersion: 'codex-cli 0.144.1', codexCompatible: true, authenticated: !signedOut, authStatus: signedOut ? 'Login necessário' : 'Autenticado', serverStatus: 'ready' }), check: async () => ({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', theme: 'dark', defaultAgentMode: 'review', codexVersion: 'codex-cli 0.144.1', codexCompatible: true, authenticated: !signedOut, authStatus: signedOut ? 'Login necessário' : 'Autenticado', serverStatus: 'ready' }), set: async (value: unknown) => value },
       providers: {
         list: async () => providerConfigurations.map((item) => ({ ...item })),
         create: async (configuration: Omit<MockProviderConfiguration, 'id' | 'credentialConfigured' | 'createdAt' | 'updatedAt'>, credential?: string) => {
@@ -124,5 +124,5 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       emitStatus: (payload: unknown) => statusListeners.forEach((listener) => listener(payload)),
       calls: () => ({ selectedExpected, memoryReads, resumes }),
     } })
-  }, { empty: Boolean(options.empty), unauthorized: Boolean(options.unauthorized) })
+  }, { empty: Boolean(options.empty), unauthorized: Boolean(options.unauthorized), signedOut: Boolean(options.signedOut) })
 }

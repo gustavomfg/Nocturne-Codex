@@ -102,7 +102,9 @@ export function ModelSettingsPage({
       const saved = await window.nocturne.models.setBindings(bindings)
       setBindings(saved)
       setBaseline(JSON.stringify(saved))
-      onNotify('Modelo do workspace atualizado.')
+      onNotify(saved.defaultBinding
+        ? 'Conexão por API ativada neste workspace.'
+        : 'Workspace voltou a usar a conta ChatGPT/Codex.')
     } catch (failure) {
       setError(errorMessage(failure))
     } finally {
@@ -131,8 +133,8 @@ export function ModelSettingsPage({
   return <div className="model-settings">
     <div className="model-settings-intro">
       <div>
-        <strong>Modelos do Workspace</strong>
-        <p>Escolha o modelo que o workspace usará por padrão.</p>
+        <strong>Conexão ativa</strong>
+        <p>Sem uma API selecionada, o workspace usa sua conta ChatGPT pelo Codex.</p>
       </div>
       <span>{models.length.toLocaleString('pt-BR')} {models.length === 1 ? 'modelo' : 'modelos'}</span>
     </div>
@@ -142,7 +144,7 @@ export function ModelSettingsPage({
     {!workspaceId && !loading && <div className="model-empty">
       <Boxes size={27}/>
       <strong>Selecione um workspace</strong>
-      <p>O modelo é definido por workspace. O catálogo global continua independente.</p>
+      <p>Escolha um projeto antes de ativar uma conexão por API.</p>
     </div>}
 
     {loading && <div className="model-empty" aria-live="polite">
@@ -153,38 +155,39 @@ export function ModelSettingsPage({
     {!loading && workspaceId && bindings && <>
       <section className="model-binding-panel" aria-labelledby="model-bindings-title">
         <header>
-          <div><strong id="model-bindings-title">Modelo do workspace</strong><small title={workspaceId}>{workspaceName(workspaceId)}</small></div>
+          <div><strong id="model-bindings-title">IA usada neste workspace</strong><small title={workspaceId}>{workspaceName(workspaceId)}</small></div>
           <span className={dirty ? 'pending' : undefined}>{dirty ? 'Alterações pendentes' : 'Sincronizado'}</span>
         </header>
 
         <label className="model-search">
           <span>Filtrar modelos</span>
-          <div><Search size={15}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nome, Provider ou família"/></div>
+          <div><Search size={15}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nome, conexão ou família"/></div>
           <small>{filteredModels.length > MAX_VISIBLE_MODELS ? `Mostrando os primeiros ${MAX_VISIBLE_MODELS.toLocaleString('pt-BR')} resultados.` : `${filteredModels.length.toLocaleString('pt-BR')} resultados disponíveis.`}</small>
         </label>
 
         <ModelSelect
-          label="Modelo padrão"
-          detail="Usado em todas as execuções deste workspace"
-          emptyLabel="Nenhum modelo selecionado"
+          label="Usar neste workspace"
+          detail="A seleção explícita substitui a conta ChatGPT/Codex neste projeto"
+          emptyLabel="Conta ChatGPT/Codex (agente completo)"
           value={bindings.defaultBinding}
           models={visibleModels}
           catalog={models}
+          providers={providers}
           onChange={(reference) => updateBinding(reference)}
         />
 
         <footer>
-          <small>Modelos incompatíveis serão recusados antes da execução.</small>
+          <small>APIs conectadas oferecem conversa e análise; não executam ferramentas do agente.</small>
           <button className="primary" disabled={!dirty || saving} onClick={() => void save()}>
-            {saving ? 'Salvando…' : 'Salvar'}
+            {saving ? 'Salvando…' : 'Aplicar ao workspace'}
           </button>
         </footer>
       </section>
 
       <section className="model-catalog-panel" aria-labelledby="model-catalog-title">
-        <div><strong id="model-catalog-title">Catálogo de modelos</strong><small>Atualiza a lista de modelos disponíveis do Provider escolhido.</small></div>
+        <div><strong id="model-catalog-title">Sincronizar modelos</strong><small>Atualiza a lista oferecida por uma conexão já configurada.</small></div>
         <div className="model-refresh-controls">
-          <label>Provider<select value={refreshProviderId} disabled={!providerIds.length || refreshing} onChange={(event) => setRefreshProviderId(event.target.value)}>{!providerIds.length && <option value="">Nenhum Provider disponível</option>}{providerIds.map((providerId) => <option key={providerId} value={providerId}>{providerLabel(providerId, providers)}</option>)}</select></label>
+          <label>Conexão<select value={refreshProviderId} disabled={!providerIds.length || refreshing} onChange={(event) => setRefreshProviderId(event.target.value)}>{!providerIds.length && <option value="">Nenhuma conexão disponível</option>}{providerIds.map((providerId) => <option key={providerId} value={providerId}>{providerLabel(providerId, providers)}</option>)}</select></label>
           <button disabled={!refreshProviderId || refreshing} onClick={() => void refresh()}><RefreshCw className={refreshing ? 'spin' : undefined} size={15}/>{refreshing ? 'Atualizando…' : 'Atualizar catálogo'}</button>
         </div>
       </section>
@@ -199,6 +202,7 @@ function ModelSelect({
   value,
   models,
   catalog,
+  providers,
   onChange,
 }: {
   label: string
@@ -207,6 +211,7 @@ function ModelSelect({
   value?: ModelReference
   models: ModelDescriptor[]
   catalog: ModelDescriptor[]
+  providers: ProviderConfigurationSummary[]
   onChange(reference?: ModelReference): void
 }) {
   const currentKey = value ? modelKey(value) : ''
@@ -224,10 +229,10 @@ function ModelSelect({
     <select value={currentKey} onChange={(event) => onChange(parseModelKey(event.target.value))}>
       <option value="">{emptyLabel}</option>
       {options.map((model) => <option key={modelKey(model)} value={modelKey(model)} disabled={model.availability !== 'available'}>
-        {model.displayName} · {model.providerId}{model.availability !== 'available' ? ` · ${availabilityLabel(model.availability)}` : ''}
+        {model.displayName} · {providerLabel(model.providerId, providers)}{model.availability !== 'available' ? ` · ${availabilityLabel(model.availability)}` : ''}
       </option>)}
     </select>
-    {value && <span className="model-selection-meta">{sourceIcon(current?.source)}{value.providerId} / {value.modelId}</span>}
+    {value && <span className="model-selection-meta">{sourceIcon(current?.source)}{providerLabel(value.providerId, providers)} / {value.modelId}</span>}
   </label>
 }
 

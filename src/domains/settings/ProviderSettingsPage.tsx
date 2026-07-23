@@ -185,38 +185,15 @@ export function ProviderSettingsPage({
       if (saved.enabled) {
         try {
           await window.nocturne.models.refresh(saved.id)
-          if (workspaceId) {
-            const allModels = await window.nocturne.models.list()
-            const available = allModels.filter(
-              (m) => m.providerId === saved.id && m.availability === 'available',
-            )
-            if (available.length > 0) {
-              const existing = await window.nocturne.models.bindings(workspaceId)
-              if (!existing?.defaultBinding) {
-                await window.nocturne.models.setBindings({
-                  workspaceId,
-                  defaultBinding: { providerId: saved.id, modelId: available[0].modelId },
-                })
-                onNotify(editor.id
-                  ? `Provider atualizado e modelo ${available[0].displayName} vinculado.`
-                  : `Provider conectado e modelo ${available[0].displayName} vinculado.`)
-              } else {
-                onNotify(editor.id
-                  ? 'Provider atualizado e modelos sincronizados.'
-                  : 'Provider conectado e modelos sincronizados.')
-              }
-            }
-          } else {
-            onNotify(editor.id
-              ? 'Provider atualizado e modelos sincronizados.'
-              : 'Provider conectado e modelos sincronizados.')
-          }
+          onNotify(workspaceId
+            ? 'Conexão pronta. Escolha abaixo se este workspace deve usá-la.'
+            : 'Conexão pronta e modelos sincronizados.')
         } catch {
-          setError('Provider salvo, mas o catálogo de modelos não pôde ser atualizado.')
-          onNotify(editor.id ? 'Provider atualizado.' : 'Provider adicionado.')
+          setError('Conexão salva, mas os modelos não puderam ser atualizados.')
+          onNotify(editor.id ? 'Conexão atualizada.' : 'Conexão adicionada.')
         }
       } else {
-        onNotify(editor.id ? 'Provider atualizado.' : 'Provider adicionado.')
+        onNotify(editor.id ? 'Conexão atualizada.' : 'Conexão adicionada.')
       }
     } catch (failure) {
       setError(errorMessage(failure))
@@ -235,26 +212,9 @@ export function ProviderSettingsPage({
       if (result.status === 'available') {
         try {
           await window.nocturne.models.refresh(id)
-          if (workspaceId) {
-            const allModels = await window.nocturne.models.list()
-            const available = allModels.filter(
-              (m) => m.providerId === id && m.availability === 'available',
-            )
-            if (available.length > 0) {
-              const existing = await window.nocturne.models.bindings(workspaceId)
-              if (!existing?.defaultBinding) {
-                await window.nocturne.models.setBindings({
-                  workspaceId,
-                  defaultBinding: { providerId: id, modelId: available[0].modelId },
-                })
-                onNotify(`Conexão validada e modelo ${available[0].displayName} vinculado.`)
-              } else {
-                onNotify('Conexão validada e modelos sincronizados.')
-              }
-            }
-          } else {
-            onNotify('Conexão validada e modelos sincronizados.')
-          }
+          onNotify(workspaceId
+            ? 'Conexão validada. O uso neste workspace não foi alterado.'
+            : 'Conexão validada e modelos sincronizados.')
         } catch {
           setError('Conexão validada, mas o catálogo de modelos não pôde ser atualizado.')
         }
@@ -283,7 +243,7 @@ export function ProviderSettingsPage({
       })
       setConfirmRemove(null)
       if (editor?.id === id) setEditor(null)
-      onNotify('Provider removido.')
+      onNotify('Conexão removida.')
     } catch (failure) {
       setError(errorMessage(failure))
     } finally {
@@ -294,11 +254,11 @@ export function ProviderSettingsPage({
   return <div className="provider-settings">
     <div className="provider-settings-intro">
       <div>
-        <strong>Providers de IA</strong>
-        <p>Escolha uma empresa, conecte sua credencial e descubra os modelos disponíveis.</p>
+        <strong>Suas conexões por API</strong>
+        <p>Adicione uma chave própria sem alterar automaticamente o workspace.</p>
       </div>
       <button className="provider-add" disabled={Boolean(editor) || showCatalog} onClick={beginCreate}>
-        <Plus size={15}/>Conectar empresa
+        <Plus size={15}/>Adicionar conexão
       </button>
     </div>
 
@@ -328,12 +288,12 @@ export function ProviderSettingsPage({
     />}
 
     {!editor && !showCatalog && <div className="provider-list" aria-busy={loading}>
-      {loading && <div className="provider-empty"><LoaderCircle className="spin" size={22}/><strong>Carregando Providers…</strong></div>}
+      {loading && <div className="provider-empty"><LoaderCircle className="spin" size={22}/><strong>Carregando conexões…</strong></div>}
       {!loading && !providers.length && <div className="provider-empty">
-        <Server size={26}/>
-        <strong>Nenhum Provider configurado</strong>
-        <p>Conecte uma empresa conhecida ou use um endpoint personalizado. Nenhuma IA é obrigatória.</p>
-        <button className="provider-add" onClick={beginCreate}><Plus size={15}/>Escolher empresa</button>
+        <KeyRound size={26}/>
+        <strong>Nenhuma chave de API adicionada</strong>
+        <p>Você pode usar OpenAI, OpenRouter ou DeepSeek. Modelos locais ficam nas opções avançadas.</p>
+        <button className="provider-add" onClick={beginCreate}><Plus size={15}/>Usar chave de API</button>
       </div>}
       {providers.map((provider) => <ProviderCard
         key={provider.id}
@@ -360,18 +320,22 @@ function ProviderCatalog({
   onPreset(entry: ProviderCatalogEntry): void
   onCustom(): void
 }) {
+  const [advanced, setAdvanced] = useState(false)
+  const entries = providerCatalog.filter((entry) => (
+    advanced ? entry.source === 'local' : entry.source === 'remote'
+  ))
   return <section className="provider-catalog" aria-labelledby="provider-catalog-title">
     <header>
-      <button aria-label="Voltar para Providers" title="Voltar" onClick={onBack}>
+      <button aria-label="Voltar" title="Voltar" onClick={() => advanced ? setAdvanced(false) : onBack()}>
         <ArrowLeft size={16}/>
       </button>
       <div>
-        <h3 id="provider-catalog-title">Escolha uma empresa</h3>
-        <small>Você usa sua própria conta, chave ou runtime local.</small>
+        <h3 id="provider-catalog-title">{advanced ? 'Opções avançadas' : 'Usar uma chave de API'}</h3>
+        <small>{advanced ? 'Conecte um runtime local ou configure seu próprio endpoint.' : 'Escolha onde sua chave foi criada.'}</small>
       </div>
     </header>
     <div className="provider-catalog-grid">
-      {providerCatalog.map((entry) => {
+      {entries.map((entry) => {
         const available = entry.integrationStatus === 'available'
         const method = entry.connectionMethods.find(({ status }) => status === 'available')
         return <button
@@ -396,8 +360,10 @@ function ProviderCatalog({
       })}
     </div>
     <footer>
-      <span>Seu Provider não está na lista?</span>
-      <button onClick={onCustom}><Server size={15}/>Configuração OpenAI-compatible avançada</button>
+      <span>{advanced ? 'Seu endpoint não está na lista?' : 'Prefere executar modelos na sua máquina?'}</span>
+      {advanced
+        ? <button onClick={onCustom}><Server size={15}/>Endpoint OpenAI-compatible</button>
+        : <button onClick={() => setAdvanced(true)}><Cpu size={15}/>Modelos locais e avançado</button>}
     </footer>
   </section>
 }
@@ -431,8 +397,8 @@ function ProviderEditorForm({
 
   return <section className="provider-editor" aria-labelledby="provider-editor-title">
     <header>
-      <div><span>{preset?.source === 'local' ? <Cpu size={16}/> : preset ? <Building2 size={16}/> : <Server size={16}/>}</span><div><strong id="provider-editor-title">{editor.id ? `Editar ${preset?.displayName ?? 'Provider'}` : `Conectar ${preset?.displayName ?? 'Provider personalizado'}`}</strong><small>{connection?.label ?? 'OpenAI-compatible avançado'}</small></div></div>
-      <button aria-label="Cancelar edição do Provider" title="Cancelar edição" disabled={saving} onClick={onCancel}><X size={16}/></button>
+      <div><span>{preset?.source === 'local' ? <Cpu size={16}/> : preset ? <Building2 size={16}/> : <Server size={16}/>}</span><div><strong id="provider-editor-title">{editor.id ? `Editar ${preset?.displayName ?? 'conexão'}` : `Conectar ${preset?.displayName ?? 'endpoint personalizado'}`}</strong><small>{connection?.label ?? 'OpenAI-compatible avançado'}</small></div></div>
+      <button aria-label="Cancelar edição da conexão" title="Cancelar edição" disabled={saving} onClick={onCancel}><X size={16}/></button>
     </header>
     <div className="provider-editor-body">
       <div className="settings-columns">
@@ -440,15 +406,15 @@ function ProviderEditorForm({
         <label>Timeout<select value={configuration.timeoutMs} onChange={(event) => onChange({ timeoutMs: Number(event.target.value) })}><option value={15_000}>15 segundos</option><option value={30_000}>30 segundos</option><option value={60_000}>60 segundos</option><option value={120_000}>120 segundos</option></select></label>
       </div>
       {connection && <div className="provider-connection-note"><KeyRound size={15}/><span><strong>{connection.label}</strong><small>{connection.detail}</small></span></div>}
-      <div className="provider-flags">
-        <label className="check-label"><input type="checkbox" checked={configuration.requiresAuthentication} onChange={(event) => onChange({ requiresAuthentication: event.target.checked })}/><span><strong>Usa credencial</strong><small>Envia um bearer token somente ao endpoint configurado</small></span></label>
+      <div className={`provider-flags ${preset ? 'single' : ''}`}>
+        {!preset && <label className="check-label"><input type="checkbox" checked={configuration.requiresAuthentication} onChange={(event) => onChange({ requiresAuthentication: event.target.checked })}/><span><strong>Usa credencial</strong><small>Envia um bearer token somente ao endpoint configurado</small></span></label>}
         <label className="check-label"><input type="checkbox" checked={configuration.enabled} onChange={(event) => onChange({ enabled: event.target.checked })}/><span><strong>Habilitar agora</strong><small>Exige validação de conexão antes de salvar</small></span></label>
       </div>
-      {configuration.requiresAuthentication && <label>Credencial
-        <span className="provider-secret-field"><KeyRound size={15}/><input type="password" autoComplete="new-password" value={editor.credential} onChange={(event) => onCredential(event.target.value)} placeholder={editor.credentialConfigured ? 'Deixe vazio para manter a credencial atual' : 'Cole a credencial'}/></span>
+      {configuration.requiresAuthentication && <label>{connection?.kind === 'api-key' ? 'Chave de API' : 'Credencial'}
+        <span className="provider-secret-field"><KeyRound size={15}/><input type="password" autoComplete="new-password" value={editor.credential} onChange={(event) => onCredential(event.target.value)} placeholder={editor.credentialConfigured ? 'Deixe vazio para manter a chave atual' : connection?.kind === 'api-key' ? 'Cole sua chave de API' : 'Cole a credencial'}/></span>
       </label>}
-      {editor.credentialConfigured && configuration.requiresAuthentication && <label className="check-label provider-clear-secret"><input type="checkbox" checked={editor.clearCredential} onChange={(event) => onClearCredential(event.target.checked)}/><span><strong>Remover credencial armazenada</strong><small>O Provider precisará permanecer desabilitado</small></span></label>}
-      {missingCredential && <p className="provider-inline-warning" role="alert">Informe uma credencial para habilitar este Provider.</p>}
+      {editor.credentialConfigured && configuration.requiresAuthentication && <label className="check-label provider-clear-secret"><input type="checkbox" checked={editor.clearCredential} onChange={(event) => onClearCredential(event.target.checked)}/><span><strong>Remover credencial armazenada</strong><small>A conexão precisará permanecer desabilitada</small></span></label>}
+      {missingCredential && <p className="provider-inline-warning" role="alert">Informe uma credencial para habilitar esta conexão.</p>}
       <details className="provider-advanced" open={!preset}>
         <summary><ChevronDown size={15}/>Configuração avançada</summary>
         <div>
@@ -469,8 +435,8 @@ function ProviderEditorForm({
       </details>
     </div>
     <footer>
-      <span>{configuration.enabled ? 'Salvar executará um teste de conexão.' : 'O draft será salvo sem acessar a rede.'}</span>
-      <div><button disabled={saving} onClick={onCancel}>Cancelar</button><button className="primary" disabled={saving || !configuration.displayName.trim() || !configuration.baseUrl.trim() || missingCredential || (editor.clearCredential && configuration.enabled)} onClick={onSave}>{saving ? 'Validando…' : configuration.enabled ? 'Validar e salvar' : 'Salvar draft'}</button></div>
+      <span>{configuration.enabled ? 'Salvar executará um teste de conexão.' : 'O rascunho será salvo sem acessar a rede.'}</span>
+      <div><button disabled={saving} onClick={onCancel}>Cancelar</button><button className="primary" disabled={saving || !configuration.displayName.trim() || !configuration.baseUrl.trim() || missingCredential || (editor.clearCredential && configuration.enabled)} onClick={onSave}>{saving ? 'Validando…' : configuration.enabled ? 'Validar e salvar' : 'Salvar rascunho'}</button></div>
     </footer>
   </section>
 }
@@ -517,7 +483,7 @@ function ProviderCard({
         <button className="danger" disabled={removing} onClick={onRemove}>{removing ? 'Removendo…' : 'Confirmar'}</button>
       </div> : <>
         <button aria-label={`Testar ${provider.displayName}`} title={provider.enabled ? 'Testar conexão' : 'Habilite o Provider antes de testar'} disabled={!provider.enabled || testing} onClick={onTest}>{testing ? <LoaderCircle className="spin" size={15}/> : <Wifi size={15}/>}</button>
-        <button aria-label={`Editar ${provider.displayName}`} title="Editar Provider" onClick={onEdit}><Pencil size={15}/></button>
+        <button aria-label={`Editar ${provider.displayName}`} title="Editar conexão" onClick={onEdit}><Pencil size={15}/></button>
         <button className="danger-icon" aria-label={`Remover ${provider.displayName}`} title="Remover Provider" onClick={onRemove}><Trash2 size={15}/></button>
       </>}
     </div>

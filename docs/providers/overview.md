@@ -38,16 +38,22 @@ Local providers execute through endpoints such as Ollama or LM Studio. Local doe
 
 ## User-visible behavior
 
-The user should be able to:
+Provider and model registries are internal architecture. The primary user
+experience is a single **AI** settings surface organized by access method:
 
-- start from a curated company catalog instead of entering protocol details;
-- see which connection methods are actually supported;
-- add, edit, disable and remove providers;
-- test connectivity;
-- inspect discovered models;
-- see local or remote status;
-- choose workspace defaults and role bindings;
-- view usage, cost and errors.
+- **ChatGPT account** uses the authenticated Codex CLI session and the usage
+  included with a compatible ChatGPT plan;
+- **API key** creates a direct, usage-billed connection to a supported API;
+- **Local model or custom endpoint** remains an advanced option.
+
+The renderer may describe these resources as connections. Terms such as
+Provider Registry, Model Registry, bindings and protocol should not be required
+knowledge during normal onboarding.
+
+Creating, enabling or testing an API connection never changes a Workspace
+binding. After model discovery, the user must explicitly choose **Use in this
+Workspace**. Clearing that choice returns execution to the authenticated Codex
+account flow.
 
 The catalog is onboarding metadata, not execution authority. A preset may
 produce a validated draft only when an implemented adapter supports its
@@ -69,6 +75,12 @@ compatibility flow until an explicit, user-controlled connection lifecycle is
 implemented for it.
 
 Add dedicated adapters only when provider-specific capabilities justify them.
+
+The initial OpenAI-compatible API adapter supports conversation and analysis.
+It does not have parity with Codex tools, workspace writes or approval
+round-trips. The UI must disclose that limitation and must not describe the API
+path as a complete agent replacement until normalized tools and approvals are
+implemented.
 
 ## Core rule
 

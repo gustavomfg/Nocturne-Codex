@@ -46,6 +46,10 @@ Users decide:
 
 No provider is mandatory.
 
+This freedom is presented through access methods rather than registry
+terminology. Account authorization, API keys and local runtimes are distinct
+connection types with different billing, capability and security behavior.
+
 ---
 
 ## Extensibility
@@ -114,6 +118,12 @@ Workspace information remains local.
 ```
 
 Every provider implements the same contract.
+
+Contract normalization does not imply capability parity. A connection may be
+eligible only for conversation and analysis until its adapter supports the
+tool and approval contracts required by workspace-changing execution. The
+renderer must expose that distinction before the user activates the connection
+for a Workspace.
 
 ---
 

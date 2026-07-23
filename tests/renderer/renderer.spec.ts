@@ -158,12 +158,12 @@ test.describe('renderer do produto', () => {
     await ready(page)
     await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
     await expect(page.getByRole('dialog', { name: 'Configurações' })).toBeVisible()
-    await page.getByRole('button', { name: /Codex CLI/ }).click()
-    await page.getByRole('textbox', { name: 'Modelo' }).fill('modelo-local')
+    await page.getByText('Configuração avançada do agente Codex').click()
+    await page.getByRole('textbox', { name: 'Modelo do agente' }).fill('modelo-local')
     await page.keyboard.press('Escape')
     await expect(page.getByText('Descartar alterações?')).toBeVisible()
     await page.getByRole('button', { name: 'Continuar editando' }).click()
-    await expect(page.getByRole('textbox', { name: 'Modelo' })).toHaveValue('modelo-local')
+    await expect(page.getByRole('textbox', { name: 'Modelo do agente' })).toHaveValue('modelo-local')
   })
 
   test('mantém a navegação das configurações estável no hover', async ({ page }) => {
@@ -172,7 +172,7 @@ test.describe('renderer do produto', () => {
     await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
     const dialog = page.getByRole('dialog', { name: 'Configurações' })
     const navigation = dialog.getByRole('navigation', { name: 'Seções das configurações' })
-    const codex = navigation.getByRole('button', { name: /Codex/ })
+    const codex = navigation.getByRole('button', { name: /^IA/ })
     const workspaces = navigation.getByRole('button', { name: /Workspaces/ })
     await codex.click()
     const before = await Promise.all([codex.boundingBox(), workspaces.boundingBox()])
@@ -188,7 +188,7 @@ test.describe('renderer do produto', () => {
     await codex.hover(); await workspaces.hover(); await codex.hover(); await workspaces.hover()
     await expect(workspaces).toHaveCSS('transform', 'none')
     await page.waitForTimeout(240)
-    await expect(dialog.getByText('Codex pronto')).toBeVisible()
+    await expect(dialog.getByText(/Codex pronto/)).toBeVisible()
     await dialog.evaluate((element) => {
       element.scrollTo(0, 0)
       element.querySelectorAll<HTMLElement>('*').forEach((child) => child.scrollTo(0, 0))
@@ -253,64 +253,61 @@ test.describe('renderer do produto', () => {
     await ready(page)
     await page.evaluate(() => { window.nocturne.settings.set = async () => { throw new Error('Não foi possível salvar as configurações.') } })
     await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
-    await page.getByRole('button', { name: /Codex CLI/ }).click()
-    await page.getByRole('textbox', { name: 'Modelo' }).fill('modelo-local')
+    await page.getByText('Configuração avançada do agente Codex').click()
+    await page.getByRole('textbox', { name: 'Modelo do agente' }).fill('modelo-local')
     await page.getByRole('button', { name: 'Salvar alterações' }).click()
     const dialog = page.getByRole('dialog', { name: 'Configurações' })
     await expect(dialog.getByRole('alert')).toContainText('Não foi possível salvar as configurações.')
     await expect(dialog).toBeVisible()
   })
 
-  test('configura modelos por workspace sem depender do Codex', async ({ page }) => {
+  test('ativa uma conexão por API explicitamente no workspace', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await ready(page)
     await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
     const dialog = page.getByRole('dialog', { name: 'Configurações' })
-    await expect(dialog.getByRole('heading', { name: 'Modelos' })).toBeVisible()
+    await expect(dialog.getByRole('heading', { name: 'IA' })).toBeVisible()
     await expect(dialog.getByText('3 modelos')).toBeVisible()
+    await dialog.locator('.ai-workspace-section').scrollIntoViewIfNeeded()
     await expect(dialog).toHaveScreenshot('model-settings.png', {
       animations: 'disabled',
       caret: 'hide',
     })
     await page.setViewportSize({ width: 720, height: 800 })
+    await dialog.locator('.ai-workspace-section').scrollIntoViewIfNeeded()
     await expect(dialog).toHaveScreenshot('model-settings-compact.png', {
       animations: 'disabled',
       caret: 'hide',
     })
     await page.setViewportSize({ width: 1440, height: 900 })
 
-    await dialog.getByLabel('Modelo padrão').selectOption({
+    await dialog.getByLabel('Usar neste workspace').selectOption({
       label: 'Claude Sonnet · openrouter',
     })
-    await dialog.getByLabel('Review').selectOption({
-      label: 'Qwen3 14B · ollama',
-    })
     await expect(dialog.getByText('Alterações pendentes')).toBeVisible()
-    await expect(dialog.getByRole('button', { name: /Codex CLI/ })).toBeDisabled()
-    await dialog.getByRole('button', { name: 'Salvar bindings' }).click()
-    await expect(page.locator('.product-toast')).toContainText('Modelos do workspace atualizados.')
+    await expect(dialog.getByRole('button', { name: /Workspaces/ })).toBeDisabled()
+    await dialog.getByRole('button', { name: 'Aplicar ao workspace' }).click()
+    await expect(page.locator('.product-toast')).toContainText('Conexão por API ativada neste workspace.')
     await expect(dialog.getByText('Sincronizado')).toBeVisible()
 
     await dialog.getByLabel('Filtrar modelos').fill('qwen')
     await expect(dialog.getByText('1 resultados disponíveis.')).toBeVisible()
     await dialog.getByRole('button', { name: 'Atualizar catálogo' }).click()
     await expect(page.locator('.product-toast')).toContainText('Catálogo de modelos atualizado.')
-    await expect(dialog.getByLabel('Modelo padrão')).toHaveValue(
+    await expect(dialog.getByLabel('Usar neste workspace')).toHaveValue(
       JSON.stringify(['openrouter', 'anthropic/claude-sonnet']),
     )
   })
 
-  test('gerencia Providers com credencial transitória e estados explícitos', async ({ page }) => {
+  test('gerencia conexões por API com credencial transitória e estados explícitos', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await ready(page)
     await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
     const dialog = page.getByRole('dialog', { name: 'Configurações' })
-    await dialog.getByRole('button', { name: /Providers/ }).click()
-    await expect(dialog.getByText('Nenhum Provider configurado')).toBeVisible()
-    await dialog.getByRole('button', { name: 'Escolher empresa' }).click()
-    await expect(dialog.getByRole('heading', { name: 'Escolha uma empresa' })).toBeVisible()
+    await expect(dialog.getByText('Nenhuma chave de API adicionada')).toBeVisible()
+    await dialog.getByRole('button', { name: 'Usar chave de API' }).click()
+    await expect(dialog.getByRole('heading', { name: 'Usar uma chave de API' })).toBeVisible()
     await expect(dialog.getByRole('button', { name: /OpenAI: Chave da API/ })).toBeEnabled()
-    await expect(dialog.getByRole('button', { name: /Anthropic: Adapter necessário/ })).toBeDisabled()
     await expect(dialog.locator('.provider-catalog-heading').first())
       .toHaveCSS('flex-direction', 'column')
     await expect(dialog).toHaveScreenshot('provider-catalog.png', {
@@ -324,14 +321,14 @@ test.describe('renderer do produto', () => {
     })
 
     await dialog.getByRole('textbox', { name: 'Nome da conexão' }).fill('OpenRouter pessoal')
-    const secret = dialog.getByRole('textbox', { name: 'Credencial', exact: true })
+    const secret = dialog.getByRole('textbox', { name: 'Chave de API', exact: true })
     await secret.fill('temporary-renderer-secret')
     const secretSurface = secret.locator('..')
     await expect(secret).toHaveCSS('border-top-width', '0px')
     await expect(secret).toHaveCSS('box-shadow', 'none')
     await expect(secretSurface).toHaveCSS('border-top-color', 'rgb(155, 124, 246)')
-    await expect(dialog.getByRole('button', { name: /Codex/ })).toBeDisabled()
-    await dialog.getByRole('button', { name: 'Salvar draft' }).click()
+    await expect(dialog.getByRole('button', { name: /Workspaces/ })).toBeDisabled()
+    await dialog.getByRole('button', { name: 'Salvar rascunho' }).click()
 
     const card = dialog.locator('.provider-card')
     await expect(card).toContainText('OpenRouter pessoal')
@@ -340,28 +337,30 @@ test.describe('renderer do produto', () => {
     await card.getByRole('button', { name: 'Editar OpenRouter pessoal' }).click()
     await dialog.getByRole('checkbox', { name: /Habilitar agora/ }).check()
     await dialog.getByRole('button', { name: 'Validar e salvar' }).click()
+    await expect(dialog.getByLabel('Usar neste workspace')).toHaveValue('')
     await card.getByRole('button', { name: 'Testar OpenRouter pessoal' }).click()
     await expect(card).toContainText('Disponível')
+    await expect(dialog.getByLabel('Usar neste workspace')).toHaveValue('')
     await expect(dialog).toHaveScreenshot('provider-settings.png', { animations: 'disabled', caret: 'hide' })
 
     await card.getByRole('button', { name: 'Remover OpenRouter pessoal' }).click()
     await expect(card.getByRole('alert')).toContainText('Remover?')
     await card.getByRole('button', { name: 'Confirmar' }).click()
-    await expect(dialog.getByText('Nenhum Provider configurado')).toBeVisible()
+    await expect(dialog.getByText('Nenhuma chave de API adicionada')).toBeVisible()
   })
 
-  test('protege um formulário de Provider ainda não salvo', async ({ page }) => {
+  test('protege um formulário de conexão ainda não salvo', async ({ page }) => {
     await page.setViewportSize({ width: 720, height: 800 })
     await ready(page)
     await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
     const dialog = page.getByRole('dialog', { name: 'Configurações' })
-    await dialog.getByRole('button', { name: /Providers/ }).click()
-    await dialog.getByRole('button', { name: 'Escolher empresa' }).click()
+    await dialog.getByRole('button', { name: 'Usar chave de API' }).click()
     await expect(dialog).toHaveScreenshot('provider-catalog-compact.png', {
       animations: 'disabled',
       caret: 'hide',
     })
-    await dialog.getByRole('button', { name: /configuração OpenAI-compatible avançada/i }).click()
+    await dialog.getByRole('button', { name: /Modelos locais e avançado/i }).click()
+    await dialog.getByRole('button', { name: /Endpoint OpenAI-compatible/i }).click()
     await dialog.getByRole('textbox', { name: 'Nome da conexão' }).fill('Provider em edição')
     await page.keyboard.press('Escape')
     await expect(dialog.getByRole('alert')).toContainText('Descartar alterações?')
@@ -600,6 +599,20 @@ test('diferencia o estado vazio sem dados locais', async ({ page }) => {
   await ready(page)
   await expect(page.getByText('Nenhuma conversa ainda')).toBeVisible()
   await expect(page.getByText('O que vamos construir?')).toBeVisible()
+})
+
+test('oferece login por conta e chave de API como caminhos separados', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-07-13T20:05:00.000Z'))
+  await installNocturneMock(page, { signedOut: true })
+  await page.setViewportSize({ width: 1180, height: 850 })
+  await ready(page)
+  await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
+  const dialog = page.getByRole('dialog', { name: 'Configurações' })
+  await expect(dialog.getByRole('heading', { name: 'IA' })).toBeVisible()
+  await expect(dialog.getByText('Conta ChatGPT', { exact: true })).toBeVisible()
+  await expect(dialog.getByText('codex login', { exact: true })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Usar chave de API' })).toBeVisible()
+  await expect(dialog.getByText('A cobrança é separada de assinaturas mensais.')).toBeVisible()
 })
 
 test('mantém o histórico isolado até reautorizar um workspace restaurado', async ({ page }) => {
