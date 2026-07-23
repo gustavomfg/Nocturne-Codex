@@ -1,359 +1,306 @@
-> The Nocturne Codex doesn't try to replace the developer. It organizes the collaboration between the developer and AI.
-
 # Nocturne Codex
 
-Nocturne Codex is a local desktop engineering workspace for working with the Codex CLI and App Server. It brings project context, persistent conversations, agent activity, review, planning, approvals, artifacts, and Git awareness into one place—without moving engineering decisions away from the developer.
+> **A local-first workspace for software development, powered by your knowledge and your choice of AI.**
 
-The current release target is **v0.8.0-beta**, a cross-platform preview that is not promoted as a stable release.
+Nocturne Codex is not an AI chatbot.
 
-> Nocturne Codex is an independent open source project. It is not an official OpenAI product and is not affiliated with OpenAI.
+It is a workspace designed to help developers understand, build, document and evolve software projects by combining structured knowledge, contextual awareness and artificial intelligence.
+
+Instead of centering the experience around prompts, Nocturne centers it around the project itself.
 
 ---
 
-## Philosophy
+# Vision
 
-AI can inspect a codebase quickly, connect information across files, and propose changes at a useful scale. A developer still has to decide what belongs in the product, which trade-offs are acceptable, and whether a change is correct.
+Modern software development is no longer just about writing code.
 
-Nocturne Codex is built around that division of responsibility. The agent contributes analysis and implementation capacity; the developer retains intent, judgment, approval, and accountability.
+Projects accumulate:
 
-The collaboration is organized as an explicit engineering loop:
+- documentation;
+- architecture decisions;
+- technical debt;
+- design systems;
+- implementation history;
+- conversations;
+- AI interactions.
 
-```text
-Analyze
-   ↓
-Plan
-   ↓
-Explain
-   ↓
-Suggest
-   ↓
-Approve
-   ↓
-Implement
-   ↓
-Validate
+Most AI tools treat every conversation as an isolated prompt.
+
+Nocturne Codex takes a different approach.
+
+Every interaction happens inside a persistent workspace that understands the project's structure, remembers approved knowledge and provides contextual assistance without forcing developers to repeatedly explain their software.
+
+---
+
+# Philosophy
+
+The project is built around five principles.
+
+## Workspace First
+
+The workspace is the center of the experience.
+
+Artificial intelligence exists to assist the workspace, not replace it.
+
+Everything starts from the project.
+
+Not from the model.
+
+---
+
+## Knowledge First
+
+Information should become reusable knowledge.
+
+Instead of losing valuable discussions inside temporary conversations, Nocturne transforms approved information into structured memory that can evolve together with the project.
+
+Knowledge belongs to the user.
+
+Always.
+
+---
+
+## Provider Agnostic
+
+No AI provider should become a dependency of the application.
+
+Users decide which models they want to use.
+
+Examples include:
+
+- OpenAI
+- Anthropic
+- OpenRouter
+- DeepSeek
+- Ollama
+- LM Studio
+- Codex CLI
+- future providers
+
+The workspace remains exactly the same regardless of which provider executes a task.
+
+---
+
+## Local First
+
+Project data should remain local whenever possible.
+
+Workspace information, memories, documentation and architecture belong to the developer.
+
+External services execute AI tasks.
+
+They do not own the workspace.
+
+---
+
+## Human in Control
+
+Artificial intelligence is an assistant.
+
+Not an autonomous owner of the project.
+
+Important decisions always remain reviewable.
+
+Generated knowledge requires explicit approval before becoming persistent.
+
+Transparency is preferred over automation.
+
+---
+
+# Core Concepts
+
+## Workspace
+
+A workspace represents a software project.
+
+It contains everything required to understand and evolve that project.
+
+Examples:
+
+- documentation
+- memories
+- architecture decisions
+- AI sessions
+- tasks
+- providers
+- statistics
+
+---
+
+## Second Brain
+
+The Second Brain stores approved knowledge.
+
+It is persistent.
+
+It is local.
+
+It is owned by the user.
+
+The system never silently promotes temporary conversations into permanent knowledge.
+
+---
+
+## Awareness
+
+Awareness is temporary.
+
+It selects only the information required for the current task.
+
+Awareness is not memory.
+
+Awareness consumes memory.
+
+---
+
+## AI Providers
+
+Artificial intelligence is accessed through interchangeable providers.
+
+No workspace component communicates directly with provider SDKs or proprietary APIs.
+
+Every request passes through the provider abstraction layer.
+
+This architecture allows developers to freely choose the model that best fits each task.
+
+---
+
+# Architecture Overview
+
+```
+                Workspace
+
+                     │
+
+        ┌────────────┼────────────┐
+        │            │            │
+        │            │            │
+   Second Brain   Sessions     Documents
+        │
+        ▼
+    Awareness
+        │
+        ▼
+   Task Builder
+        │
+        ▼
+ AI Orchestrator
+        │
+        ▼
+ Provider Layer
+        │
+ ┌──────┼──────────────┬──────────────┐
+ │      │              │              │
+OpenAI Claude     OpenRouter     Ollama
+ │
+Codex CLI
+ │
+LM Studio
 ```
 
-Not every analysis should become an edit. Not every suggestion should be accepted. Not every generated change should be committed. Nocturne Codex makes those boundaries visible instead of hiding them behind a single prompt box.
+The workspace never depends directly on a specific provider.
+
+Providers are execution engines.
+
+The workspace is the product.
 
 ---
 
-## What is Nocturne Codex?
+# What Nocturne Codex Is
 
-Nocturne Codex is not only a chat window. A chat transcript alone does not explain what the agent is doing, preserve project decisions, or create a safe boundary around code changes.
+Nocturne Codex is:
 
-It is not merely a graphical wrapper around the Codex CLI. It manages App Server lifecycle, JSON-RPC events, persistent threads, approvals, workspace context, diagnostics, and recovery behavior.
-
-It is also not an IDE. It does not aim to replace source navigation, debugging, or the editor where developers already work.
-
-Nocturne Codex is an **Engineering Workspace**: a desktop environment for coordinating a developer, an intelligent agent, and the state of a real software project. It sits beside the editor and repository, giving the collaboration structure and memory.
-
----
-
-## Core capabilities
-
-### Persistent AI conversations
-
-Conversations and messages are stored locally in SQLite. Codex thread IDs are retained so a project discussion can continue across application sessions instead of starting from zero every time.
-
-### Workspace management
-
-Workspaces establish the project boundary. Recent and favorite projects are available from the interface, while file access, previews, attachments, and exports are validated against the selected workspace.
-
-### Codex App Server integration
-
-The application starts `codex app-server --stdio`, initializes the JSON-RPC session, creates or resumes threads, streams responses, routes approval requests, and supports turn cancellation. Unexpected process exits are detected and reported rather than presented as a ready state.
-
-### Agent Activity
-
-The activity panel translates low-level events into human-readable work such as reading a file, inspecting Git changes, running tests, or applying a patch. Technical output remains available when it is needed, but it is not the primary interface.
-
-### Planning
-
-Plans emitted by the agent are shown as ordered steps with progress. A plan can be reviewed and edited before it is executed, making larger tasks easier to inspect before code changes begin.
-
-### Review Mode
-
-Review Mode forces the turn into a read-only sandbox. The agent can inspect the project, run safe read-only checks, explain findings, and publish structured suggestions. It cannot edit the workspace simply because the user asked for an analysis.
-
-### Build Mode
-
-Build Mode is the execution-oriented mode. The agent may modify files within the configured workspace sandbox, subject to the App Server approval policy and the application's command safeguards. The resulting files and diff remain visible for review.
-
-### Docs Mode
-
-Docs Mode focuses the agent on documentation work and limits its instructions to documentation files related to the request. Markdown can be saved directly or exported through the document workflow.
-
-### AI Suggestions
-
-Review findings become persistent suggestions rather than disappearing into prose. A suggestion records the problem, impact, reasoning, affected files, proposed solution, expected benefits, severity, category, estimated complexity, and risk. The developer can inspect, reject, defer, or explicitly prepare it for application.
-
-### Project Health
-
-Project Health summarizes open suggestions across architecture, security, testing, performance, maintainability, and documentation. The scores are explicitly estimates: each explanation states which open suggestions and severity penalties contributed to the result. They are not presented as objective code-quality measurements.
-
-### Workspace Memory
-
-Each workspace can maintain:
-
-```text
-.nocturne/
-├── project.json
-├── memory.md
-└── rules.md
-```
-
-Detected stack information, useful commands, architectural decisions, and project preferences are supplied as context in future turns. Accepted and rejected review decisions also become part of the project's durable memory.
-
-### Second Brain
-
-The local Second Brain complements workspace Markdown with structured SQLite memories. Facts, decisions, preferences, constraints, and learnings remain scoped to a workspace or conversation, searchable through FTS5, included in backup and restoration, and manageable from a dedicated library. The agent may propose durable knowledge, but every generated entry starts as a candidate and requires explicit approval. Only active memories relevant to the current prompt enter Codex context, under strict item and character budgets; archived, outdated, and unapproved entries are excluded.
-
-### Artifacts
-
-Responses, reports, diffs, files, images, Markdown, configuration, and exported documents can be retained as conversation artifacts. Text, Markdown, code, and supported images have an internal preview; safe HTTPS links open in the system browser, while HTTP, local, and unsafe protocols remain blocked. Files can also be opened in the system editor or containing folder.
-
-### Git integration
-
-Nocturne Codex shows the current branch, modified files, working and staged diffs, and confirmed commits. Commit creation requires explicit confirmation and supports selective staging, including Unicode paths and renames. It never pushes automatically.
-
-### Diagnostics and recovery
-
-Structured, rotating logs record application, renderer, App Server, IPC, workspace, Git, export, and persistence failures without intentionally logging full file contents. The settings screen exposes process state, executable path, PID, version, last failure, log access, diagnostic copying, and App Server restart. Before a backup restoration replaces local data, Nocturne creates a permission-restricted SQLite recovery snapshot and retains a bounded history in the application data directory. Restored conversations remain readable, but their workspaces must be selected again before filesystem, Git, document, memory, or Codex operations are enabled.
-
-### Secure Electron architecture
-
-The renderer runs with `contextIsolation: true`, `nodeIntegration: false`, and Electron sandboxing on the actively supported Electron 43 runtime. Node.js, SQLite, filesystem, Git, Pandoc, and process management stay in the main process. The preload exposes a small typed API, IPC payloads and origins are validated, web permissions are denied by default, external navigation is restricted, and workspace paths are normalized before access. Packaged applications disable Node runtime and inspector escape hatches through Electron fuses and enforce ASAR-only application loading with integrity validation.
+- a software engineering workspace;
+- a knowledge management platform;
+- an AI-assisted development environment;
+- a documentation hub;
+- an architecture companion;
+- a project memory system.
 
 ---
 
-## How it works
+# What Nocturne Codex Is Not
 
-1. **Verify the local Codex environment.** On first launch, Nocturne Codex checks the CLI path, version, authentication status, and App Server availability.
-2. **Select a workspace.** The workspace becomes the root for conversations, memory, file access, and agent operations.
-3. **Start or resume a conversation.** Messages and the Codex thread are persisted locally.
-4. **Choose the interaction mode.** Use Review for read-only analysis, Build for implementation, or Docs for documentation-focused work.
-5. **Observe the work.** Streaming responses, agent state, activities, plans, approvals, changed files, and diffs are shown while the turn runs.
-6. **Evaluate suggestions.** Review the evidence, impact, files, benefits, risk, complexity, and proposed diff before deciding what to do.
-7. **Approve implementation deliberately.** Applying a suggestion creates an implementation request in Build Mode; opening a suggestion alone never changes a file.
-8. **Validate the result.** Ask the agent to run relevant type checks, linting, and tests, then inspect the Git diff yourself.
-9. **Preserve or export the outcome.** Review Second Brain candidates, keep artifacts in the conversation, update workspace memory, save Markdown, or export supported document formats.
+Nocturne Codex is not:
+
+- another AI chatbot;
+- another IDE;
+- another note-taking application;
+- another wrapper around a language model;
+- tied to a single AI provider.
 
 ---
 
-## Review Mode
+# Current State
 
-A request can be as simple as:
+Current version:
 
-```text
-Analyze my project.
-```
+> **0.8.0-beta**
 
-In Review Mode, the agent may read source files, inspect architecture and Git state, run safe read-only commands, identify problems, explain their impact, and produce structured suggestions. Each proposal can include affected files and a concrete solution or diff.
+Current highlights:
 
-Review Mode does **not** automatically edit files, install dependencies, remove files, or execute workspace modifications. The sandbox is forced to read-only for the turn, even if the general application setting allows workspace writes.
-
-The output is therefore a decision surface, not an implicit implementation queue. Suggestions remain pending until the developer rejects them or explicitly moves one into the application flow.
-
-See [docs/review-mode.md](docs/review-mode.md) for protocol and persistence details.
-
----
-
-## Build Mode
-
-Build Mode is used when the developer intends to change the project. The agent can inspect files, publish a plan, request approvals, modify files inside the workspace sandbox, and run validation commands.
-
-The mode does not make generated changes correct by default. The developer is expected to inspect activities, review affected files and diffs, consider test output, and decide whether the result should be committed.
-
-Dangerous or sensitive command patterns are classified by a central policy. App Server approvals remain part of the execution path, and destructive Git or privilege-escalation commands are not treated as routine operations.
+- Local Second Brain
+- Structured project memories
+- Workspace-based knowledge
+- Review Mode
+- Electron secure architecture
+- IPC isolation
+- Provider-agnostic architecture in development
 
 ---
 
-## Docs Mode
+# Roadmap
 
-Docs Mode narrows the agent's focus to documentation related to the request. It is suitable for architecture notes, setup guides, troubleshooting material, reports, and project documentation.
+The next architectural milestone introduces the Provider System.
 
-Markdown responses can be saved as `.md`. HTML, DOCX, and PDF export are available when Pandoc—and, for some PDF workflows, a compatible PDF engine—is installed on the system.
+Instead of integrating a single AI service, Nocturne Codex will support multiple providers through a unified execution layer while preserving the same workspace experience.
 
----
+Future work includes:
 
-## Security model
-
-Nocturne Codex reduces accidental authority; it does not claim to make arbitrary generated commands safe.
-
-- The renderer has no direct Node.js access.
-- Privileged operations are implemented in the Electron main process.
-- IPC payloads are validated before use.
-- File operations are confined to normalized workspace paths.
-- Restored workspaces are untrusted until the user explicitly selects the original folder again.
-- Review Mode forces a read-only sandbox.
-- Build operations follow the configured Codex sandbox and approval policy.
-- Sensitive and dangerous commands are classified and surfaced for approval.
-- External navigation is blocked inside the application; allowed HTTPS links open externally.
-- Browser permissions such as geolocation, camera, microphone, MIDI, and USB are denied by default.
-- Production packages disable `ELECTRON_RUN_AS_NODE`, Node options, and CLI inspection through verified Electron fuses.
-- The application reuses the Codex CLI's existing authentication. Credentials are not sent to the renderer.
-- Logs are size-limited and redact fields that resemble tokens, passwords, API keys, or authorization data.
-
-Review [docs/security.md](docs/security.md) and [SECURITY.md](SECURITY.md) before reporting or changing security-sensitive behavior.
+- Bring Your Own AI
+- Provider abstraction layer
+- AI execution pipeline
+- Model routing
+- Local model support
+- Workspace telemetry
+- AI statistics
+- Cost tracking
+- Provider plugins
 
 ---
 
-## Installation
+# Documentation
 
-### Requirements
+Documentation is organized into independent domains.
 
-- Linux x64 for the publicly distributed v0.8.0-beta preview; Windows x64 and macOS packages are built and validated in CI but are not published for this Beta;
-- Codex CLI installed and authenticated;
-- Codex CLI 0.144.0 or newer with `app-server --stdio` (verified versions: 0.144.1 and 0.144.5);
-- Git for repository status, diff, and commit workflows;
-- Pandoc only if HTML, DOCX, or PDF export is required.
+- Architecture
+- Workspace
+- Development
+- Security
+- Providers
+- ADRs
+- Review Mode
+- Troubleshooting
+- Design System
 
-Verify Codex before launching:
-
-```bash
-codex --version
-codex login status
-```
-
-If authentication is missing, use the login flow provided by the Codex CLI:
-
-```bash
-codex login
-```
-
-Nocturne Codex starts and supervises the App Server automatically. It does not bundle the Codex CLI or copy the user's authentication into the application package.
-
-### Linux AppImage
-
-Download the AppImage from the [v0.8.0-beta release](https://github.com/gustavomfg/Nocturne-Codex/releases/tag/v0.8.0-beta), then:
-
-```bash
-chmod +x Nocturne.Codex-Linux-0.8.0-beta.AppImage
-./Nocturne.Codex-Linux-0.8.0-beta.AppImage
-```
-
-A `.tar.gz` archive is also published for Linux. The packaging pipeline validates Windows NSIS and macOS DMG/ZIP targets, but those packages are not distributed in v0.8.0-beta. Consent-based updates are implemented for packaged builds and require the platform package plus its `latest*.yml` metadata to be published together. Beta artifacts are unsigned previews and may trigger operating-system warnings. Stable releases require Authenticode, Developer ID, notarization, and signed checksums where applicable.
-
-Hardware acceleration is enabled by default for smooth scrolling, dialogs, and panel transitions. If a Linux graphics driver renders a blank or corrupted window, start the application once with the software-rendering fallback:
-
-```bash
-NOCTURNE_DISABLE_GPU=1 ./Nocturne.Codex-Linux-0.8.0-beta.AppImage
-```
-
-This fallback is intended for driver troubleshooting; keeping hardware acceleration enabled provides the best interface performance on supported systems.
+Each document describes a single responsibility and should be read independently.
 
 ---
 
-## Development
+# Design Principles
 
-### Requirements
+Every architectural decision follows the same priorities.
 
-- WebStorm is the adopted IDE; the workspace shortcut expects the `webstorm` launcher in `PATH`;
-- Node.js 24.18 or newer within the Node 24 LTS line;
-- npm 11 (the adopted version is declared in `package.json`);
-- a native build toolchain compatible with `better-sqlite3`;
-- Codex CLI for manual App Server integration testing.
-
-Install dependencies and start the development application:
-
-```bash
-npm ci
-npm run dev
-```
-
-Available checks and builds:
-
-```bash
-npm run typecheck   # TypeScript validation
-npm run lint        # ESLint
-npm run test        # unit and integration tests using Electron's Node runtime
-npm run test:watch  # watch mode with the same native ABI
-npm run test:renderer # browser interaction and visual regression tests
-npm run build       # renderer, main, and preload production builds
-npm run package     # package the current operating system target
-npm run smoke:package          # packaged runtime, preload, SQLite, sandbox, and permissions
-npm run smoke:codex            # opt-in contract smoke against an authenticated real Codex CLI
-npm run verify:signatures      # require platform signatures/notarization for stable artifacts
-npm run verify:release-metadata # version and Codex compatibility consistency
-```
-
-The default automated suite does not call the real Codex service. It combines a simulated App Server transport with direct `CodexClient` lifecycle coverage. `npm run smoke:codex` is a separate, deliberate opt-in check that requires an authenticated CLI, uses a temporary read-only workspace, and stores only a sanitized report. Renderer tests use a deterministic `window.nocturne` bridge and versioned references at 1440, 980, 720, and 520 px. See [docs/development.md](docs/development.md) for native module and release notes.
-
-Codex compatibility has three explicit states: versions below `0.144.0` are unsupported; versions at or above the minimum but outside the verified matrix are minimum-compatible but unverified; and versions listed in `shared/codex-compatibility.json` are verified. Because the App Server API is experimental, an unverified version must not be presented as homologated.
+1. Security before convenience.
+2. Workspace before AI.
+3. Knowledge before conversations.
+4. User control before automation.
+5. Extensibility before provider-specific optimizations.
 
 ---
 
-## Roadmap
+# License
 
-The following items are plans, not current capabilities.
+This project is open source.
 
-### Short term
-
-- [x] End-to-end Electron boundary tests for review, approval, backup, files, and recovery
-- [ ] Signed release artifacts
-- [x] Published SHA-256 checksums
-- [x] Accessibility, keyboard navigation, responsive layout, and reduced-motion pass
-- [ ] Better diff navigation and per-file validation results
-- [x] Explicit App Server compatibility matrix
-
-### Medium term
-
-- [ ] Plugin system with a reviewed capability model
-- [x] Selective Git staging by file
-- [ ] Git staging and application by hunk
-- [ ] Reusable review profiles and workspace policies
-- [ ] Better collaboration through exportable reviews and decision history
-- [ ] Additional packaged platforms after repeatable release validation
-
-### Long term
-
-- [ ] Multi-agent workflows with visible responsibilities and handoffs
-- [ ] Optional local-model integrations
-- [ ] Team collaboration without weakening local workspace boundaries
-- [ ] Extensible engineering workflows beyond the current Codex integration
-
-The roadmap is deliberately subordinate to stability. Multi-agent execution, plugins, real-time team collaboration, and local models do **not** exist in the current Beta.
-
----
-
-## Status
-
-**v0.8.0-beta — stability preview.**
-
-The core local workflow is implemented for Linux, Windows, and macOS. This beta is intended for product validation and is not presented as a stable release. A future stable publication requires signed packages, notarization on macOS, a successful real Codex contract smoke for the exact release commit, and the generated `latest*.yml` metadata used by consent-based updates. The App Server interface remains experimental, so compatibility is maintained through an explicit verified-version matrix.
-
-Project Health is an explained estimate derived from open suggestions, not a formal security or quality audit. AI suggestions can be incomplete or wrong and must be reviewed like any other proposed engineering change.
-
-Known issues and release changes are tracked in [CHANGELOG.md](CHANGELOG.md). The complete notes for this build are available in [docs/releases/v0.8.0-beta.md](docs/releases/v0.8.0-beta.md).
-
----
-
-## Contributing
-
-Contributions are welcome when they preserve the project's central constraint: AI work should remain observable, scoped, and subject to developer judgment.
-
-Before opening a pull request:
-
-1. discuss substantial behavior changes in an issue;
-2. keep the change focused and avoid unrelated refactors;
-3. preserve the Electron trust boundary and IPC validation;
-4. use strict TypeScript types and follow the existing naming style;
-5. add tests for state, persistence, security policy, or protocol behavior where relevant;
-6. run typecheck, lint, tests, and build;
-7. document manual validation for UI changes.
-
-```bash
-npm run typecheck
-npm run lint
-npm run test
-npm run build
-```
-
-Read [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before contributing. Security reports must follow [SECURITY.md](SECURITY.md) rather than public issues.
-
----
-
-## License
-
-Nocturne Codex is available under the [MIT License](LICENSE).
+See the repository license for details.
