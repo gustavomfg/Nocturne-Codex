@@ -59,6 +59,7 @@ describe('persistência SQLite', () => {
       timeoutMs: 30_000,
     }, credentialReference)).toThrow()
 
+    const rotatedReference = 'f79c1a83-df07-4ff0-91d0-cf639fd0845e'
     const updated = db.providerConfigurations.update(created.id, {
       providerType: 'openai-compatible',
       displayName: 'OpenRouter local policy',
@@ -67,16 +68,18 @@ describe('persistência SQLite', () => {
       enabled: false,
       requiresAuthentication: true,
       timeoutMs: 45_000,
-    })
+    }, rotatedReference)
     expect(updated).toMatchObject({
       displayName: 'OpenRouter local policy',
       enabled: false,
       credentialConfigured: true,
     })
+    expect(db.providerConfigurations.getCredentialReference(created.id))
+      .toBe(rotatedReference)
     expect(db.providerConfigurations.list()).toEqual([updated])
     expect(db.providerConfigurations.delete(created.id)).toEqual({
       deleted: true,
-      credentialReference,
+      credentialReference: rotatedReference,
     })
     expect(db.providerConfigurations.delete(created.id)).toEqual({
       deleted: false,

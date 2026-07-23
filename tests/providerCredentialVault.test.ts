@@ -190,4 +190,15 @@ describe('ProviderCredentialVault', () => {
       code: 'invalid-reference',
     })
   })
+
+  it('remove referências órfãs sem descriptografar as credenciais ativas', async () => {
+    const { vault } = await setup()
+    const active = await vault.create('active-secret')
+    const orphan = await vault.create('orphan-secret')
+
+    await expect(vault.prune([active])).resolves.toBe(1)
+    await expect(vault.resolve(active)).resolves.toBe('active-secret')
+    await expect(vault.has(orphan)).resolves.toBe(false)
+    await expect(vault.prune([active])).resolves.toBe(0)
+  })
 })

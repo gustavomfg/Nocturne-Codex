@@ -69,19 +69,28 @@ export class ProviderConfigurationRepository {
     return this.get(id) as ProviderConfigurationSummary
   }
 
-  update(id: string, input: unknown): ProviderConfigurationSummary {
+  update(
+    id: string,
+    input: unknown,
+    credentialReference?: string | null,
+  ): ProviderConfigurationSummary {
     const validatedId = identifierSchema.parse(id)
     const value = providerConfigurationInputSchema.parse(input)
+    const credentialRef = credentialReference === undefined
+      ? undefined
+      : parseCredentialReference(credentialReference)
     const changed = this.database.prepare(`UPDATE provider_configs SET
       provider_type=@providerType,display_name=@displayName,source=@source,
       base_url=@baseUrl,enabled=@enabled,
       requires_authentication=@requiresAuthentication,timeout_ms=@timeoutMs,
+      ${credentialRef === undefined ? '' : 'credential_ref=@credentialRef,'}
       updated_at=@updatedAt
       WHERE id=@id`).run({
       id: validatedId,
       ...value,
       enabled: value.enabled ? 1 : 0,
       requiresAuthentication: value.requiresAuthentication ? 1 : 0,
+      ...(credentialRef === undefined ? {} : { credentialRef }),
       updatedAt: this.now().toISOString(),
     })
     if (!changed.changes) throw new Error('Configuração de Provider não encontrada.')
@@ -104,6 +113,12 @@ export class ProviderConfigurationRepository {
       .get(validatedId) as { credentialRef: string | null } | undefined
     if (!row) throw new Error('Configuração de Provider não encontrada.')
     return row.credentialRef
+  }
+
+  listCredentialReferences(): string[] {
+    const rows = this.database.prepare(`SELECT credential_ref credentialRef
+      FROM provider_configs WHERE credential_ref IS NOT NULL`).all() as Array<{ credentialRef: string }>
+    return rows.map((row) => row.credentialRef)
   }
 
   delete(id: string): { deleted: boolean; credentialReference: string | null } {

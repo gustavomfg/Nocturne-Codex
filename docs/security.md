@@ -483,6 +483,13 @@ state, never the reference. JSON backup export omits the reference entirely, so
 restoration cannot bind configuration imported from another installation to a
 credential already present on the machine.
 
+The main-process configuration service is the transaction coordinator across
+SQLite, the credential vault and the Provider Registry. It validates enabled
+configurations before persistence, compensates newly created vault entries when
+database writes fail, rotates by reference rather than reading the old secret,
+and prunes unreferenced ciphertext during initialization. Adapter validation
+errors are normalized before leaving the service.
+
 ## Secret Submission
 
 ```text

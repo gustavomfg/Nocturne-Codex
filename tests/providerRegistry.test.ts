@@ -77,4 +77,19 @@ describe('ProviderRegistry', () => {
     expect(disposeOllama).toHaveBeenCalledOnce()
     expect(registry.list()).toEqual([])
   })
+
+  it('troca o adapter antes do descarte e preserva o novo se o descarte falhar', async () => {
+    const registry = new ProviderRegistry()
+    const previous = adapter('openai', {
+      dispose: vi.fn().mockRejectedValue(new Error('falha nativa com segredo')),
+    })
+    const next = adapter('openai')
+    registry.register(previous)
+
+    await expect(registry.replace(next)).resolves.toMatchObject({
+      replaced: true,
+      disposalError: expect.any(Error),
+    })
+    expect(registry.resolve('openai')).toBe(next)
+  })
 })

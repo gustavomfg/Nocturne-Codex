@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ProviderExecutionError } from '../electron/ai/ProviderExecutionError'
 import { OpenAICompatibleProviderAdapter } from '../electron/ai/providers/openai-compatible/adapter'
+import { OpenAICompatibleAdapterFactory } from '../electron/ai/providers/openai-compatible/factory'
+import { ModelRegistry } from '../electron/ai/ModelRegistry'
 import {
   parseOpenAICompatibleConfig,
   providerEndpoint,
@@ -128,6 +130,27 @@ describe('OpenAI-compatible configuration', () => {
     'https://provider.example/v1#fragment',
   ])('recusa endpoint inseguro %s', (baseUrl) => {
     expect(() => parseOpenAICompatibleConfig({ ...config, baseUrl })).toThrow()
+  })
+})
+
+describe('OpenAICompatibleAdapterFactory', () => {
+  it('normaliza configuração persistente sem vazar campos de lifecycle ao adapter', () => {
+    const factory = new OpenAICompatibleAdapterFactory(new ModelRegistry())
+    const normalized = factory.normalize({
+      providerType: 'openai-compatible',
+      displayName: 'Custom',
+      source: 'remote',
+      baseUrl: 'https://provider.example/v1/',
+      enabled: false,
+      requiresAuthentication: true,
+      timeoutMs: 30_000,
+    })
+    expect(normalized.baseUrl).toBe('https://provider.example/v1')
+    expect(() => factory.create(
+      '9ba7e635-8746-48bd-a8e9-4609ff1690cb',
+      normalized,
+      async () => undefined,
+    )).not.toThrow()
   })
 })
 

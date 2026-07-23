@@ -39,6 +39,23 @@ The persistence repository does not coordinate SQLite and vault mutations by
 itself. The main-process configuration service owns that two-resource workflow,
 including compensation when either side fails.
 
+The configuration service now:
+
+- serializes create, update and removal operations;
+- normalizes endpoint policy before touching persistence;
+- permits an unvalidated configuration only as a disabled draft;
+- requires and tests a credential before an authenticated Provider is enabled;
+- validates enabled configurations with a temporary, unregistered adapter;
+- creates a new opaque reference for credential rotation;
+- compensates a new vault entry when SQLite persistence fails;
+- atomically replaces the registered adapter after persistence succeeds;
+- removes obsolete ciphertext after rotation or removal;
+- rebuilds adapters and prunes unreferenced vault entries during initialization.
+
+Plaintext used by validation exists only in the temporary main-process call. A
+persistent adapter resolves the current opaque reference on demand and never
+captures the submitted secret.
+
 ## Validation
 
 Validation checks:

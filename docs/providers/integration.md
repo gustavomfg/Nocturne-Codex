@@ -102,11 +102,13 @@ that each configured model exists in `/models`; automatic capability inference
 is not performed because OpenAI-compatible catalogs do not expose a portable
 capability contract.
 
-The main-process credential vault now provides the secure-storage boundary used
-by the injected credential resolver. Wiring provider records to opaque
-references, configuration IPC, custom headers and renderer forms remains
-outside this transport slice and must never make the resolver or plaintext
-secret renderer-accessible.
+The main-process credential vault and configuration service provide the
+secure-storage boundary used by the injected credential resolver. Provider
+records are coordinated with opaque references, enabled configurations are
+connection-tested before persistence, and persistent adapters resolve the
+current credential only at request time. Configuration IPC, custom headers and
+renderer forms remain outside this transport slice and must never make the
+resolver or plaintext secret renderer-accessible.
 
 ## Testing
 

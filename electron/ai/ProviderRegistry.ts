@@ -39,6 +39,20 @@ export class ProviderRegistry {
     this.adapters.set(id, adapter)
   }
 
+  async replace(adapter: ProviderAdapter): Promise<{
+    replaced: boolean
+    disposalError?: unknown
+  }> {
+    const previous = this.adapters.get(adapter.definition.id)
+    this.adapters.set(adapter.definition.id, adapter)
+    try {
+      await previous?.dispose?.()
+      return { replaced: Boolean(previous) }
+    } catch (disposalError) {
+      return { replaced: Boolean(previous), disposalError }
+    }
+  }
+
   list(): ProviderDefinition[] {
     return [...this.adapters.values()].map(({ definition }) => ({ ...definition }))
   }

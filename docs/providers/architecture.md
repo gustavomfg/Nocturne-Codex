@@ -74,6 +74,25 @@ The transport supports explicit remote HTTPS endpoints and local loopback
 runtimes. It does not follow redirects or infer model capabilities from native
 catalogs.
 
+## Configuration coordination
+
+The main-process configuration service sits above persistence, secure storage
+and adapter construction:
+
+```text
+Validated user intent
+        ↓
+Provider Configuration Service
+   ├── SQLite metadata
+   ├── Credential vault
+   └── Provider Registry
+```
+
+Disabled drafts do not require network validation. Enabling, creating or
+updating an active Provider requires a successful normalized health check.
+Credential rotation creates a new vault reference, commits it with metadata,
+replaces the adapter and only then removes the old ciphertext.
+
 ## Core rule
 
 > **Provider code ends where normalized Nocturne contracts begin.**

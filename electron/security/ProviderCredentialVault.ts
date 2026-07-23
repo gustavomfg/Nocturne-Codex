@@ -122,13 +122,27 @@ export class ProviderCredentialVault {
 
   delete(reference: string): Promise<boolean> {
     return this.exclusive(async () => {
-      this.assertAvailable()
       const validatedReference = validateReference(reference)
       const store = await this.readStore()
       if (!store.entries[validatedReference]) return false
       delete store.entries[validatedReference]
       await this.writeStore(store)
       return true
+    })
+  }
+
+  prune(allowedReferences: readonly string[]): Promise<number> {
+    return this.exclusive(async () => {
+      const allowed = new Set(allowedReferences.map(validateReference))
+      const store = await this.readStore()
+      let removed = 0
+      for (const reference of Object.keys(store.entries)) {
+        if (allowed.has(reference)) continue
+        delete store.entries[reference]
+        removed += 1
+      }
+      if (removed > 0) await this.writeStore(store)
+      return removed
     })
   }
 

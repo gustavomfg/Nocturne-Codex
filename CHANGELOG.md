@@ -34,6 +34,12 @@
   endpoint, origem, timeout, estado e referência opaca de proprietário único;
 - backups preservam metadados de Providers, mas removem referências do cofre e
   exigem nova credencial após restauração;
+- serviço de configuração do main process coordena validação, SQLite, cofre e
+  Registry com serialização e compensação de falhas;
+- drafts desabilitados permanecem offline, enquanto Providers habilitados
+  exigem health check e credencial válida antes da persistência;
+- rotação cria nova referência opaca, troca o adapter de forma atômica e limpa
+  ciphertext antigo ou órfão sem capturar plaintext no adapter persistente;
 - geração de imagens permanece fora do conjunto inicial de capacidades e será tratada em uma etapa futura.
 
 ### Estabilidade e compatibilidade
@@ -73,7 +79,7 @@
 
 ### Qualidade
 
-- 169 testes unitários e de integração;
+- 181 testes unitários e de integração;
 - 28 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints, no Segundo Cérebro e na atualização da Saúde do Projeto;
 - typecheck, ESLint, design system, build de produção, pacote Linux real e audit npm sem vulnerabilidades aprovados;
 - decisões de sugestão precisam persistir antes do turno Build, e o status aplicado exige alterações observadas no escopo aprovado;
