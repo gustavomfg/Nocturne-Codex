@@ -10,7 +10,7 @@ import { parseBackupInWorker, serializeBackupInWorker } from '../electron/ipc/ba
 
 const now = new Date().toISOString()
 const workspace = { path: '/tmp/project', name: 'project', favorite: 0 as const, created_at: now, last_opened_at: now }
-const conversation = { id: randomUUID(), title: 'Teste', workspace: workspace.path, codex_thread_id: null, created_at: now, updated_at: now }
+const conversation = { id: randomUUID(), title: 'Teste', workspace: workspace.path, created_at: now, updated_at: now }
 const valid = () => ({ schemaVersion: 5, exportedAt: now, workspaces: [workspace], conversations: [conversation], messages: [], artifacts: [], memories: [], suggestions: [], suggestionDecisions: [], settings: { theme: 'dark' as const } })
 const modelDescriptor = { providerId: 'provider-1', modelId: 'model-1', displayName: 'Model 1', source: 'remote' as const, capabilities: ['chat'] as const, availability: 'available' as const }
 const modelCatalogItem = { provider_id: modelDescriptor.providerId, model_id: modelDescriptor.modelId, descriptor: JSON.stringify(modelDescriptor), updated_at: now }

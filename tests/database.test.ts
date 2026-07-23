@@ -25,13 +25,12 @@ afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(direc
 
 describe('persistência SQLite', () => {
   it('mantém migrações incrementais, ordenadas e sem lacunas', () => {
-    expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
     expect(migrations[migrations.length - 1]?.version).toBe(DATABASE_SCHEMA_VERSION)
   })
-  it('persiste conversa, thread, mensagens, memória e artefatos', () => {
+  it('persiste conversa, mensagens, memória e artefatos', () => {
     const db = create(); const workspace = '/tmp/workspace'; const conversation = db.createConversation(workspace)
-    db.setThread(conversation.id, 'thread-1'); db.addMessage(conversation.id, 'user', 'Olá'); db.setWorkspaceMemory(workspace, 'decisão'); db.addArtifact(conversation.id, workspace, 'markdown', 'Resposta', null, '# ok')
-    expect(db.listConversations()[0].codexThreadId).toBe('thread-1')
+    db.addMessage(conversation.id, 'user', 'Olá'); db.setWorkspaceMemory(workspace, 'decisão'); db.addArtifact(conversation.id, workspace, 'markdown', 'Resposta', null, '# ok')
     expect(db.listMessages(conversation.id)).toHaveLength(1)
     expect(db.getWorkspaceMemory(workspace).content).toBe('decisão')
     expect(db.listArtifacts(conversation.id)[0].type).toBe('markdown'); db.close()
@@ -200,7 +199,7 @@ describe('persistência SQLite', () => {
     const db = new LocalDatabase(directory)
     db.close()
     const migrated = new Sqlite(file, { readonly: true })
-    expect(migrated.pragma('user_version', { simple: true })).toBe(10)
+    expect(migrated.pragma('user_version', { simple: true })).toBe(11)
     const tables = migrated.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>
     expect(tables.map((item) => item.name)).toContain('suggestions')
     expect(tables.map((item) => item.name)).toContain('workspace_memory')
@@ -228,7 +227,7 @@ describe('persistência SQLite', () => {
     expect(fs.statSync(path.join(directory, migrationBackups[0])).mode & 0o777).toBe(0o600)
     migrated.close()
     const verified = new Sqlite(file, { readonly: true })
-    expect(verified.pragma('user_version', { simple: true })).toBe(10)
+    expect(verified.pragma('user_version', { simple: true })).toBe(11)
     verified.close()
   })
   it('migra o schema 7 preservando dados e criando o índice do Segundo Cérebro', () => {
@@ -254,7 +253,7 @@ describe('persistência SQLite', () => {
     expect(migrated.providerConfigurations.list()).toEqual([])
     migrated.close()
     const verified = new Sqlite(file, { readonly: true })
-    expect(verified.pragma('user_version', { simple: true })).toBe(10)
+    expect(verified.pragma('user_version', { simple: true })).toBe(11)
     verified.close()
   })
   it('migra o schema 9 preservando dados e criando catálogo e bindings', () => {
@@ -271,18 +270,18 @@ describe('persistência SQLite', () => {
     expect(migrationBackups).toHaveLength(1)
     migrated.close()
     const verified = new Sqlite(file, { readonly: true })
-    expect(verified.pragma('user_version', { simple: true })).toBe(10)
+    expect(verified.pragma('user_version', { simple: true })).toBe(11)
     verified.close()
   })
   it('recusa schema futuro antes de executar manutenção ou migrações', () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-test-')); directories.push(directory)
     const file = path.join(directory, 'nocturne.db')
     const future = new Sqlite(file)
-    future.pragma('user_version = 11')
+    future.pragma('user_version = 12')
     future.close()
-    expect(() => new LocalDatabase(directory)).toThrow(/schema 11.*suporta até o schema 10/)
+    expect(() => new LocalDatabase(directory)).toThrow(/schema 12.*suporta até o schema 11/)
     const preserved = new Sqlite(file, { readonly: true })
-    expect(preserved.pragma('user_version', { simple: true })).toBe(11)
+    expect(preserved.pragma('user_version', { simple: true })).toBe(12)
     preserved.close()
   })
   it('reverte integralmente uma restauração inválida', () => {
