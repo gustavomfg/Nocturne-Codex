@@ -39,6 +39,7 @@ interface ProviderEditor {
 }
 
 interface ProviderSettingsPageProps {
+  workspaceId: string
   onDirtyChange(dirty: boolean): void
   onNotify(message: string): void
 }
@@ -54,6 +55,7 @@ const defaultConfiguration: ProviderConfigurationInput = {
 }
 
 export function ProviderSettingsPage({
+  workspaceId,
   onDirtyChange,
   onNotify,
 }: ProviderSettingsPageProps) {
@@ -183,9 +185,35 @@ export function ProviderSettingsPage({
       if (saved.enabled) {
         try {
           await window.nocturne.models.refresh(saved.id)
-          onNotify(editor.id
-            ? 'Provider atualizado e modelos sincronizados.'
-            : 'Provider conectado e modelos sincronizados.')
+          if (workspaceId) {
+            const allModels = await window.nocturne.models.list()
+            const available = allModels.filter(
+              (m) => m.providerId === saved.id && m.availability === 'available',
+            )
+            if (available.length > 0) {
+              const existing = await window.nocturne.models.bindings(workspaceId)
+              if (!existing?.defaultBinding) {
+                await window.nocturne.models.setBindings({
+                  workspaceId,
+                  defaultBinding: { providerId: saved.id, modelId: available[0].modelId },
+                  roleBindings: {},
+                  fallbackPolicy: 'disabled',
+                  fallbackBindings: [],
+                })
+                onNotify(editor.id
+                  ? `Provider atualizado e modelo ${available[0].displayName} vinculado.`
+                  : `Provider conectado e modelo ${available[0].displayName} vinculado.`)
+              } else {
+                onNotify(editor.id
+                  ? 'Provider atualizado e modelos sincronizados.'
+                  : 'Provider conectado e modelos sincronizados.')
+              }
+            }
+          } else {
+            onNotify(editor.id
+              ? 'Provider atualizado e modelos sincronizados.'
+              : 'Provider conectado e modelos sincronizados.')
+          }
         } catch {
           setError('Provider salvo, mas o catálogo de modelos não pôde ser atualizado.')
           onNotify(editor.id ? 'Provider atualizado.' : 'Provider adicionado.')
@@ -210,7 +238,29 @@ export function ProviderSettingsPage({
       if (result.status === 'available') {
         try {
           await window.nocturne.models.refresh(id)
-          onNotify('Conexão validada e modelos sincronizados.')
+          if (workspaceId) {
+            const allModels = await window.nocturne.models.list()
+            const available = allModels.filter(
+              (m) => m.providerId === id && m.availability === 'available',
+            )
+            if (available.length > 0) {
+              const existing = await window.nocturne.models.bindings(workspaceId)
+              if (!existing?.defaultBinding) {
+                await window.nocturne.models.setBindings({
+                  workspaceId,
+                  defaultBinding: { providerId: id, modelId: available[0].modelId },
+                  roleBindings: {},
+                  fallbackPolicy: 'disabled',
+                  fallbackBindings: [],
+                })
+                onNotify(`Conexão validada e modelo ${available[0].displayName} vinculado.`)
+              } else {
+                onNotify('Conexão validada e modelos sincronizados.')
+              }
+            }
+          } else {
+            onNotify('Conexão validada e modelos sincronizados.')
+          }
         } catch {
           setError('Conexão validada, mas o catálogo de modelos não pôde ser atualizado.')
         }
