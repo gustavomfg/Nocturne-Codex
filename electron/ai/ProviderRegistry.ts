@@ -3,6 +3,7 @@ import type { ProviderAvailability, ProviderDefinition } from '../../shared/ai/p
 export interface ProviderAdapter {
   readonly definition: ProviderDefinition
   getAvailability(): ProviderAvailability | Promise<ProviderAvailability>
+  listModels(): readonly unknown[] | Promise<readonly unknown[]>
   dispose?(): void | Promise<void>
 }
 

@@ -5,6 +5,7 @@ function adapter(id: string, overrides: Partial<ProviderAdapter> = {}): Provider
   return {
     definition: { id, displayName: id.toUpperCase(), source: 'remote' },
     getAvailability: () => ({ status: 'available' }),
+    listModels: () => [],
     ...overrides,
   }
 }

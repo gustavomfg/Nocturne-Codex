@@ -35,6 +35,10 @@ An adapter should support only the capabilities it actually provides. Typical op
 - cancel execution;
 - normalize usage and errors.
 
+Model discovery is applied to the Model Registry only after the complete
+normalized catalog passes validation. Concurrent refreshes use latest-request
+wins semantics, so a slower obsolete response cannot replace a newer catalog.
+
 ## Boundaries
 
 Adapters may know provider-native protocols.

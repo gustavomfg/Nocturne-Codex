@@ -33,6 +33,9 @@ Models may come from:
 - manual configuration.
 
 Missing metadata is acceptable. The system must not invent capabilities.
+Provider discovery replaces only that Provider's catalog, and only after every
+descriptor passes normalized validation. A failed or superseded refresh
+preserves the last valid catalog.
 
 ## Pricing
 
