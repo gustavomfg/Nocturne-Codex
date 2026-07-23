@@ -2,6 +2,13 @@
 
 ## 0.8.0-beta — 2026-07-16
 
+### Fundação Provider Agnostic
+
+- Provider Registry inicial registra adapters substituíveis, consulta disponibilidade e garante descarte determinístico sem alterar a integração Codex existente;
+- Model Registry normalizado identifica modelos por `providerId + modelId`, valida descriptors e preços em runtime e filtra candidatos apenas por capacidades declaradas;
+- atualização de catálogo por Provider é atômica e preserva modelos pertencentes aos demais Providers;
+- geração de imagens permanece fora do conjunto inicial de capacidades e será tratada em uma etapa futura.
+
 ### Estabilidade e compatibilidade
 
 - Codex CLI `0.144.5` homologado com initialize, configuração, thread efêmera, resposta real e cancelamento durante atividade;

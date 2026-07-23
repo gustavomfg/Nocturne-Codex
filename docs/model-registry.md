@@ -64,7 +64,7 @@ The registry is responsible for:
 - normalizing capabilities;
 - supporting discovery;
 - enabling model selection;
-- resolving workspace bindings.
+- validating model references used by workspace bindings.
 
 It is **not** responsible for executing requests.
 
@@ -80,11 +80,11 @@ Conceptually:
 
 ```ts
 type ModelDescriptor = {
-  id: string;
   providerId: string;
+  modelId: string;
 
   displayName: string;
-  family: string;
+  family?: string;
   version?: string;
 
   source:
@@ -97,10 +97,11 @@ type ModelDescriptor = {
   maxOutputTokens?: number;
 
   pricing?: Pricing;
-
-  enabled: boolean;
+  availability: ModelAvailability;
 };
 ```
+
+Models are identified by the pair `providerId + modelId`.
 
 The registry stores normalized metadata.
 
@@ -151,7 +152,7 @@ Examples:
 - Disabled
 - Offline
 - Missing Credentials
-- Unsupported
+- Incompatible
 - Deprecated
 
 Availability belongs to the registry.

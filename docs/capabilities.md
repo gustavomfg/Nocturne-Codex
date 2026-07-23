@@ -41,7 +41,6 @@ Examples:
 - structured output
 - embeddings
 - reasoning
-- image generation
 
 The Provider Adapter translates provider-specific metadata into a normalized capability set.
 
@@ -59,8 +58,7 @@ type Capability =
   | "tool-calling"
   | "structured-output"
   | "embeddings"
-  | "reasoning"
-  | "image-generation";
+  | "reasoning";
 ```
 
 Models expose one or more capabilities.
@@ -182,14 +180,6 @@ The orchestrator does not assume a provider-specific implementation.
 
 ---
 
-## Image Generation
-
-Represents models capable of generating or editing images.
-
-Image generation follows its own execution pipeline and security rules.
-
----
-
 # Optional Metadata
 
 Capabilities may include metadata such as:
@@ -225,6 +215,7 @@ Adding a new capability should not require redesigning the architecture.
 
 Future examples:
 
+- image generation
 - audio input
 - audio output
 - video understanding
