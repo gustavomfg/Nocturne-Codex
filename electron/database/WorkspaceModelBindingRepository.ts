@@ -69,13 +69,6 @@ function cloneBindings(bindings: WorkspaceModelBindings): WorkspaceModelBindings
     defaultBinding: bindings.defaultBinding
       ? { ...bindings.defaultBinding }
       : undefined,
-    roleBindings: Object.fromEntries(
-      Object.entries(bindings.roleBindings)
-        .map(([role, reference]) => [role, reference ? { ...reference } : reference]),
-    ),
-    fallbackBindings: bindings.fallbackBindings.map((reference) => ({
-      ...reference,
-    })),
   }
 }
 

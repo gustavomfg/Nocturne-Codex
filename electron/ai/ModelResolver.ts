@@ -1,8 +1,8 @@
 import type { WorkspaceModelBindings } from '../../shared/ai/bindings'
 import { workspaceModelBindingsSchema } from '../../shared/ai/bindingSchemas'
-import type { ModelDescriptor, ModelReference } from '../../shared/ai/model'
+import type { ModelDescriptor } from '../../shared/ai/model'
 import type { ProviderAvailability } from '../../shared/ai/provider'
-import type { NormalizedTask, TaskModelSelection } from '../../shared/ai/task'
+import type { NormalizedTask } from '../../shared/ai/task'
 import { ModelRegistry } from './ModelRegistry'
 import { ProviderRegistry } from './ProviderRegistry'
 
@@ -13,7 +13,6 @@ export type ModelResolutionErrorCode =
   | 'model-unavailable'
   | 'capability-mismatch'
   | 'provider-unavailable'
-  | 'fallback-confirmation-required'
 
 export class ModelResolutionError extends Error {
   constructor(
@@ -29,13 +28,6 @@ export class ModelResolutionError extends Error {
 export interface ResolvedModel {
   model: ModelDescriptor
   providerAvailability: ProviderAvailability
-  source: 'explicit' | 'role' | 'workspace-default' | 'configured-fallback'
-  usedFallback: boolean
-}
-
-interface Candidate {
-  reference: ModelReference
-  source: ResolvedModel['source']
 }
 
 export class ModelResolver {
@@ -61,58 +53,28 @@ export class ModelResolver {
       )
     }
 
-    const primary = resolvePrimary(task.selection, bindings)
-    const candidates = [primary]
-    if (task.selection.type !== 'explicit' && bindings.fallbackPolicy === 'configured') {
-      candidates.push(...bindings.fallbackBindings.map((reference) => ({
-        reference,
-        source: 'configured-fallback' as const,
-      })))
-    }
-
-    let lastFailure: ModelResolutionError | undefined
-    for (const [index, candidate] of candidates.entries()) {
-      try {
-        const resolved = await this.validateCandidate(task, candidate)
-        return { ...resolved, usedFallback: index > 0 }
-      } catch (error) {
-        lastFailure = asResolutionError(error, candidate.reference)
-        if (index === 0 && task.selection.type === 'explicit') throw lastFailure
-        if (bindings.fallbackPolicy !== 'configured') break
-      }
-    }
-
-    if (
-      bindings.fallbackPolicy === 'explicit'
-      && bindings.fallbackBindings.length > 0
-      && task.selection.type !== 'explicit'
-    ) {
-      throw new ModelResolutionError(
-        'fallback-confirmation-required',
-        'O modelo selecionado está indisponível. Confirme um fallback antes de continuar.',
-        {
-          failure: lastFailure?.code,
-          alternatives: bindings.fallbackBindings,
-        },
-      )
-    }
-    throw lastFailure ?? new ModelResolutionError(
-      'binding-not-found',
-      'Nenhum modelo foi resolvido para a tarefa.',
-    )
+    const reference = resolvePrimary(task.selection, bindings)
+    return this.validateModel(task, reference)
   }
 
-  private async validateCandidate(
+  private async validateModel(
     task: NormalizedTask,
-    candidate: Candidate,
-  ): Promise<Omit<ResolvedModel, 'usedFallback'>> {
+    reference: WorkspaceModelBindings['defaultBinding'],
+  ): Promise<ResolvedModel> {
+    if (!reference) {
+      throw new ModelResolutionError(
+        'binding-not-found',
+        'Nenhum modelo padrão foi configurado para o Workspace.',
+      )
+    }
+
     let model: ModelDescriptor
     try {
-      model = this.models.resolve(candidate.reference)
+      model = this.models.resolve(reference)
     } catch {
       throw new ModelResolutionError(
         'model-unavailable',
-        `Modelo não encontrado: ${candidate.reference.providerId}/${candidate.reference.modelId}`,
+        `Modelo não encontrado: ${reference.providerId}/${reference.modelId}`,
       )
     }
     if (model.availability !== 'available') {
@@ -149,36 +111,14 @@ export class ModelResolver {
         { availability: providerAvailability.status },
       )
     }
-    return { model, providerAvailability, source: candidate.source }
+    return { model, providerAvailability }
   }
 }
 
 function resolvePrimary(
-  selection: TaskModelSelection,
+  selection: NormalizedTask['selection'],
   bindings: WorkspaceModelBindings,
-): Candidate {
-  if (selection.type === 'explicit') {
-    return { reference: selection.model, source: 'explicit' }
-  }
-  if (selection.type === 'role') {
-    const roleBinding = bindings.roleBindings[selection.role]
-    if (roleBinding) return { reference: roleBinding, source: 'role' }
-  }
-  if (bindings.defaultBinding) {
-    return { reference: bindings.defaultBinding, source: 'workspace-default' }
-  }
-  throw new ModelResolutionError(
-    'binding-not-found',
-    selection.type === 'role'
-      ? `Nenhum modelo foi configurado para a role ${selection.role}.`
-      : 'Nenhum modelo padrão foi configurado para o Workspace.',
-  )
-}
-
-function asResolutionError(error: unknown, reference: ModelReference) {
-  if (error instanceof ModelResolutionError) return error
-  return new ModelResolutionError(
-    'model-unavailable',
-    `Falha ao resolver ${reference.providerId}/${reference.modelId}.`,
-  )
+): WorkspaceModelBindings['defaultBinding'] {
+  if (selection.type === 'explicit') return selection.model
+  return bindings.defaultBinding
 }
