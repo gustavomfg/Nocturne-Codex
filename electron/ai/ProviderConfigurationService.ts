@@ -61,6 +61,7 @@ export class ProviderConfigurationService {
     private readonly credentials: ProviderCredentialStore,
     private readonly providers: ProviderRegistry,
     private readonly factory: ConfiguredProviderAdapterFactory,
+    private readonly onProviderRemoved?: (id: string) => void,
   ) {}
 
   list() {
@@ -187,6 +188,7 @@ export class ProviderConfigurationService {
       if (removed.credentialReference) {
         await this.credentials.delete(removed.credentialReference).catch(() => undefined)
       }
+      this.onProviderRemoved?.(id)
       return true
     })
   }

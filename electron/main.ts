@@ -158,6 +158,10 @@ async function initializeServices() {
     ),
     providerRegistry,
     new OpenAICompatibleAdapterFactory(modelRegistry),
+    (id) => {
+      database!.modelCatalog.deleteProviderModels(id)
+      modelRegistry!.deleteProviderModels(id)
+    },
   )
   try {
     const initialized = await providerConfigurations.initialize()

@@ -64,6 +64,12 @@ export class ModelRegistry {
       .map(cloneDescriptor)
   }
 
+  deleteProviderModels(providerId: string): void {
+    for (const [key, descriptor] of this.models) {
+      if (descriptor.providerId === providerId) this.models.delete(key)
+    }
+  }
+
   replaceProviderModels(providerId: string, inputs: readonly unknown[]): ModelDescriptor[] {
     const descriptors = inputs.map(parseDescriptor)
     const keys = new Set<string>()
