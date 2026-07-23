@@ -2,7 +2,6 @@ import { app, BrowserWindow, shell } from 'electron'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { CodexClient } from './codex/CodexClient'
 import { LocalDatabase } from './database/Database'
 import { registerIpc } from './ipc/registerIpc'
 import { Logger } from './logging/Logger'
@@ -29,7 +28,6 @@ const hasSingleInstanceLock = app.requestSingleInstanceLock()
 
 let win: BrowserWindow | null = null
 let database: LocalDatabase | null = null
-const codex = new CodexClient()
 let logger: Logger | null = null
 let disposeIpc: (() => void) | null = null
 let disposeUpdates: (() => void) | null = null
@@ -78,7 +76,6 @@ function createWindow() {
   disposeIpc = registerIpc(
     currentWindow,
     database,
-    codex,
     logger,
     providerConfigurations,
     {
@@ -104,18 +101,11 @@ function createWindow() {
   })
   currentWindow.webContents.on('render-process-gone', (_event, details) => {
     logger?.error('app', 'Renderer encerrado inesperadamente', details)
-    codex.stop()
     if (!currentWindow.isDestroyed()) setTimeout(() => { if (!currentWindow.isDestroyed()) void currentWindow.webContents.reload() }, 1_000)
   })
   currentWindow.webContents.on('unresponsive', () => logger?.warn('app', 'Renderer não está respondendo'))
   currentWindow.webContents.on('responsive', () => logger?.info('app', 'Renderer voltou a responder'))
-  const memoryTimer = setInterval(() => {
-    if (currentWindow.isDestroyed() || !['planning', 'running', 'waiting-approval', 'cancelling'].includes(codex.status)) return
-    const renderer = app.getAppMetrics().find((metric) => metric.pid === currentWindow.webContents.getOSProcessId())
-    logger?.info('app', 'Uso de memória durante execução', { main: process.memoryUsage(), renderer: renderer?.memory, codex: codex.getDiagnostics() })
-  }, 10_000)
   currentWindow.on('closed', () => {
-    clearInterval(memoryTimer)
     if (win !== currentWindow) return
     disposeIpc?.()
     disposeIpc = null
@@ -221,7 +211,6 @@ app.on('before-quit', () => {
   logger?.info('app', 'Encerrando aplicação')
   disposeUpdates?.(); disposeUpdates = null
   disposeIpc?.(); disposeIpc = null
-  codex.stop()
   void providerRegistry?.dispose()
   providerRegistry = null
   providerConfigurations = null

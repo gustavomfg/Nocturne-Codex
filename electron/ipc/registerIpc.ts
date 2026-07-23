@@ -5,17 +5,13 @@ import { execFile, spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { promisify } from 'node:util'
 import { z } from 'zod'
-import { CodexClient } from '../codex/CodexClient'
 import { LocalDatabase } from '../database/Database'
 import { Logger } from '../logging/Logger'
 import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
-import { agentModes, sanitizeSuggestionTitle } from '../../shared/suggestions'
-import { approvalSchema, codexSendSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, saveAssistantSchema, saveMarkdownSchema } from '../../shared/ipc/schemas'
-import { CODEX_COMPATIBILITY, classifyCodexVersion } from '../../shared/constants'
+import { sanitizeSuggestionTitle } from '../../shared/suggestions'
+import { approvalSchema, aiSendSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, saveAssistantSchema, saveMarkdownSchema } from '../../shared/ipc/schemas'
 import { registerDataIpc } from './registerDataIpc'
-import { buildBrainMemoryContext } from '../memory/BrainMemoryContext'
 import { registerGitIpc } from './registerGitIpc'
-import { registerCodexBridge } from './registerCodexBridge'
 import { registerWorkspaceIpc } from './registerWorkspaceIpc'
 import { registerKnowledgeIpc } from './registerKnowledgeIpc'
 import { safeIpcMain } from './safeIpc'
@@ -38,7 +34,6 @@ const execFileAsync = promisify(execFile)
 export function registerIpc(
   win: BrowserWindow,
   database: LocalDatabase,
-  codex: CodexClient,
   logger: Logger,
   providerConfigurations: ProviderConfigurationOperations,
   modelCatalog: ModelCatalogOperations,
@@ -54,10 +49,8 @@ export function registerIpc(
   const disposeModels = registerModelIpc(win, database, modelCatalog)
   ipcMain.handle('clipboard:readText', () => clipboard.readText().slice(0, 2_000_000))
   ipcMain.handle('clipboard:writeText', (_event, value: unknown) => { clipboard.writeText(z.string().max(2_000_000).parse(value)) })
+
   const approvalDetails = new Map<string, { command?: string; risk?: string }>()
-  const disposeCodexBridge = registerCodexBridge(win, codex, logger, approvalDetails)
-  let readinessCache: { expiresAt: number; value: Record<string, unknown> } | null = null
-  let readinessRequest: Promise<Record<string, unknown>> | null = null
 
   ipcMain.handle('files:attach', async (_event, value: unknown) => {
     const conversation = getAuthorizedConversation(database, idSchema.parse(value))
@@ -99,17 +92,8 @@ export function registerIpc(
     return { kind: extension === '.md' ? 'markdown' : 'text', name: path.basename(filePath), filePath, mime: 'text/plain', content: await fs.promises.readFile(filePath, 'utf8'), size: stat.size }
   })
 
-  ipcMain.handle('codex:start', async () => {
-    await codex.start(database.getSettings().codexPath || 'codex')
-    return { status: codex.status }
-  })
-  ipcMain.handle('codex:restart', async () => {
-    await codex.restart(database.getSettings().codexPath || 'codex')
-    return codex.getDiagnostics()
-  })
-  ipcMain.handle('codex:diagnostics', () => ({ ...codex.getDiagnostics(), version: database.getSettings().codexVersion || undefined, logsPath: logger.path }))
   ipcMain.handle('diagnostics:openLogs', () => shell.openPath(logger.path))
-  ipcMain.handle('diagnostics:copy', async () => JSON.stringify({ app: 'Nocturne Codex', platform: process.platform, arch: process.arch, codex: codex.getDiagnostics() }, null, 2))
+  ipcMain.handle('diagnostics:copy', async () => JSON.stringify({ app: 'Nocturne Codex', platform: process.platform, arch: process.arch }, null, 2))
   ipcMain.handle('diagnostics:rendererError', (_event, value: unknown) => {
     const data = z.object({ type: z.enum(['error', 'unhandledRejection']), message: z.string().max(8_000), stack: z.string().max(20_000).optional() }).parse(value)
     logger.error('app', `Renderer ${data.type}`, data)
@@ -119,135 +103,90 @@ export function registerIpc(
     logger.info('app', 'Estado do renderer durante execução', data)
   })
 
-  ipcMain.handle('codex:send', async (_event, value: unknown) => {
-    const { conversationId, prompt, attachments, mode } = codexSendSchema.parse(value)
+  ipcMain.handle('ai:send', async (_event, value: unknown) => {
+    const { conversationId, prompt, attachments, mode } = aiSendSchema.parse(value)
     const conversation = getAuthorizedConversation(database, conversationId)
     attachments.forEach((filePath) => assertInsideWorkspace(filePath, conversation.workspace))
 
     const bindings = database.workspaceModelBindings.get(conversation.workspace)
-    const enabledExternalProviders = providerConfigurations.list().filter(
-      (p) => p.enabled && p.id !== 'codex-cli',
-    )
-    const canUseExternalAi = enabledExternalProviders.length > 0 && bindings?.defaultBinding
+    const enabledProviders = providerConfigurations.list().filter((p) => p.enabled)
+    const hasActiveModel = enabledProviders.length > 0 && bindings?.defaultBinding
 
-    if (canUseExternalAi) {
-      database.addMessage(conversationId, 'user', prompt, { attachments })
-      if (conversation.title === 'Nova conversa') database.renameFromPrompt(conversationId, prompt)
-
-      const workspaceMemory = database.getWorkspaceMemory(conversation.workspace)
-      const projectPath = path.join(conversation.workspace, '.nocturne', 'project.json')
-      let projectName = path.basename(conversation.workspace)
-      try {
-        const projectData = JSON.parse(await fs.promises.readFile(projectPath, 'utf8')) as { name?: string }
-        if (projectData.name) projectName = projectData.name
-      } catch { /* use directory name */ }
-
-      const contextSources: NormalizedTaskInput['context'] = []
-      if (workspaceMemory.content) {
-        contextSources.push({
-          id: 'workspace-memory',
-          type: 'memory',
-          title: 'Memória do workspace',
-          content: workspaceMemory.content,
-          scope: 'workspace',
-          potentiallyOutdated: false,
-        })
-      }
-
-      const taskInput: NormalizedTaskInput = {
-        workspace: { id: conversation.workspace, name: projectName },
-        intent: prompt,
-        mode: mode === 'review' ? 'review' : 'build',
-        messages: [],
-        context: contextSources,
-        constraints: [],
-        requirements: ['chat', 'streaming'],
-        selection: { type: 'workspace-default' },
-        output: { format: 'markdown' },
-        permissions: { workspaceAccess: mode === 'review' ? 'read-only' : 'workspace-write' },
-        tools: [],
-      }
-
-      await executeAiTurn(win, modelRegistry, providerRegistry, taskInput, bindings)
-      return { threadId: randomUUID(), recreated: false }
+    if (!hasActiveModel) {
+      throw new Error('Nenhuma IA configurada. Abra Configurações > IA para conectar um provedor.')
     }
 
-    let threadId = conversation.codexThreadId
-    let recreated = false
-    const context = await readWorkspaceContext(conversation.workspace)
-    const brain = buildBrainMemoryContext(database, conversation.workspace, conversationId, prompt)
-    const memory = `${context.content}\n\n# Regras do projeto\n${context.rules}\n\n# Projeto detectado\n${JSON.stringify(context.project, null, 2)}${brain.text ? `\n\n${brain.text}` : ''}`
-    if (!threadId) {
-      threadId = await codex.createThread(conversation.workspace, database.getSettings(), memory)
-      database.setThread(conversationId, threadId)
-    } else {
-      try { await codex.resumeThread(threadId, conversation.workspace, database.getSettings()) }
-      catch {
-        database.clearThread(conversationId)
-        threadId = await codex.createThread(conversation.workspace, database.getSettings(), memory)
-        database.setThread(conversationId, threadId)
-        recreated = true
-      }
-    }
     database.addMessage(conversationId, 'user', prompt, { attachments })
     if (conversation.title === 'Nova conversa') database.renameFromPrompt(conversationId, prompt)
-    await codex.sendTurn(threadId, conversation.workspace, prompt, database.getSettings(), attachments, memory, mode)
-    database.markBrainMemoriesUsed(brain.memoryIds)
-    return { threadId, recreated }
+
+    const workspaceMemory = database.getWorkspaceMemory(conversation.workspace)
+    const projectPath = path.join(conversation.workspace, '.nocturne', 'project.json')
+    let projectName = path.basename(conversation.workspace)
+    try {
+      const projectData = JSON.parse(await fs.promises.readFile(projectPath, 'utf8')) as { name?: string }
+      if (projectData.name) projectName = projectData.name
+    } catch { /* use directory name */ }
+
+    const contextSources: NormalizedTaskInput['context'] = []
+    if (workspaceMemory.content) {
+      contextSources.push({
+        id: 'workspace-memory',
+        type: 'memory',
+        title: 'Memória do workspace',
+        content: workspaceMemory.content,
+        scope: 'workspace',
+        potentiallyOutdated: false,
+      })
+    }
+
+    const taskInput: NormalizedTaskInput = {
+      workspace: { id: conversation.workspace, name: projectName },
+      intent: prompt,
+      mode: mode === 'review' ? 'review' : 'build',
+      messages: [],
+      context: contextSources,
+      constraints: [],
+      requirements: ['chat', 'streaming'],
+      selection: { type: 'workspace-default' },
+      output: { format: 'markdown' },
+      permissions: { workspaceAccess: mode === 'review' ? 'read-only' : 'workspace-write' },
+      tools: [],
+    }
+
+    await executeAiTurn(win, modelRegistry, providerRegistry, taskInput, bindings)
   })
 
-  ipcMain.handle('codex:resume', async (_event, value: unknown) => {
-    const conversation = getAuthorizedConversation(database, idSchema.parse(value))
-    if (!conversation.codexThreadId) return { resumed: false }
-    await codex.resumeThread(conversation.codexThreadId, conversation.workspace, database.getSettings())
-    return { resumed: true }
-  })
-
-  ipcMain.handle('codex:interrupt', async (_event, value: unknown) => {
-    const conversation = getAuthorizedConversation(database, idSchema.parse(value))
-    if (!conversation.codexThreadId) throw new Error('Esta conversa ainda não possui uma thread do Codex.')
-    await codex.interrupt(conversation.codexThreadId)
-  })
-
-  ipcMain.handle('codex:save-assistant', (_event, value: unknown) => {
+  ipcMain.handle('ai:save-assistant', (_event, value: unknown) => {
     const data = saveAssistantSchema.parse(value)
     const conversation = getAuthorizedConversation(database, data.conversationId)
     const message = database.addMessage(data.conversationId, 'assistant', data.content, data.metadata)
-    database.addArtifact(data.conversationId, conversation.workspace, 'markdown', `Resposta · ${new Date().toLocaleString()}`, null, data.content, { origin: 'Codex' })
+    database.addArtifact(data.conversationId, conversation.workspace, 'markdown', `Resposta · ${new Date().toLocaleString()}`, null, data.content)
     const metadata = data.metadata as { files?: Array<{ path?: string; kind?: string }>; diff?: string } | undefined
     for (const file of metadata?.files ?? []) {
       if (!file.path) continue
-      database.addArtifact(data.conversationId, conversation.workspace, artifactType(file.path), path.basename(file.path), file.path, null, { kind: file.kind, origin: 'Codex' })
+      database.addArtifact(data.conversationId, conversation.workspace, artifactType(file.path), path.basename(file.path), file.path, null)
     }
-    if (metadata?.diff) database.addArtifact(data.conversationId, conversation.workspace, 'report', 'Alterações do turno', null, metadata.diff, { origin: 'Codex', format: 'diff' })
+    if (metadata?.diff) database.addArtifact(data.conversationId, conversation.workspace, 'report', 'Alterações do turno', null, metadata.diff)
     return message
   })
 
-  ipcMain.handle('codex:approve', (_event, value: unknown) => {
+  ipcMain.handle('ai:approve', (_event, value: unknown) => {
     const data = approvalSchema.parse(value)
     const detail = approvalDetails.get(data.key)
     database.recordApproval(data.key, data.accepted, detail?.command, detail?.risk)
     approvalDetails.delete(data.key)
-    logger.info('codex', data.accepted ? 'Aprovação concedida' : 'Aprovação recusada', { approvalKey: data.key, risk: detail?.risk })
-    return codex.resolveApproval(data.key, data.accepted, data.forSession)
+    logger.info('ai', data.accepted ? 'Aprovação concedida' : 'Aprovação recusada', { approvalKey: data.key, risk: detail?.risk })
   })
 
-  const savedSettings = () => { const saved = database.getSettings(); return { ...saved, diagnosticMode: saved.diagnosticMode === 'true', ...(readinessCache?.value ?? {}), serverStatus: codex.status } }
-  ipcMain.handle('settings:get', () => savedSettings())
-  ipcMain.handle('settings:check', async () => {
-    if (readinessCache && readinessCache.expiresAt > Date.now()) return savedSettings()
-    readinessRequest ??= getCodexInfo(codex, database.getSettings().codexPath).then((value) => { readinessCache = { value, expiresAt: Date.now() + 30_000 }; return value }).finally(() => { readinessRequest = null })
-    await readinessRequest
-    return savedSettings()
+  ipcMain.handle('settings:get', () => {
+    const saved = database.getSettings()
+    return { ...saved, diagnosticMode: saved.diagnosticMode === 'true' }
   })
   ipcMain.handle('settings:set', (_event, value: unknown) => {
-    const data = z.object({ model: z.string().max(100), sandbox: z.enum(['read-only', 'workspace-write']), approvalPolicy: z.enum(['untrusted', 'on-request']), codexPath: z.string().trim().max(1_000).optional(), diagnosticMode: z.boolean().optional(), theme: z.literal('dark').default('dark'), defaultAgentMode: z.enum(agentModes).default('review') }).parse(value)
-    if (data.codexPath && !path.isAbsolute(data.codexPath) && data.codexPath !== 'codex') throw new Error('Use um caminho absoluto para o executável do Codex.')
-    if (data.codexPath && path.isAbsolute(data.codexPath) && (!fs.existsSync(data.codexPath) || !fs.statSync(data.codexPath).isFile())) throw new Error('Executável do Codex não encontrado.')
-    logger.setDiagnostic(Boolean(data.diagnosticMode))
-    database.setSettings({ ...data, diagnosticMode: String(Boolean(data.diagnosticMode)) })
-    readinessCache = null
-    return { ...database.getSettings(), diagnosticMode: Boolean(data.diagnosticMode) }
+    const data = z.object({ model: z.string().max(100).optional(), sandbox: z.enum(['read-only', 'workspace-write']).optional(), approvalPolicy: z.enum(['untrusted', 'on-request']).optional(), diagnosticMode: z.boolean().optional(), theme: z.literal('dark').default('dark') }).parse(value)
+    if (data.diagnosticMode !== undefined) logger.setDiagnostic(data.diagnosticMode)
+    database.setSettings({ ...data, diagnosticMode: data.diagnosticMode !== undefined ? String(data.diagnosticMode) : undefined } as Record<string, string>)
+    return database.getSettings()
   })
 
   ipcMain.handle('documents:saveMarkdown', async (_event, value: unknown) => {
@@ -274,7 +213,6 @@ export function registerIpc(
     return result.filePath
   })
   return () => {
-    disposeCodexBridge()
     ipcMain.dispose()
     disposeKnowledge()
     disposeWorkspace()
@@ -312,39 +250,10 @@ async function run(command: string, args: string[], cwd: string) {
   catch (error) { throw new Error(error instanceof Error ? error.message : String(error)) }
 }
 
-async function getCodexInfo(codex: CodexClient, configuredExecutable?: string) {
-  const executable = configuredExecutable || findExecutable('codex') || 'codex'
-  const [version, config, authStatus, pandocVersion] = await Promise.all([
-    commandVersion(executable),
-    codex.readConfig().catch(() => null),
-    commandOutput(executable, ['login', 'status']),
-    commandVersion('pandoc'),
-  ])
-  const parsedVersion = version?.match(/(\d+\.\d+\.\d+)/)?.[1]
-  const compatibilityStatus = classifyCodexVersion(parsedVersion)
-  const compatibilityMessage = compatibilityStatus === 'verified'
-    ? `Versão verificada (${parsedVersion}).`
-    : compatibilityStatus === 'minimum-compatible-unverified'
-      ? `Atende ao mínimo ${CODEX_COMPATIBILITY.minimum}, mas ainda não foi verificada pelo Nocturne.`
-      : parsedVersion
-        ? `Versão incompatível; instale ${CODEX_COMPATIBILITY.minimum} ou superior.`
-        : 'Não foi possível identificar a versão do Codex CLI.'
-  return { codexPath: executable, codexVersion: version || 'indisponível', codexCompatible: compatibilityStatus !== 'unsupported', codexCompatibilityStatus: compatibilityStatus, codexCompatibilityMessage: compatibilityMessage, pandocVersion: pandocVersion || 'indisponível', serverStatus: codex.status, authStatus: authStatus || 'Não foi possível verificar a autenticação.', authenticated: Boolean(authStatus && /logged in|autenticado/i.test(authStatus)), rawConfig: config }
-}
-
-function findExecutable(name: string) {
-  for (const directory of (process.env.PATH || '').split(path.delimiter)) {
-    const candidate = path.join(directory, name)
-    if (fs.existsSync(candidate)) return candidate
-  }
-  return null
-}
-
 async function commandVersion(command: string) {
   try { const { stdout, stderr } = await execFileAsync(command, ['--version'], { timeout: 5_000 }); return (stdout || stderr).trim() }
   catch { return null }
 }
-async function commandOutput(command: string, args: string[]) { try { const { stdout, stderr } = await execFileAsync(command, args, { timeout: 5_000 }); return (stdout || stderr).trim() } catch { return null } }
 
 function safeName(name: string, extension: string) {
   const base = path.basename(name).replace(/[^a-zA-Z0-9._-]/g, '-')

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { agentModes, suggestionStatuses } from '../suggestions'
+import { suggestionStatuses } from '../suggestions'
 import { BACKUP_LIMITS } from './backupLimits'
 import { DATABASE_SCHEMA_VERSION } from '../constants'
 import { isSafeBrainMemoryContent } from '../brainMemory'
@@ -12,7 +12,7 @@ const pathValue = z.string().min(1).max(4_000)
 const jsonText = (limit: number) => z.string().max(limit).refine((value) => { try { JSON.parse(value); return true } catch { return false } }, 'JSON inválido')
 
 const workspace = z.object({ path: pathValue, name: z.string().min(1).max(500), favorite: z.union([z.literal(0), z.literal(1)]).default(0), authorized: z.union([z.literal(0), z.literal(1)]).optional(), created_at: timestamp, last_opened_at: timestamp }).strict()
-const conversation = z.object({ id: uuid, title: z.string().min(1).max(500), workspace: pathValue, codex_thread_id: z.string().max(500).nullable().default(null), created_at: timestamp, updated_at: timestamp }).strict()
+const conversation = z.object({ id: uuid, title: z.string().min(1).max(500), workspace: pathValue, created_at: timestamp, updated_at: timestamp }).strict()
 const message = z.object({ id: uuid, conversation_id: uuid, role: z.enum(['user', 'assistant', 'system']), content: z.string().max(2_000_000), metadata: jsonText(500_000).nullable().default(null), created_at: timestamp }).strict()
 const artifact = z.object({ id: uuid, conversation_id: uuid, workspace: pathValue, type: z.string().min(1).max(50), title: z.string().min(1).max(500), file_path: pathValue.nullable().default(null), content: z.string().max(2_000_000).nullable().default(null), metadata: jsonText(500_000).nullable().default(null), created_at: timestamp, updated_at: timestamp }).strict()
 const memory = z.object({ workspace: pathValue, content: z.string().max(50_000), updated_at: timestamp }).strict()
@@ -36,7 +36,7 @@ const workspaceModelBinding = z.object({ workspace_id: pathValue, bindings: json
     context.addIssue({ code: 'custom', path: ['bindings'], message: 'Bindings de modelos inconsistentes.' })
   }
 })
-const settings = z.object({ model: z.string().max(100).optional(), sandbox: z.enum(['read-only', 'workspace-write']).optional(), approvalPolicy: z.enum(['untrusted', 'on-request']).optional(), codexPath: z.string().max(1_000).optional(), diagnosticMode: z.enum(['true', 'false']).optional(), theme: z.literal('dark').optional(), defaultAgentMode: z.enum(agentModes).optional() }).strict()
+const settings = z.object({ model: z.string().max(100).optional(), sandbox: z.enum(['read-only', 'workspace-write']).optional(), approvalPolicy: z.enum(['untrusted', 'on-request']).optional(), diagnosticMode: z.enum(['true', 'false']).optional(), theme: z.literal('dark').optional() }).strict()
 
 export const backupSchema = z.object({ schemaVersion: z.number().int().min(1).max(DATABASE_SCHEMA_VERSION), exportedAt: timestamp.optional(), conversations: z.array(conversation).max(25_000), workspaces: z.array(workspace).max(5_000), messages: z.array(message).max(100_000), artifacts: z.array(artifact).max(50_000), memories: z.array(memory).max(5_000), brainMemories: z.array(brainMemory).max(50_000).default([]), suggestions: z.array(suggestion).max(25_000).default([]), suggestionDecisions: z.array(decision).max(50_000).default([]), providerConfigs: z.array(providerConfig).max(1_000).default([]), modelCatalog: z.array(modelCatalogItem).max(25_000).default([]), workspaceModelBindings: z.array(workspaceModelBinding).max(5_000).default([]), settings: settings.optional() }).strict().superRefine((data, context) => {
   const totalRecords = data.conversations.length + data.workspaces.length + data.messages.length + data.artifacts.length + data.memories.length + data.brainMemories.length + data.suggestions.length + data.suggestionDecisions.length + data.providerConfigs.length + data.modelCatalog.length + data.workspaceModelBindings.length

@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
-export type LogCategory = 'app' | 'codex' | 'ipc' | 'workspace' | 'git' | 'artifacts' | 'export' | 'persistence' | 'update'
+export type LogCategory = 'app' | 'codex' | 'ai' | 'ipc' | 'workspace' | 'git' | 'artifacts' | 'export' | 'persistence' | 'update'
 
 export class Logger {
   private readonly file: string

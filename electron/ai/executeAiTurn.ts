@@ -11,7 +11,7 @@ import type { NormalizedExecutionEvent, NormalizedProviderError } from '../../sh
 
 function emitCodexEvent(win: BrowserWindow, method: string, params: Record<string, unknown>) {
   if (!win.isDestroyed()) {
-    win.webContents.send('codex:event', { method, params })
+    win.webContents.send('ai:event', { method, params })
   }
 }
 

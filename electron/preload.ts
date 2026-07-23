@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC_CHANNELS as channels } from '../shared/ipc/channels'
-import type { CodexEvent, CodexStatus } from '../shared/types'
+import type { AgentEvent } from '../shared/types'
 import type {
   NocturneApi,
   ModelIpcResult,
@@ -64,17 +64,12 @@ export const nocturneApi: NocturneApi = {
     messagePage: (id: string, offset = 0, limit = 100) => ipcRenderer.invoke(channels.conversations.messagePage, { id, offset, limit }),
     delete: (id: string) => ipcRenderer.invoke(channels.conversations.delete, id),
   },
-  codex: {
-    start: () => ipcRenderer.invoke(channels.codex.start),
-    restart: () => ipcRenderer.invoke(channels.codex.restart),
-    diagnostics: () => ipcRenderer.invoke(channels.codex.diagnostics),
-    send: (conversationId: string, prompt: string, attachments: string[] = [], mode = 'build') => ipcRenderer.invoke(channels.codex.send, { conversationId, prompt, attachments, mode }),
-    resume: (conversationId: string) => ipcRenderer.invoke(channels.codex.resume, conversationId),
-    interrupt: (conversationId: string) => ipcRenderer.invoke(channels.codex.interrupt, conversationId),
-    saveAssistant: (conversationId: string, content: string, metadata?: unknown) => ipcRenderer.invoke(channels.codex.saveAssistant, { conversationId, content, metadata }),
-    approve: (key: string, accepted: boolean, forSession = false) => ipcRenderer.invoke(channels.codex.approve, { key, accepted, forSession }),
-    onEvent: (listener: (payload: CodexEvent) => void) => on(channels.codex.event, listener),
-    onStatus: (listener: (payload: { status: CodexStatus; error?: string }) => void) => on(channels.codex.status, listener),
+  ai: {
+    send: (conversationId: string, prompt: string, attachments: string[] = [], mode = 'build') => ipcRenderer.invoke(channels.ai.send, { conversationId, prompt, attachments, mode }),
+    saveAssistant: (conversationId: string, content: string, metadata?: unknown) => ipcRenderer.invoke(channels.ai.saveAssistant, { conversationId, content, metadata }),
+    approve: (key: string, accepted: boolean, forSession = false) => ipcRenderer.invoke(channels.ai.approve, { key, accepted, forSession }),
+    onEvent: (listener: (payload: AgentEvent) => void) => on(channels.ai.event, listener),
+    onStatus: (listener: (payload: { status: string; error?: string }) => void) => on(channels.ai.status, listener),
   },
   files: {
     attach: (conversationId: string) => ipcRenderer.invoke(channels.files.attach, conversationId),
@@ -93,7 +88,7 @@ export const nocturneApi: NocturneApi = {
   suggestions: { list: (conversationId: string) => ipcRenderer.invoke(channels.suggestions.list, conversationId), page: (conversationId: string, offset = 0, limit = COLLECTION_PAGE_LIMITS.suggestions) => ipcRenderer.invoke(channels.suggestions.page, { conversationId, offset, limit }), create: (conversationId: string, content: string) => ipcRenderer.invoke(channels.suggestions.create, { conversationId, content }), status: (conversationId: string, suggestionId: string, status: string, result?: string) => ipcRenderer.invoke(channels.suggestions.status, { conversationId, suggestionId, status, result }) },
   data: { export: () => ipcRenderer.invoke(channels.data.export), import: () => ipcRenderer.invoke(channels.data.import) },
   diagnostics: { openLogs: () => ipcRenderer.invoke(channels.diagnostics.openLogs), copy: () => ipcRenderer.invoke(channels.diagnostics.copy), rendererError: (value: unknown) => ipcRenderer.invoke(channels.diagnostics.rendererError, value), rendererStats: (value: unknown) => ipcRenderer.invoke(channels.diagnostics.rendererStats, value) },
-  settings: { get: () => ipcRenderer.invoke(channels.settings.get), check: () => ipcRenderer.invoke(channels.settings.check), set: (settings: unknown) => ipcRenderer.invoke(channels.settings.set, settings) },
+  settings: { get: () => ipcRenderer.invoke(channels.settings.get), set: (settings: unknown) => ipcRenderer.invoke(channels.settings.set, settings) },
   providers: {
     list: () => providerResult(ipcRenderer.invoke(channels.providers.list)),
     create: (configuration, credential) => providerResult(ipcRenderer.invoke(
