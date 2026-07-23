@@ -9,7 +9,6 @@ import {
 } from 'lucide-react'
 import type { WorkspaceModelBindings } from '../../../shared/ai/bindings'
 import type { ModelDescriptor, ModelReference } from '../../../shared/ai/model'
-import type { ModelRole } from '../../../shared/ai/task'
 import type { ProviderConfigurationSummary } from '../../../shared/ai/providerConfiguration'
 import { errorMessage } from '../../shared/format'
 
@@ -18,13 +17,6 @@ interface ModelSettingsPageProps {
   onDirtyChange(dirty: boolean): void
   onNotify(message: string): void
 }
-
-const visibleRoles: Array<{ role: ModelRole; label: string; detail: string }> = [
-  { role: 'planning', label: 'Planejamento', detail: 'Análise e decomposição de tarefas' },
-  { role: 'coding', label: 'Código', detail: 'Implementação e alterações no projeto' },
-  { role: 'review', label: 'Review', detail: 'Revisão estritamente somente leitura' },
-  { role: 'documentation', label: 'Documentação', detail: 'Criação e manutenção de docs' },
-]
 
 const MAX_VISIBLE_MODELS = 200
 
@@ -95,16 +87,10 @@ export function ModelSettingsPage({
   const visibleModels = filteredModels.slice(0, MAX_VISIBLE_MODELS)
   const providerIds = providerChoices(providers, models)
 
-  const updateBinding = (role: 'default' | ModelRole, reference?: ModelReference) => {
+  const updateBinding = (reference?: ModelReference) => {
     setBindings((current) => {
       if (!current) return current
-      if (role === 'default') {
-        return { ...current, defaultBinding: reference }
-      }
-      const roleBindings = { ...current.roleBindings }
-      if (reference) roleBindings[role] = reference
-      else delete roleBindings[role]
-      return { ...current, roleBindings }
+      return { ...current, defaultBinding: reference }
     })
   }
 
@@ -116,7 +102,7 @@ export function ModelSettingsPage({
       const saved = await window.nocturne.models.setBindings(bindings)
       setBindings(saved)
       setBaseline(JSON.stringify(saved))
-      onNotify('Modelos do workspace atualizados.')
+      onNotify('Modelo do workspace atualizado.')
     } catch (failure) {
       setError(errorMessage(failure))
     } finally {
@@ -146,7 +132,7 @@ export function ModelSettingsPage({
     <div className="model-settings-intro">
       <div>
         <strong>Modelos do Workspace</strong>
-        <p>Escolha capacidades por função sem vincular o projeto a um único Provider.</p>
+        <p>Escolha o modelo que o workspace usará por padrão.</p>
       </div>
       <span>{models.length.toLocaleString('pt-BR')} {models.length === 1 ? 'modelo' : 'modelos'}</span>
     </div>
@@ -156,18 +142,18 @@ export function ModelSettingsPage({
     {!workspaceId && !loading && <div className="model-empty">
       <Boxes size={27}/>
       <strong>Selecione um workspace</strong>
-      <p>Os bindings pertencem ao projeto ativo. O catálogo global continua independente.</p>
+      <p>O modelo é definido por workspace. O catálogo global continua independente.</p>
     </div>}
 
     {loading && <div className="model-empty" aria-live="polite">
       <LoaderCircle className="spin" size={23}/>
-      <strong>Carregando catálogo e bindings…</strong>
+      <strong>Carregando catálogo…</strong>
     </div>}
 
     {!loading && workspaceId && bindings && <>
       <section className="model-binding-panel" aria-labelledby="model-bindings-title">
         <header>
-          <div><strong id="model-bindings-title">Política do workspace</strong><small title={workspaceId}>{workspaceName(workspaceId)}</small></div>
+          <div><strong id="model-bindings-title">Modelo do workspace</strong><small title={workspaceId}>{workspaceName(workspaceId)}</small></div>
           <span className={dirty ? 'pending' : undefined}>{dirty ? 'Alterações pendentes' : 'Sincronizado'}</span>
         </header>
 
@@ -179,37 +165,24 @@ export function ModelSettingsPage({
 
         <ModelSelect
           label="Modelo padrão"
-          detail="Usado quando nenhuma função possui escolha específica"
-          emptyLabel="Nenhum modelo padrão"
+          detail="Usado em todas as execuções deste workspace"
+          emptyLabel="Nenhum modelo selecionado"
           value={bindings.defaultBinding}
           models={visibleModels}
           catalog={models}
-          onChange={(reference) => updateBinding('default', reference)}
+          onChange={(reference) => updateBinding(reference)}
         />
 
-        <div className="model-role-grid">
-          {visibleRoles.map(({ role, label, detail }) => <ModelSelect
-            key={role}
-            label={label}
-            detail={detail}
-            emptyLabel="Usar o padrão do workspace"
-            value={bindings.roleBindings[role]}
-            models={visibleModels}
-            catalog={models}
-            onChange={(reference) => updateBinding(role, reference)}
-          />)}
-        </div>
-
         <footer>
-          <small>Seleções incompatíveis serão recusadas antes da execução.</small>
+          <small>Modelos incompatíveis serão recusados antes da execução.</small>
           <button className="primary" disabled={!dirty || saving} onClick={() => void save()}>
-            {saving ? 'Salvando…' : 'Salvar bindings'}
+            {saving ? 'Salvando…' : 'Salvar'}
           </button>
         </footer>
       </section>
 
       <section className="model-catalog-panel" aria-labelledby="model-catalog-title">
-        <div><strong id="model-catalog-title">Descoberta de modelos</strong><small>Atualiza somente o catálogo do Provider escolhido.</small></div>
+        <div><strong id="model-catalog-title">Catálogo de modelos</strong><small>Atualiza a lista de modelos disponíveis do Provider escolhido.</small></div>
         <div className="model-refresh-controls">
           <label>Provider<select value={refreshProviderId} disabled={!providerIds.length || refreshing} onChange={(event) => setRefreshProviderId(event.target.value)}>{!providerIds.length && <option value="">Nenhum Provider disponível</option>}{providerIds.map((providerId) => <option key={providerId} value={providerId}>{providerLabel(providerId, providers)}</option>)}</select></label>
           <button disabled={!refreshProviderId || refreshing} onClick={() => void refresh()}><RefreshCw className={refreshing ? 'spin' : undefined} size={15}/>{refreshing ? 'Atualizando…' : 'Atualizar catálogo'}</button>
