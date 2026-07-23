@@ -1,9 +1,18 @@
 import type { ProviderAvailability, ProviderDefinition } from '../../shared/ai/provider'
+import type {
+  ProviderExecutionControl,
+  ProviderExecutionRequest,
+  ProviderExecutionResult,
+} from '../../shared/ai/providerExecution'
 
 export interface ProviderAdapter {
   readonly definition: ProviderDefinition
   getAvailability(): ProviderAvailability | Promise<ProviderAvailability>
   listModels(): readonly unknown[] | Promise<readonly unknown[]>
+  execute(
+    request: ProviderExecutionRequest,
+    control: ProviderExecutionControl,
+  ): ProviderExecutionResult | Promise<ProviderExecutionResult>
   dispose?(): void | Promise<void>
 }
 

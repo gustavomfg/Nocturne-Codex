@@ -45,6 +45,16 @@ Completion, failure or cancellation
 
 A fake provider must support deterministic completion, streaming, failure, cancellation and tool requests.
 
+The initial executable slice resolves and validates the model before creating an
+execution. The Orchestrator emits the start and exactly one terminal event;
+adapters emit only validated message and usage payloads. Cancellation uses an
+`AbortSignal`, is idempotent and wins over a late adapter result.
+
+Unknown adapter exceptions and invalid native payloads become a safe
+`invalid-response` failure without preserving the original payload or message.
+Tool requests remain disabled until the normalized authorization contract is
+implemented.
+
 ## Core rule
 
 > **The orchestrator coordinates; adapters translate; domains own their data.**

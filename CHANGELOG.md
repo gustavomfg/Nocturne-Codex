@@ -13,6 +13,8 @@
 - ferramentas permanecem bloqueadas no contrato inicial até existir validação, política e autorização normalizadas para Tool Calling;
 - Workspace Model Bindings resolvem escolha explícita, role e padrão local, validando capacidades e disponibilidade sem substituir silenciosamente a decisão do usuário;
 - fallback desabilitado, dependente de confirmação ou previamente configurado possui comportamento distinto e auditável;
+- AI Orchestrator executa tarefas normalizadas por adapters substituíveis, centralizando início, terminal, validação de streaming e falhas seguras;
+- cancelamento usa `AbortSignal`, é idempotente e prevalece sobre resultados tardios; Provider falso cobre conclusão, falha, payload inválido e interrupção;
 - geração de imagens permanece fora do conjunto inicial de capacidades e será tratada em uma etapa futura.
 
 ### Estabilidade e compatibilidade

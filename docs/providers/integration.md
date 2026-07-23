@@ -49,6 +49,11 @@ Adapters emit validated event payloads. The Orchestrator owns the common
 execution envelope, event sequence and terminal lifecycle, preventing native
 provider identifiers or late events from redefining application state.
 
+In the initial contract, adapters receive a normalized task, resolved model and
+`AbortSignal`. They may emit message deltas and usage updates, then return a
+normalized finish reason or throw a normalized Provider error. They do not emit
+start or terminal events directly.
+
 ## Error mapping
 
 Map authentication, rate limit, timeout, unavailable model, invalid response and cancellation into shared error codes.

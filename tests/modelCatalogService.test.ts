@@ -23,6 +23,7 @@ function adapter(
     definition: { id, displayName: id, source: 'remote' },
     getAvailability: () => ({ status: 'available' }),
     listModels,
+    execute: () => ({ finishReason: 'stop' }),
   }
 }
 

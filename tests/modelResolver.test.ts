@@ -23,6 +23,7 @@ function adapter(id: string, status: 'available' | 'offline' = 'available'): Pro
     definition: { id, displayName: id, source: 'remote' },
     getAvailability: vi.fn().mockResolvedValue({ status }),
     listModels: () => [],
+    execute: () => ({ finishReason: 'stop' }),
   }
 }
 
