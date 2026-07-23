@@ -66,6 +66,9 @@
   realmente disponíveis sem tratar assinaturas de consumo como acesso à API;
 - discovery OpenAI-compatible consulta `/models` com os mesmos limites de rede,
   preserva metadados já verificados e não inventa capabilities para IDs novos;
+- configuração de IA agora começa por um catálogo visual de empresas, mantém
+  endpoints personalizados em opções avançadas e sincroniza modelos depois de
+  validar uma conexão habilitada;
 - geração de imagens permanece fora do conjunto inicial de capacidades e será tratada em uma etapa futura.
 
 ### Estabilidade e compatibilidade
@@ -105,8 +108,8 @@
 
 ### Qualidade
 
-- 189 testes unitários e de integração;
-- 31 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints, Providers, modelos por Workspace, Segundo Cérebro e atualização da Saúde do Projeto;
+- 195 testes unitários e de integração;
+- 31 cenários determinísticos de renderer, incluindo regressão visual em quatro breakpoints, catálogo de Providers, modelos por Workspace, Segundo Cérebro e atualização da Saúde do Projeto;
 - typecheck, ESLint, design system, build de produção, pacote Linux real e audit npm sem vulnerabilidades aprovados;
 - decisões de sugestão precisam persistir antes do turno Build, e o status aplicado exige alterações observadas no escopo aprovado;
 - Saúde do Projeto recalcula todas as dimensões após mudanças persistidas nas sugestões e evidencia a transição de cada nota com feedback visual e acessível;

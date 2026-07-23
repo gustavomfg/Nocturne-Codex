@@ -307,9 +307,23 @@ test.describe('renderer do produto', () => {
     const dialog = page.getByRole('dialog', { name: 'Configurações' })
     await dialog.getByRole('button', { name: /Providers/ }).click()
     await expect(dialog.getByText('Nenhum Provider configurado')).toBeVisible()
-    await dialog.getByRole('button', { name: 'Adicionar primeiro Provider' }).click()
+    await dialog.getByRole('button', { name: 'Escolher empresa' }).click()
+    await expect(dialog.getByRole('heading', { name: 'Escolha uma empresa' })).toBeVisible()
+    await expect(dialog.getByRole('button', { name: /OpenAI: Chave da API/ })).toBeEnabled()
+    await expect(dialog.getByRole('button', { name: /Anthropic: Adapter necessário/ })).toBeDisabled()
+    await expect(dialog.locator('.provider-catalog-heading').first())
+      .toHaveCSS('flex-direction', 'column')
+    await expect(dialog).toHaveScreenshot('provider-catalog.png', {
+      animations: 'disabled',
+      caret: 'hide',
+    })
+    await dialog.getByRole('button', { name: /OpenRouter: Chave OpenRouter/ }).click()
+    await expect(dialog).toHaveScreenshot('provider-connection.png', {
+      animations: 'disabled',
+      caret: 'hide',
+    })
 
-    await dialog.getByRole('textbox', { name: 'Nome' }).fill('OpenRouter pessoal')
+    await dialog.getByRole('textbox', { name: 'Nome da conexão' }).fill('OpenRouter pessoal')
     const secret = dialog.getByRole('textbox', { name: 'Credencial', exact: true })
     await secret.fill('temporary-renderer-secret')
     const secretSurface = secret.locator('..')
@@ -342,12 +356,17 @@ test.describe('renderer do produto', () => {
     await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
     const dialog = page.getByRole('dialog', { name: 'Configurações' })
     await dialog.getByRole('button', { name: /Providers/ }).click()
-    await dialog.getByRole('button', { name: 'Adicionar primeiro Provider' }).click()
-    await dialog.getByRole('textbox', { name: 'Nome' }).fill('Provider em edição')
+    await dialog.getByRole('button', { name: 'Escolher empresa' }).click()
+    await expect(dialog).toHaveScreenshot('provider-catalog-compact.png', {
+      animations: 'disabled',
+      caret: 'hide',
+    })
+    await dialog.getByRole('button', { name: /configuração OpenAI-compatible avançada/i }).click()
+    await dialog.getByRole('textbox', { name: 'Nome da conexão' }).fill('Provider em edição')
     await page.keyboard.press('Escape')
     await expect(dialog.getByRole('alert')).toContainText('Descartar alterações?')
     await dialog.getByRole('button', { name: 'Continuar editando' }).click()
-    await expect(dialog.getByRole('textbox', { name: 'Nome' })).toHaveValue('Provider em edição')
+    await expect(dialog.getByRole('textbox', { name: 'Nome da conexão' })).toHaveValue('Provider em edição')
   })
 
   test('protege e salva o contexto do workspace com feedback', async ({ page }) => {

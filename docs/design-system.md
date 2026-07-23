@@ -204,12 +204,17 @@ Tabs use readable labels, a stable height, and an accent underline for selection
 
 Dialogs use `--shadow-lg`, a strong border, and restrained backdrop blur. Titles are 16 px or greater. Sections are separated by spacing and subtle borders. Inputs always have visible labels.
 
-Provider settings use a single-column list of bounded cards and one editor at a
-time. Source, endpoint, credential state and availability remain textual; icon
+Provider settings begin with a two-column company catalog and collapse to one
+column at the canonical 720 px breakpoint. Each card states company, supported
+connection method, protocol and implementation availability; unsupported
+adapters remain visible but disabled. The editor shows the selected connection
+method first and moves source, protocol and URL base into a native advanced
+disclosure. Configured Providers use a single-column list of bounded cards and
+one editor at a time. Credential state and availability remain textual; icon
 color alone never communicates connection state. Password fields use one
 focus-within boundary, drafts state that no network request occurs, and enabled
-submissions state that validation will run. Unsaved Provider edits prevent
-silent navigation away.
+submissions state that validation and model discovery will run. Unsaved
+Provider edits prevent silent navigation away.
 
 Model settings put Workspace policy before any specific integration. The
 default model and role bindings use searchable normalized descriptors, preserve

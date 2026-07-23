@@ -246,6 +246,7 @@ Current highlights:
 - Electron secure architecture
 - IPC isolation
 - Secure OpenAI-compatible Provider configuration
+- Curated company connection catalog
 - Persistent model catalog and Workspace role bindings
 - Provider-agnostic configuration interface
 

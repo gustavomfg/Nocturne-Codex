@@ -82,7 +82,11 @@ The settings interface mirrors this lifecycle. New configurations start as
 disabled drafts, enabling changes the primary action to an explicit validation,
 stored credentials are represented only by a boolean protected state, and
 destructive removal requires confirmation. Unsaved editor state blocks settings
-navigation and closing until the user saves, cancels or confirms discard.
+navigation and closing until the user saves, cancels or confirms discard. The
+company catalog is the primary entry point; protocol and URL fields remain
+available under advanced configuration. A successful enabled save or explicit
+connection test requests a model-catalog refresh. Provider persistence remains
+successful if that later refresh fails, and the UI reports the partial result.
 
 ## Validation
 
