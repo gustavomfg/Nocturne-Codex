@@ -23,7 +23,15 @@ export function assessCommand(command: string | string[]): CommandAssessment {
   return { risk, reasons, requiresApproval: risk !== 'safe', blockedAutomatic: risk === 'dangerous' }
 }
 
+const DEVICE_PATH_PREFIX = /^\\\\[?.]\\|^\/\//i
+
 export function resolveInsideWorkspace(candidate: string, workspace: string) {
+  if (typeof candidate !== 'string' || candidate.includes('\0')) {
+    throw new Error('Acesso bloqueado: caminho inválido.')
+  }
+  if (DEVICE_PATH_PREFIX.test(candidate) || DEVICE_PATH_PREFIX.test(workspace)) {
+    throw new Error('Acesso bloqueado: caminhos de dispositivo não são permitidos.')
+  }
   const root = path.resolve(workspace)
   const resolved = path.resolve(root, candidate)
   assertContained(resolved, root)
@@ -41,7 +49,9 @@ export function resolveInsideWorkspace(candidate: string, workspace: string) {
 
 function assertContained(candidate: string, root: string) {
   const relative = path.relative(root, candidate)
-  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw new Error('Acesso bloqueado: o caminho está fora do workspace.')
+  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error('Acesso bloqueado: o caminho está fora do workspace.')
+  }
 }
 
 function tokenize(command: string) {

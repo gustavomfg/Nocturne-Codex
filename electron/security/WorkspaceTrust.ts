@@ -2,11 +2,16 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
+const DEVICE_PATH_PREFIX = /^\\\\[?.]\\|^\/\//i
+
 const systemRoots = process.platform === 'win32'
   ? [process.env.SystemRoot, process.env.ProgramFiles, process.env['ProgramFiles(x86)']]
   : ['/bin', '/boot', '/dev', '/etc', '/proc', '/run', '/sbin', '/sys', '/usr', '/var']
 
 export function assertSafeWorkspaceScope(value: string, requireExisting = true) {
+  if (typeof value !== 'string' || value.includes('\0') || DEVICE_PATH_PREFIX.test(value)) {
+    throw new Error('Caminho de workspace inválido.')
+  }
   const resolved = path.resolve(value)
   const candidate = fs.existsSync(resolved) ? fs.realpathSync.native(resolved) : resolved
   const blocked = [path.parse(candidate).root, os.homedir(), ...systemRoots]
