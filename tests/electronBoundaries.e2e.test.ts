@@ -109,6 +109,7 @@ class SimulatedProviderConfigurations {
   }
 
   async testConnection(_id: string) {
+    void _id
     return { status: 'available' as const }
   }
 }
@@ -117,6 +118,7 @@ class SimulatedModelCatalog {
   models: ModelDescriptor[] = []
   list() { return this.models }
   async refresh(_id: string) {
+    void _id
     return { status: 'applied' as const, models: [] }
   }
 }
