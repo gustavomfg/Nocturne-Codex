@@ -33,13 +33,20 @@ export class Logger {
 }
 
 function serializeError(error: unknown) { return error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : error }
+const SENSITIVE_KEYS = /(?:sk-[a-zA-Z0-9]{20,}|eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,})/g
+const SENSITIVE_FIELD_NAMES = /token|authorization|api[_-]?key|apikey|password|secret|credential|auth_token|refresh_token|access_token|client_secret/i
+const SENSITIVE_HEADER = /\b(bearer|basic|digest|token)\s+[a-zA-Z0-9+/=_-]{8,}/gi
+const JSON_SENSITIVE = new RegExp(`(["'])(?:${SENSITIVE_FIELD_NAMES.source})["']\\s*:\\s*["'](.*?)["']`, 'gi')
+
 export function redactLogText(value: string) {
-  const jsonRedacted = value.replace(/(["'](?:token|authorization|api[_-]?key|password)["']\s*:\s*)(["'])(.*?)\2/gi, (_match, prefix: string, quote: string) => `${prefix}${quote}[REDACTED]${quote}`)
-  return jsonRedacted.replace(/\b(token|authorization|api[_-]?key|password)(\s*[=:]\s*)(?:(?:bearer|basic)\s+)?(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi, '$1$2[REDACTED]').slice(0, 8_000)
+  const jsonRedacted = value.replace(JSON_SENSITIVE, (_match, quote) => `${quote}[REDACTED]${quote}`)
+  const headerRedacted = jsonRedacted.replace(SENSITIVE_HEADER, '$1 [REDACTED]')
+  const keyRedacted = headerRedacted.replace(SENSITIVE_KEYS, '[REDACTED-KEY]')
+  return keyRedacted.slice(0, 8_000)
 }
 export function redactLogValue(value: unknown): unknown {
   if (typeof value === 'string') return redactLogText(value)
   if (Array.isArray(value)) return value.map(redactLogValue)
-  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value as Record<string, unknown>).filter(([key]) => !/token|authorization|api[_-]?key|password/i.test(key)).map(([key, item]) => [key, redactLogValue(item)]))
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value as Record<string, unknown>).filter(([key]) => !SENSITIVE_FIELD_NAMES.test(key)).map(([key, item]) => [key, redactLogValue(item)]))
   return value
 }
