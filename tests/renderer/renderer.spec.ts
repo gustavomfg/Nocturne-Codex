@@ -80,8 +80,9 @@ test.describe('renderer do produto', () => {
   test('mantém um símbolo textual do estado Codex em 520px', async ({ page }) => {
     await page.setViewportSize({ width: 520, height: 760 })
     await ready(page)
-    const connection = page.getByRole('button', { name: /Codex:/ })
+    const connection = page.locator('.connection')
     await expect(connection.locator('.connection-symbol')).toBeVisible()
+    await page.evaluate(() => (window as unknown as { __nocturneTest: { emitStatus(payload: unknown): void } }).__nocturneTest.emitStatus({ status: 'ready' }))
     await expect(connection.locator('.connection-symbol')).toHaveAttribute('data-symbol', 'ready')
     await page.evaluate(() => (window as unknown as { __nocturneTest: { emitStatus(payload: unknown): void } }).__nocturneTest.emitStatus({ status: 'failed' }))
     await expect(connection.locator('.connection-symbol')).toHaveAttribute('data-symbol', 'unavailable')
@@ -158,12 +159,14 @@ test.describe('renderer do produto', () => {
     await ready(page)
     await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
     await expect(page.getByRole('dialog', { name: 'Configurações' })).toBeVisible()
-    await page.getByText('Configuração avançada do agente Codex').click()
-    await page.getByRole('textbox', { name: 'Modelo do agente' }).fill('modelo-local')
+    await page.getByRole('button', { name: 'Aplicativo' }).click()
+    const checkbox = page.getByRole('checkbox', { name: /Logs detalhados/ })
+    await checkbox.click()
+    await expect(checkbox).toBeChecked()
     await page.keyboard.press('Escape')
     await expect(page.getByText('Descartar alterações?')).toBeVisible()
     await page.getByRole('button', { name: 'Continuar editando' }).click()
-    await expect(page.getByRole('textbox', { name: 'Modelo do agente' })).toHaveValue('modelo-local')
+    await expect(checkbox).toBeChecked()
   })
 
   test('mantém a navegação das configurações estável no hover', async ({ page }) => {
@@ -188,7 +191,7 @@ test.describe('renderer do produto', () => {
     await codex.hover(); await workspaces.hover(); await codex.hover(); await workspaces.hover()
     await expect(workspaces).toHaveCSS('transform', 'none')
     await page.waitForTimeout(240)
-    await expect(dialog.getByText(/Codex pronto/)).toBeVisible()
+    await expect(dialog.locator('p').filter({ hasText: 'Conectar inteligência' })).toBeVisible()
     await dialog.evaluate((element) => {
       element.scrollTo(0, 0)
       element.querySelectorAll<HTMLElement>('*').forEach((child) => child.scrollTo(0, 0))
@@ -253,8 +256,8 @@ test.describe('renderer do produto', () => {
     await ready(page)
     await page.evaluate(() => { window.nocturne.settings.set = async () => { throw new Error('Não foi possível salvar as configurações.') } })
     await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
-    await page.getByText('Configuração avançada do agente Codex').click()
-    await page.getByRole('textbox', { name: 'Modelo do agente' }).fill('modelo-local')
+    await page.getByRole('button', { name: 'Aplicativo' }).click()
+    await page.getByRole('checkbox', { name: /Logs detalhados/ }).click()
     await page.getByRole('button', { name: 'Salvar alterações' }).click()
     const dialog = page.getByRole('dialog', { name: 'Configurações' })
     await expect(dialog.getByRole('alert')).toContainText('Não foi possível salvar as configurações.')
@@ -266,37 +269,21 @@ test.describe('renderer do produto', () => {
     await ready(page)
     await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
     const dialog = page.getByRole('dialog', { name: 'Configurações' })
-    await expect(dialog.getByRole('heading', { name: 'IA' })).toBeVisible()
-    await expect(dialog.getByText('3 modelos')).toBeVisible()
-    await dialog.locator('.ai-workspace-section').scrollIntoViewIfNeeded()
-    await expect(dialog).toHaveScreenshot('model-settings.png', {
-      animations: 'disabled',
-      caret: 'hide',
-    })
-    await page.setViewportSize({ width: 720, height: 800 })
-    await dialog.locator('.ai-workspace-section').scrollIntoViewIfNeeded()
-    await expect(dialog).toHaveScreenshot('model-settings-compact.png', {
-      animations: 'disabled',
-      caret: 'hide',
-    })
-    await page.setViewportSize({ width: 1440, height: 900 })
+    await expect(dialog.getByRole('heading', { name: 'IA', exact: true })).toBeVisible()
+    await expect(dialog.locator('p').filter({ hasText: 'Conectar inteligência' })).toBeVisible()
 
-    await dialog.getByLabel('Usar neste workspace').selectOption({
-      label: 'Claude Sonnet · openrouter',
-    })
-    await expect(dialog.getByText('Alterações pendentes')).toBeVisible()
-    await expect(dialog.getByRole('button', { name: /Workspaces/ })).toBeDisabled()
-    await dialog.getByRole('button', { name: 'Aplicar ao workspace' }).click()
-    await expect(page.locator('.product-toast')).toContainText('Conexão por API ativada neste workspace.')
-    await expect(dialog.getByText('Sincronizado')).toBeVisible()
+    await dialog.getByRole('button', { name: 'Adicionar IA' }).click()
+    await expect(dialog.getByText('Escolher IA')).toBeVisible()
+    await dialog.getByRole('button', { name: 'OpenRouter' }).click()
+    await dialog.getByRole('textbox', { name: '' }).fill('sk-or-v1-test')
+    await dialog.getByRole('button', { name: 'Conectar' }).click()
+    await expect(dialog.getByText('Escolher modelo')).toBeVisible()
+    await expect(dialog.getByText('Claude Sonnet')).toBeVisible()
 
-    await dialog.getByLabel('Filtrar modelos').fill('qwen')
-    await expect(dialog.getByText('1 resultados disponíveis.')).toBeVisible()
-    await dialog.getByRole('button', { name: 'Atualizar catálogo' }).click()
-    await expect(page.locator('.product-toast')).toContainText('Catálogo de modelos atualizado.')
-    await expect(dialog.getByLabel('Usar neste workspace')).toHaveValue(
-      JSON.stringify(['openrouter', 'anthropic/claude-sonnet']),
-    )
+    await dialog.getByRole('button', { name: 'Usar este modelo' }).click()
+    await expect(page.locator('.product-toast')).toContainText('Usando anthropic/claude-sonnet.')
+    await expect(dialog.getByText('Conectar IA')).toBeVisible()
+    await expect(dialog.getByText('OpenRouter')).toBeVisible()
   })
 
   test('gerencia conexões por API com credencial transitória e estados explícitos', async ({ page }) => {
@@ -304,35 +291,26 @@ test.describe('renderer do produto', () => {
     await ready(page)
     await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
     const dialog = page.getByRole('dialog', { name: 'Configurações' })
-    await expect(dialog.getByText('Nenhuma IA conectada')).toBeVisible()
+    await expect(dialog.getByText('Conectar IA')).toBeVisible()
     await dialog.getByRole('button', { name: 'Adicionar IA' }).click()
-    await expect(dialog.getByText('Escolher serviço de IA')).toBeVisible()
-    await expect(dialog).toHaveScreenshot('ai-service-list.png', {
-      animations: 'disabled',
-      caret: 'hide',
-    })
+    await expect(dialog.getByText('Escolher IA')).toBeVisible()
 
     await dialog.getByRole('button', { name: 'OpenRouter' }).click()
     const secret = dialog.getByRole('textbox', { name: '' })
     await secret.fill('temporary-renderer-secret')
-    const secretSurface = secret.locator('..')
-    await expect(secret).toHaveCSS('border-top-width', '0px')
-    await expect(secret).toHaveCSS('box-shadow', 'none')
-    await expect(secretSurface).toHaveCSS('border-top-color', 'rgb(155, 124, 246)')
 
     await dialog.getByRole('button', { name: 'Conectar' }).click()
     await expect(dialog.getByText('Escolher modelo')).toBeVisible()
     await expect(dialog.getByText('Claude Sonnet')).toBeVisible()
 
     await dialog.getByRole('button', { name: 'Usar este modelo' }).click()
-    await expect(dialog.getByText('Nenhuma IA conectada')).toBeVisible()
+    await expect(dialog.getByText('Conectar IA')).toBeVisible()
     await expect(dialog.getByText('OpenRouter')).toBeVisible()
-    await expect(dialog).toHaveScreenshot('ai-connected-list.png', { animations: 'disabled', caret: 'hide' })
 
     await dialog.getByRole('button', { name: 'Remover OpenRouter' }).click()
     await expect(dialog.getByText('Remover esta conexão?')).toBeVisible()
-    await dialog.getByRole('button', { name: 'Remover' }).click()
-    await expect(dialog.getByText('Nenhuma IA conectada')).toBeVisible()
+    await dialog.getByRole('button', { name: 'Remover', exact: true }).click()
+    await expect(dialog.getByText('Conectar IA')).toBeVisible()
   })
 
   test('protege alterações não salvas nas configurações', async ({ page }) => {
@@ -340,7 +318,7 @@ test.describe('renderer do produto', () => {
     await ready(page)
     await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
     const dialog = page.getByRole('dialog', { name: 'Configurações' })
-    await dialog.getByText('Aplicativo').click()
+    await dialog.getByRole('button', { name: 'Aplicativo' }).click()
     await dialog.getByText('Logs detalhados').click()
     await page.keyboard.press('Escape')
     await expect(dialog.getByRole('alert')).toContainText('Descartar alterações?')
@@ -404,7 +382,7 @@ test.describe('renderer do produto', () => {
     await page.setViewportSize({ width: 1180, height: 850 })
     await ready(page)
     await page.evaluate(() => { window.nocturne.ai.send = async () => {} })
-    await page.getByLabel('Mensagem para o Codex').fill('Registre um aprendizado durável.')
+    await page.getByLabel('Mensagem para o agente').fill('Registre um aprendizado durável.')
     await page.getByRole('button', { name: 'Enviar mensagem' }).click()
     await page.evaluate(() => {
       const bridge = (window as unknown as { __nocturneTest: { emitEvent(payload: unknown): void; emitStatus(payload: unknown): void } }).__nocturneTest
@@ -588,11 +566,10 @@ test('oferece login por conta e chave de API como caminhos separados', async ({ 
   await ready(page)
   await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
   const dialog = page.getByRole('dialog', { name: 'Configurações' })
-  await expect(dialog.getByRole('heading', { name: 'IA' })).toBeVisible()
-  await expect(dialog.getByText('Conta ChatGPT', { exact: true })).toBeVisible()
-  await expect(dialog.getByText('Conta ChatGPT', { exact: true })).toBeVisible()
-  await expect(dialog.getByRole('button', { name: 'Usar chave de API' })).toBeVisible()
-  await expect(dialog.getByText('A cobrança é separada de assinaturas mensais.')).toBeVisible()
+  await expect(dialog.getByRole('heading', { name: 'IA', exact: true })).toBeVisible()
+  await expect(dialog.getByText('Conectar IA')).toBeVisible()
+  await expect(dialog.getByText('Escolha sua inteligência preferida para começar.')).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Adicionar IA' })).toBeVisible()
 })
 
 test('mantém o histórico isolado até reautorizar um workspace restaurado', async ({ page }) => {

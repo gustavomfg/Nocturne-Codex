@@ -87,7 +87,8 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       providers: {
         list: async () => providerConfigurations.map((item) => ({ ...item })),
         create: async (configuration: Omit<MockProviderConfiguration, 'id' | 'credentialConfigured' | 'createdAt' | 'updatedAt'>, credential?: string) => {
-          const created = { id: '45ce1afb-ce58-4a26-b549-8e37bd3e1375', ...configuration, credentialConfigured: Boolean(credential), createdAt: now, updatedAt: now }
+          const id = configuration.displayName.toLowerCase().replace(/\s+/g, '-')
+          const created = { id, ...configuration, credentialConfigured: Boolean(credential), createdAt: now, updatedAt: now }
           providerConfigurations = [created, ...providerConfigurations]
           return { ...created }
         },
