@@ -7,6 +7,7 @@ import { gitCommitSchema, idSchema } from '../../shared/ipc/schemas'
 import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
 import { safeIpcMain } from './safeIpc'
 import { getAuthorizedConversation } from './conversationAccess'
+import { redactLogText } from '../logging/Logger'
 
 const run = promisify(execFile)
 const MAX_DIFF_CHARACTERS = 1_500_000
@@ -86,7 +87,7 @@ function readGitOutput(workspace: string, args: string[], limit: number) {
     child.on('close', (code) => {
       clearTimeout(timeout)
       if (code === 0) resolve({ stdout, truncated })
-      else reject(new Error(stderr || `Git encerrou com código ${code ?? 'desconhecido'}.`))
+      else reject(new Error(redactLogText(stderr.slice(0, 2_000)) || `Git encerrou com código ${code ?? 'desconhecido'}.`))
     })
   })
 }

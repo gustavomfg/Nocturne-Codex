@@ -12,6 +12,8 @@ import { assertSafeWorkspaceScope } from '../security/WorkspaceTrust'
 export function registerDataIpc(win: BrowserWindow, database: LocalDatabase, logger: Logger) {
   const ipcMain = safeIpcMain(win)
   ipcMain.handle('data:export', async () => {
+    const warning = await dialog.showMessageBox(win, { type: 'info', buttons: ['Continuar', 'Cancelar'], defaultId: 0, cancelId: 1, title: 'Exportar dados do Nocturne', message: 'O backup inclui todas as conversas, memórias e artefatos do workspace.', detail: 'Credenciais de API não são exportadas. Mantenha o arquivo em local seguro — ele contém o histórico completo de conversas e dados do projeto.' })
+    if (warning.response !== 0) return null
     const result = await dialog.showSaveDialog(win, { title: 'Exportar dados do Nocturne', defaultPath: 'nocturne-backup.json', filters: [{ name: 'JSON', extensions: ['json'] }] })
     if (result.canceled || !result.filePath) return null
     const startedAt = performance.now()

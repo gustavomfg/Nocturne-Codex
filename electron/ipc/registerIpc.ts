@@ -5,6 +5,7 @@ import { execFile, spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { promisify } from 'node:util'
 import { z } from 'zod'
+import { redactLogText } from '../logging/Logger'
 import { LocalDatabase } from '../database/Database'
 import { Logger } from '../logging/Logger'
 import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
@@ -251,7 +252,7 @@ function artifactType(filePath: string) {
 
 async function run(command: string, args: string[], cwd: string) {
   try { return await execFileAsync(command, args, { cwd, timeout: 20_000, maxBuffer: 5_000_000 }) }
-  catch (error) { throw new Error(error instanceof Error ? error.message : String(error)) }
+  catch (error) { throw new Error(error instanceof Error ? redactLogText(error.message.slice(0, 2_000)) : String(error)) }
 }
 
 async function resolveBinary(name: string): Promise<string | null> {
