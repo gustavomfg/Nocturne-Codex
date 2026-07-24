@@ -48,8 +48,8 @@ export function registerIpc(
   const disposeKnowledge = registerKnowledgeIpc(win, database, logger, { workspace: (id) => getConversation(database, id).workspace, authorizedWorkspace: (id) => getAuthorizedConversation(database, id).workspace, read: readWorkspaceContext, write: writeWorkspaceContext, recordDecision: recordSuggestionDecision })
   const disposeProviders = registerProviderIpc(win, providerConfigurations)
   const disposeModels = registerModelIpc(win, database, modelCatalog)
-  ipcMain.handle('clipboard:readText', () => clipboard.readText().slice(0, 2_000_000))
-  ipcMain.handle('clipboard:writeText', (_event, value: unknown) => { clipboard.writeText(z.string().max(2_000_000).parse(value)) })
+  ipcMain.handle('clipboard:readText', () => clipboard.readText().slice(0, 10_000))
+  ipcMain.handle('clipboard:writeText', (_event, value: unknown) => { clipboard.writeText(z.string().max(100_000).parse(value)) })
 
   const approvalDetails = new Map<string, { command?: string; risk?: string }>()
 
