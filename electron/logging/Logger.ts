@@ -33,8 +33,19 @@ export class Logger {
 }
 
 function serializeError(error: unknown) { return error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : error }
-const SENSITIVE_KEYS = /(?:sk-[a-zA-Z0-9]{20,}|eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,})/g
-const SENSITIVE_FIELD_NAMES = /token|authorization|api[_-]?key|apikey|password|secret|credential|auth_token|refresh_token|access_token|client_secret/i
+
+const TOKEN_PATTERNS = [
+  /sk-[a-zA-Z0-9]{20,}/, // OpenAI / Anthropic
+  /pk-[a-zA-Z0-9]{20,}/, // OpenAI Project Key
+  /gh[opsu]_[a-zA-Z0-9]{36,}/, // GitHub
+  /glpat-[a-zA-Z0-9_-]{20,}/, // GitLab
+  /npm_[a-zA-Z0-9]{36,}/, // npm
+  /AKIA[0-9A-Z]{16}/, // AWS Access Key
+  /eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}/, // JWT
+  /-----BEGIN\s+(?:RSA|DSA|EC|OPENSSH|PRIVATE)\s+KEY-----/, // SSH private key
+]
+const SENSITIVE_KEYS = new RegExp(`(?:${TOKEN_PATTERNS.map((p) => p.source).join('|')})`, 'g')
+const SENSITIVE_FIELD_NAMES = /token|authorization|api[_-]?key|apikey|password|secret|credential|auth_token|refresh_token|access_token|client_secret|private_key|privatekey/i
 const SENSITIVE_HEADER = /\b(bearer|basic|digest|token)\s+[a-zA-Z0-9+/=_-]{8,}/gi
 const JSON_SENSITIVE = new RegExp(`(["'])(?:${SENSITIVE_FIELD_NAMES.source})["']\\s*:\\s*["'](.*?)["']`, 'gi')
 const KEY_VALUE_SENSITIVE = new RegExp(`\\b(${SENSITIVE_FIELD_NAMES.source})(\\s*[=:]\\s*)(["'])([^"']+)\\3`, 'gi')
@@ -43,7 +54,7 @@ export function redactLogText(value: string) {
   const jsonRedacted = value.replace(JSON_SENSITIVE, (_match, quote) => `${quote}[REDACTED]${quote}`)
   const headerRedacted = jsonRedacted.replace(SENSITIVE_HEADER, '$1 [REDACTED]')
   const kvRedacted = headerRedacted.replace(KEY_VALUE_SENSITIVE, '$1$2[REDACTED]')
-  const keyRedacted = kvRedacted.replace(SENSITIVE_KEYS, '[REDACTED-KEY]')
+  const keyRedacted = kvRedacted.replace(SENSITIVE_KEYS, '[REDACTED-TOKEN]')
   return keyRedacted.slice(0, 8_000)
 }
 export function redactLogValue(value: unknown): unknown {
