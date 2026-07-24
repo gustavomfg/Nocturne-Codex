@@ -321,6 +321,7 @@ export class LocalDatabase {
 
   importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[]; brainMemories?: unknown[]; suggestions?: unknown[]; suggestionDecisions?: unknown[]; providerConfigs?: unknown[]; modelCatalog?: unknown[]; workspaceModelBindings?: unknown[]; settings?: Record<string, string> }) {
     const statements = new Map<string, Database.Statement>()
+    const MAX_STRING_LENGTH = 10_000_000
     const insert = (table: string, rows: unknown[]) => {
       const allowed = importColumns[table]
       if (!allowed) throw new Error(`Tabela de importação não permitida: ${table}.`)
@@ -329,6 +330,16 @@ export class LocalDatabase {
         const row = raw as Record<string, unknown>
         const keys = Object.keys(row).filter((key) => allowed.has(key))
         if (!keys.length) continue
+        for (const key of keys) {
+          const value = row[key]
+          if (typeof value === 'string') {
+            if (value.length > MAX_STRING_LENGTH || value.includes('\0')) {
+              throw new Error(`Valor inválido na coluna ${key} da tabela ${table}.`)
+            }
+          } else if (typeof value === 'number') {
+            if (!Number.isFinite(value)) throw new Error(`Valor numérico inválido na coluna ${key} da tabela ${table}.`)
+          }
+        }
         const signature = `${table}:${keys.join(',')}`
         let statement = statements.get(signature)
         if (!statement) {
