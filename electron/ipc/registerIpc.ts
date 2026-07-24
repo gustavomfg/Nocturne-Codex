@@ -65,7 +65,7 @@ export function registerIpc(
       const stat = fs.statSync(filePath)
       if (!stat.isFile()) throw new Error(`${path.basename(filePath)} não é um arquivo válido.`)
       if (stat.size > 1_000_000) throw new Error(`${path.basename(filePath)} excede o limite de 1 MB.`)
-      return { path: filePath, name: path.basename(filePath), size: stat.size }
+      return { path: path.relative(conversation.workspace, filePath), name: path.basename(filePath), size: stat.size }
     })
   })
 
