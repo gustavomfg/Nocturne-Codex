@@ -37,11 +37,13 @@ const SENSITIVE_KEYS = /(?:sk-[a-zA-Z0-9]{20,}|eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9
 const SENSITIVE_FIELD_NAMES = /token|authorization|api[_-]?key|apikey|password|secret|credential|auth_token|refresh_token|access_token|client_secret/i
 const SENSITIVE_HEADER = /\b(bearer|basic|digest|token)\s+[a-zA-Z0-9+/=_-]{8,}/gi
 const JSON_SENSITIVE = new RegExp(`(["'])(?:${SENSITIVE_FIELD_NAMES.source})["']\\s*:\\s*["'](.*?)["']`, 'gi')
+const KEY_VALUE_SENSITIVE = new RegExp(`\\b(${SENSITIVE_FIELD_NAMES.source})(\\s*[=:]\\s*)(["'])([^"']+)\\3`, 'gi')
 
 export function redactLogText(value: string) {
   const jsonRedacted = value.replace(JSON_SENSITIVE, (_match, quote) => `${quote}[REDACTED]${quote}`)
   const headerRedacted = jsonRedacted.replace(SENSITIVE_HEADER, '$1 [REDACTED]')
-  const keyRedacted = headerRedacted.replace(SENSITIVE_KEYS, '[REDACTED-KEY]')
+  const kvRedacted = headerRedacted.replace(KEY_VALUE_SENSITIVE, '$1$2[REDACTED]')
+  const keyRedacted = kvRedacted.replace(SENSITIVE_KEYS, '[REDACTED-KEY]')
   return keyRedacted.slice(0, 8_000)
 }
 export function redactLogValue(value: unknown): unknown {
