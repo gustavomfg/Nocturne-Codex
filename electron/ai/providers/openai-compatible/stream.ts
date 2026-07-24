@@ -119,6 +119,10 @@ export async function consumeOpenAICompatibleStream(
 
 export async function readBoundedJson(response: Response): Promise<unknown> {
   if (!response.body) throw new OpenAICompatibleProtocolError()
+  const contentType = response.headers.get('content-type')?.toLowerCase() ?? ''
+  if (!contentType.includes('json') && !contentType.includes('text/plain')) {
+    throw new OpenAICompatibleProtocolError('Tipo de conteúdo inesperado.')
+  }
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let content = ''
