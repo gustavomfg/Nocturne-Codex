@@ -1,11 +1,18 @@
 import { dialog, type BrowserWindow } from 'electron'
 import fs from 'node:fs'
-import { spawn } from 'node:child_process'
+import { spawn, execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { z } from 'zod'
 import type { LocalDatabase } from '../database/Database'
 import { idSchema, pageSchema, workspaceFavoriteSchema, workspaceToolSchema } from '../../shared/ipc/schemas'
 import { safeIpcMain } from './safeIpc'
 import { assertSafeWorkspaceScope } from '../security/WorkspaceTrust'
+
+const execFileAsync = promisify(execFile)
+
+async function binaryExists(name: string): Promise<boolean> {
+  try { await execFileAsync('which', [name]); return true } catch { return false }
+}
 
 interface Dependencies {
   ensureWorkspace(workspace: string): Promise<void>
@@ -32,8 +39,15 @@ export function registerWorkspaceIpc(win: BrowserWindow, database: LocalDatabase
   ipcMain.handle('workspace:openTool', async (_event, value: unknown) => {
     const data = workspaceToolSchema.parse(value); const workspace = dependencies.assertKnownWorkspace(data.workspace)
     if (!fs.existsSync(workspace)) throw new Error('Workspace não encontrado.')
-    if (data.tool === 'editor') { try { await dependencies.run('webstorm', [workspace], workspace) } catch { throw new Error('Não foi possível abrir o WebStorm. Verifique se o comando “webstorm” está no PATH.') } return }
+    if (data.tool === 'editor') {
+      if (!(await binaryExists('webstorm'))) throw new Error('Não foi possível abrir o WebStorm. Verifique se o comando “webstorm” está no PATH e é executável.')
+      try { await dependencies.run('webstorm', [workspace], workspace) } catch { throw new Error('Não foi possível abrir o WebStorm. Verifique se o comando “webstorm” está no PATH.') }
+      return
+    }
     const terminal = process.platform === 'win32' ? ['cmd', ['/K', 'cd', '/d', workspace]] as const : process.platform === 'darwin' ? ['open', ['-a', 'Terminal', workspace]] as const : ['x-terminal-emulator', ['--working-directory', workspace]] as const
+    if (process.platform !== 'win32' && process.platform !== 'darwin' && !(await binaryExists(terminal[0]))) {
+      throw new Error('Terminal não encontrado. Instale x-terminal-emulator ou configure um terminal alternativo.')
+    }
     await new Promise<void>((resolve, reject) => {
       const child = spawn(terminal[0], [...terminal[1]], { cwd: workspace, detached: true, stdio: 'ignore' })
       child.once('error', () => reject(new Error('Não foi possível abrir o terminal. Instale ou configure o terminal padrão do sistema.')))
