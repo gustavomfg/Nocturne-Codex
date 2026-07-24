@@ -243,8 +243,10 @@ Current highlights:
 - Structured project memories
 - Workspace-based knowledge
 - Review Mode
-- Electron secure architecture
-- IPC isolation
+- Electron secure architecture (contextIsolation, sandbox, origin validation)
+- Isolated IPC with origin check and rate limiting
+- Credential vault with safeStorage encryption and atomic writes
+- Path traversal protection and command execution policy
 - Secure OpenAI-compatible Provider configuration
 - Curated company connection catalog
 - Persistent model catalog and Workspace role bindings

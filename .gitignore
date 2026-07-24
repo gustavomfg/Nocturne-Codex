@@ -42,6 +42,7 @@ core
 core.*
 *.dmp
 *.crash
+nocturne-crash.log
 .cache
 .tmp
 tmp
