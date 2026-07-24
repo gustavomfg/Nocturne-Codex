@@ -68,12 +68,16 @@ export function registerIpc(
     })
   })
 
+  const EXECUTABLE_EXTENSIONS = new Set(['.exe', '.bat', '.cmd', '.com', '.msi', '.sh', '.bin', '.app', '.dmg', '.deb', '.rpm', '.AppImage'])
   ipcMain.handle('files:open', async (_event, value: unknown) => {
     const data = fileActionSchema.parse(value)
     const conversation = getAuthorizedConversation(database, data.conversationId)
     const filePath = resolveWorkspaceFile(data.filePath, conversation.workspace)
     if (!fs.existsSync(filePath)) throw new Error('Arquivo não encontrado.')
     if (data.action === 'folder') { shell.showItemInFolder(filePath); return }
+    if (EXECUTABLE_EXTENSIONS.has(path.extname(filePath).toLowerCase())) {
+      throw new Error('Abrir executáveis diretamente não é permitido por segurança.')
+    }
     const error = await shell.openPath(filePath)
     if (error) throw new Error(error)
   })
@@ -99,7 +103,7 @@ export function registerIpc(
     logger.error('app', `Renderer ${data.type}`, data)
   })
   ipcMain.handle('diagnostics:rendererStats', (_event, value: unknown) => {
-    const data = z.object({ responseSize: z.number().int().nonnegative(), activities: z.number().int().nonnegative(), messages: z.number().int().nonnegative() }).parse(value)
+    const data = z.object({ responseSize: z.number().int().nonnegative().max(10_000_000), activities: z.number().int().nonnegative().max(100_000), messages: z.number().int().nonnegative().max(100_000) }).parse(value)
     logger.info('app', 'Estado do renderer durante execução', data)
   })
 
@@ -203,12 +207,12 @@ export function registerIpc(
   ipcMain.handle('documents:export', async (_event, value: unknown) => {
     const data = exportDocumentSchema.parse(value)
     const conversation = getAuthorizedConversation(database, data.conversationId)
-    const available = await commandVersion('pandoc')
-    if (!available) throw new Error('Pandoc não foi encontrado no PATH.')
+    const pandocPath = await resolveBinary('pandoc')
+    if (!pandocPath) throw new Error('Pandoc não foi encontrado no PATH.')
     const result = await dialog.showSaveDialog(win, { title: `Exportar ${data.format.toUpperCase()}`, defaultPath: path.join(conversation.workspace, `documento.${data.format}`), filters: [{ name: data.format.toUpperCase(), extensions: [data.format] }] })
     if (result.canceled || !result.filePath) return null
     assertInsideWorkspace(result.filePath, conversation.workspace)
-    await pipeCommand('pandoc', ['-f', 'markdown', '-t', data.format, '-o', result.filePath], data.content, conversation.workspace)
+    await pipeCommand(pandocPath, ['-f', 'markdown', '-t', data.format, '-o', result.filePath], data.content, conversation.workspace)
     database.addArtifact(data.conversationId, conversation.workspace, 'document', path.basename(result.filePath), result.filePath, data.format === 'html' ? await fs.promises.readFile(result.filePath, 'utf8') : null, { format: data.format })
     return result.filePath
   })
@@ -250,9 +254,14 @@ async function run(command: string, args: string[], cwd: string) {
   catch (error) { throw new Error(error instanceof Error ? error.message : String(error)) }
 }
 
-async function commandVersion(command: string) {
-  try { const { stdout, stderr } = await execFileAsync(command, ['--version'], { timeout: 5_000 }); return (stdout || stderr).trim() }
-  catch { return null }
+async function resolveBinary(name: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync('which', [name], { timeout: 5_000 })
+    const resolved = stdout.trim()
+    if (!resolved || !path.isAbsolute(resolved)) return null
+    await fs.promises.access(resolved, fs.constants.X_OK)
+    return resolved
+  } catch { return null }
 }
 
 function safeName(name: string, extension: string) {
