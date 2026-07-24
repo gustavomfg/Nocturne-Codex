@@ -1,3 +1,5 @@
+> **Documentação v0.8.0-beta · Compatibilidade Codex CLI: mínima 0.0.0**
+
 # Nocturne Codex
 
 > **A local-first workspace for software development, powered by your knowledge and your choice of AI.**
