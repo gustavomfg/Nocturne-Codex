@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { LocalDatabase } from '../database/Database'
 import type { Logger } from '../logging/Logger'
 import { extractBrainMemoryCandidates, extractSuggestions } from '../../shared/suggestions'
+import { isSafeBrainMemoryContent } from '../../shared/brainMemory'
 import { brainMemoryCreateSchema, brainMemoryDeleteSchema, brainMemoryExtractSchema, brainMemoryPageSchema, brainMemoryUpdateSchema, conversationPageSchema, idSchema, suggestionStatusSchema } from '../../shared/ipc/schemas'
 import { safeIpcMain } from './safeIpc'
 
@@ -25,6 +26,9 @@ export function registerKnowledgeIpc(win: BrowserWindow, database: LocalDatabase
   })
   ipcMain.handle('memory:set', async (_event, value: unknown) => {
     const data = z.object({ conversationId: idSchema, content: z.string().max(20_000), rules: z.string().max(20_000).default('') }).parse(value); const workspace = dependencies.authorizedWorkspace(data.conversationId)
+    if (!isSafeBrainMemoryContent(data.content) || !isSafeBrainMemoryContent(data.rules)) {
+      throw new Error('A memória parece conter uma credencial e não pode ser persistida.')
+    }
     const result = await dependencies.write(workspace, data.content, data.rules); database.setWorkspaceMemory(workspace, `${data.content}\n\n# Regras do projeto\n${data.rules}`); return result
   })
   ipcMain.handle('brain:page', (_event, value: unknown) => {
