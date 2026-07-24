@@ -236,9 +236,15 @@ export function AIConnectionPage({
           value={credential}
           onChange={(e) => setCredential(e.target.value)}
           placeholder={
-            selectedPreset.id === 'other'
-              ? 'Cole sua chave de API'
-              : 'Ex.: sk-proj-...'
+            selectedPreset.id === 'openai'
+              ? 'Ex.: sk-proj-...'
+              : selectedPreset.id === 'deepseek'
+                ? 'Ex.: sk-...'
+                : selectedPreset.id === 'openrouter'
+                  ? 'Ex.: sk-or-v1-...'
+                  : selectedPreset.id === 'other'
+                    ? 'Cole sua chave de API'
+                    : 'Chave de API'
           }
         />
         {selectedPreset.id === 'other' && (
