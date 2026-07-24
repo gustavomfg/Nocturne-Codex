@@ -237,7 +237,7 @@ Nocturne Codex is not:
 
 Current version:
 
-> **0.8.0-beta**
+> **v0.8.0-beta**
 
 Current highlights:
 
