@@ -3,6 +3,26 @@ import path from 'node:path'
 import electron from 'vite-plugin-electron/simple'
 import react from '@vitejs/plugin-react'
 
+const DEV_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws://127.0.0.1:*; object-src 'none'; base-uri 'none'; form-action 'none'"
+const PROD_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+
+function cspPlugin(): import('vite').Plugin {
+  let isDev = false
+  return {
+    name: 'csp',
+    configResolved(config) {
+      isDev = config.command === 'serve'
+    },
+    transformIndexHtml(html: string) {
+      const csp = isDev ? DEV_CSP : PROD_CSP
+      return html.replace(
+        /(<meta\s+http-equiv="Content-Security-Policy"\s+content=")[^"]*(")/,
+        `$1${csp}$2`,
+      )
+    },
+  }
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   server: {
@@ -18,6 +38,7 @@ export default defineConfig({
     },
   },
   plugins: [
+    cspPlugin(),
     react(),
     electron({
       main: {
