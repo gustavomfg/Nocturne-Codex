@@ -1,75 +1,124 @@
-> **Documentação v0.8.0-beta · Compatibilidade Codex CLI: mínima e verificada 0.145.0**
+> **Documentation for Nocturne Studio v0.9.0-beta**
 
-Documentação técnica: [arquitetura](docs/architecture.md), [segurança](docs/security.md)
-e [desenvolvimento](docs/development.md).
+# 🌙 Nocturne Studio
 
-# Nocturne Studio
+> **A software engineering workspace built around your project—not your prompts.**
 
-> **A local-first workspace for software development, powered by your knowledge and your choice of AI.**
+Nocturne Studio is a local-first workspace designed to help developers **understand, build, document and evolve software projects** through structured knowledge, contextual awareness and artificial intelligence.
 
-Nocturne Studio is not an AI chatbot.
-
-It is a workspace designed to help developers understand, build, document and evolve software projects by combining structured knowledge, contextual awareness and artificial intelligence.
-
-Instead of centering the experience around prompts, Nocturne centers it around the project itself.
+Unlike traditional AI tools, Nocturne Studio treats the **project** as the primary source of context. Artificial intelligence becomes one component of the workspace—not the workspace itself.
 
 ---
 
-# Vision
+# Why Nocturne Studio?
 
-Modern software development is no longer just about writing code.
+Modern software projects are more than source code.
 
-Projects accumulate:
+They accumulate documentation, architectural decisions, technical debt, conversations, design systems and operational knowledge.
 
-- documentation;
-- architecture decisions;
-- technical debt;
-- design systems;
-- implementation history;
-- conversations;
-- AI interactions.
-
-Most AI tools treat every conversation as an isolated prompt.
+Most AI tools start every interaction from scratch.
 
 Nocturne Studio takes a different approach.
 
-Every interaction happens inside a persistent workspace that understands the project's structure, remembers approved knowledge and provides contextual assistance without forcing developers to repeatedly explain their software.
+It builds a persistent engineering workspace where knowledge evolves together with the project, allowing developers to reuse context instead of repeatedly explaining it.
 
 ---
 
-# Philosophy
+# Features
 
-The project is built around five principles.
+Current capabilities include:
 
-## Workspace First
-
-The workspace is the center of the experience.
-
-Artificial intelligence exists to assist the workspace, not replace it.
-
-Everything starts from the project.
-
-Not from the model.
-
----
-
-## Knowledge First
-
-Information should become reusable knowledge.
-
-Instead of losing valuable discussions inside temporary conversations, Nocturne transforms approved information into structured memory that can evolve together with the project.
-
-Knowledge belongs to the user.
-
-Always.
+- 🧠 Local Second Brain
+- 👁️ Context-aware Awareness system
+- 🤖 Multiple AI providers
+- 📚 Persistent project knowledge
+- 🏗️ Architecture-oriented workspace
+- 🔒 Secure Electron architecture
+- 🔐 Encrypted credential storage
+- ⚡ Secure IPC communication
+- 📦 Provider abstraction layer
+- 📝 Review Mode
 
 ---
 
-## Provider Agnostic
+# Core Principles
 
-No AI provider should become a dependency of the application.
+### Workspace First
 
-Users decide which models they want to use.
+The project is the center of the experience.
+
+Artificial intelligence assists the workspace instead of defining it.
+
+---
+
+### Knowledge First
+
+Approved information becomes structured project knowledge.
+
+Knowledge belongs to the developer and remains reusable across future work.
+
+---
+
+### Provider Agnostic
+
+No AI provider should become a dependency of the workspace.
+
+Developers choose the provider that best fits each task.
+
+---
+
+### Local First
+
+Workspace data stays local whenever possible.
+
+External services execute AI requests without owning the project.
+
+---
+
+### Human in Control
+
+Artificial intelligence assists decisions.
+
+Developers remain responsible for reviewing, approving and evolving their software.
+
+---
+
+# Architecture
+
+```text
+                    Workspace
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+    Second Brain     Sessions      Documents
+        │
+        ▼
+    Awareness
+        │
+        ▼
+ Task Orchestrator
+        │
+        ▼
+  Provider Layer
+        │
+ ┌──────┼───────────────┬──────────────┐
+ │      │               │              │
+OpenAI Anthropic   OpenRouter      Ollama
+ │
+Codex CLI
+ │
+LM Studio
+```
+
+The workspace communicates exclusively with the Provider Layer.
+
+Every provider follows the same execution contract, allowing new providers to be integrated without changing the workspace architecture.
+
+---
+
+# AI Providers
+
+Nocturne Studio supports multiple execution backends.
 
 Examples include:
 
@@ -80,234 +129,86 @@ Examples include:
 - Ollama
 - LM Studio
 - Codex CLI
-- future providers
 
-The workspace remains exactly the same regardless of which provider executes a task.
-
----
-
-## Local First
-
-Project data should remain local whenever possible.
-
-Workspace information, memories, documentation and architecture belong to the developer.
-
-External services execute AI tasks.
-
-They do not own the workspace.
+Support for additional providers can be added without modifying the workspace architecture.
 
 ---
 
-## Human in Control
+# Current Status
 
-Artificial intelligence is an assistant.
+**Current version**
 
-Not an autonomous owner of the project.
+> **v0.9.0-beta**
 
-Important decisions always remain reviewable.
+Implemented:
 
-Generated knowledge requires explicit approval before becoming persistent.
-
-Transparency is preferred over automation.
-
----
-
-# Core Concepts
-
-## Workspace
-
-A workspace represents a software project.
-
-It contains everything required to understand and evolve that project.
-
-Examples:
-
-- documentation
-- memories
-- architecture decisions
-- AI sessions
-- tasks
-- providers
-- statistics
-
----
-
-## Second Brain
-
-The Second Brain stores approved knowledge.
-
-It is persistent.
-
-It is local.
-
-It is owned by the user.
-
-The system never silently promotes temporary conversations into permanent knowledge.
-
----
-
-## Awareness
-
-Awareness is temporary.
-
-It selects only the information required for the current task.
-
-Awareness is not memory.
-
-Awareness consumes memory.
-
----
-
-## AI Providers
-
-Artificial intelligence is accessed through interchangeable providers.
-
-No workspace component communicates directly with provider SDKs or proprietary APIs.
-
-Every request passes through the provider abstraction layer.
-
-This architecture allows developers to freely choose the model that best fits each task.
-
----
-
-# Architecture Overview
-
-```
-                Workspace
-
-                     │
-
-        ┌────────────┼────────────┐
-        │            │            │
-        │            │            │
-   Second Brain   Sessions     Documents
-        │
-        ▼
-    Awareness
-        │
-        ▼
-   Task Builder
-        │
-        ▼
- AI Orchestrator
-        │
-        ▼
- Provider Layer
-        │
- ┌──────┼──────────────┬──────────────┐
- │      │              │              │
-OpenAI Claude     OpenRouter     Ollama
- │
-Codex CLI
- │
-LM Studio
-```
-
-The workspace never depends directly on a specific provider.
-
-Providers are execution engines.
-
-The workspace is the product.
-
----
-
-# What Nocturne Studio Is
-
-Nocturne Studio is:
-
-- a software engineering workspace;
-- a knowledge management platform;
-- an AI-assisted development environment;
-- a documentation hub;
-- an architecture companion;
-- a project memory system.
-
----
-
-# What Nocturne Studio Is Not
-
-Nocturne Studio is not:
-
-- another AI chatbot;
-- another IDE;
-- another note-taking application;
-- another wrapper around a language model;
-- tied to a single AI provider.
-
----
-
-# Current State
-
-Current version:
-
-> **v0.8.0-beta**
-
-Current highlights:
-
-- Local Second Brain
-- Structured project memories
-- Workspace-based knowledge
 - Review Mode
-- Electron secure architecture (contextIsolation, sandbox, origin validation)
-- Isolated IPC with origin check and rate limiting
-- Credential vault with safeStorage encryption and atomic writes
-- Path traversal protection and command execution policy
-- Secure OpenAI-compatible Provider configuration
-- Curated company connection catalog
-- Persistent model catalog and Workspace role bindings
-- Provider-agnostic configuration interface
+- Workspace Memory
+- Second Brain
+- Awareness foundation
+- Secure Provider System
+- Credential Vault
+- Provider abstraction
+- Secure Electron architecture
+- Typed IPC
+- Security hardening
+- Packaging and release pipeline
+- Automated validation workflows
 
----
+Currently under development:
 
-# Roadmap
-
-The current architectural milestone is completing the Provider System.
-
-Its normalized registries, execution contracts, secure configuration,
-persistent catalog, typed IPC and first Workspace model-selection experience
-are in place. The next slices connect these choices to the complete product
-execution flow while preserving the same Workspace behavior.
-
-Future work includes:
-
-- Bring Your Own AI
-- AI execution pipeline
-- Model routing
-- Local model support
-- Workspace telemetry
-- AI statistics
-- Cost tracking
-- Provider plugins
+- Build Mode
+- Docs Mode
+- Workspace automation
+- Expanded provider capabilities
 
 ---
 
 # Documentation
 
-Documentation is organized into independent domains.
+Project documentation is organized into dedicated domains.
 
 - Architecture
-- Workspace
 - Development
 - Security
 - Providers
-- ADRs
+- Workspace
 - Review Mode
+- ADRs
 - Troubleshooting
 - Design System
 
-Each document describes a single responsibility and should be read independently.
+Each document focuses on a single responsibility, making the documentation easier to navigate and maintain.
 
 ---
 
-# Design Principles
+# Roadmap
 
-Every architectural decision follows the same priorities.
+## v0.9.x
+
+- Complete Provider System
+- Expand Workspace execution flow
+- Improve Review Mode
+- Continue Build and Docs Mode development
+
+## v1.0
+
+- Stable Workspace experience
+- Complete engineering workflow
+- Expanded provider ecosystem
+- Plugin-ready architecture
+
+---
+
+# Design Priorities
+
+Every architectural decision follows the same priorities:
 
 1. Security before convenience.
 2. Workspace before AI.
 3. Knowledge before conversations.
-4. User control before automation.
-5. Extensibility before provider-specific optimizations.
+4. Human control before automation.
+5. Extensibility before provider-specific implementations.
 
 ---
 
@@ -315,4 +216,4 @@ Every architectural decision follows the same priorities.
 
 This project is open source.
 
-See the repository license for details.
+See the repository license for more information.
