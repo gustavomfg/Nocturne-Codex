@@ -33,6 +33,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.release_tag }}
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: 24
@@ -40,8 +41,8 @@ jobs:
       - name: Require a stable version and matching tag
         shell: bash
         run: |
-          test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"
           node -e "const v=require('./package.json').version;const tag=process.env.RELEASE_TAG;if(v.includes('-'))throw new Error('Stable signing requires a version without a prerelease suffix: '+v);if(tag !== 'v'+v)throw new Error('Tag '+tag+' does not match package version v'+v)"
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$RELEASE_TAG")"
       - name: Require a successful Codex smoke for this commit
         shell: bash
         run: |

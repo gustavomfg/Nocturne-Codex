@@ -54,7 +54,7 @@ describe('políticas de execução', () => {
     expect(workflow).toContain('npm run verify:release-assets -- release-assets')
     expect(workflow).toContain('gh release create "$RELEASE_TAG"')
     expect(workflow).toContain('tag !== \'v\'+v')
-    expect(workflow).toContain('refs/tags/$RELEASE_TAG')
+    expect(workflow).toContain('git rev-list -n 1 "$RELEASE_TAG"')
     expect(workflow).not.toContain('${{ runner.os ==')
     expect(workflow).toContain("matrix.os == 'macos-latest'")
     expect(workflow).toContain("matrix.os == 'windows-latest' && secrets.WIN_CSC_LINK")

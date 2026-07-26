@@ -1,6 +1,13 @@
 name: Security · dependencies
 
 on:
+  push:
+    branches:
+      - master
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/workflows/dependency-security.yml
   pull_request:
     paths:
       - package.json
