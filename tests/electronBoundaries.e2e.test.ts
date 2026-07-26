@@ -263,6 +263,7 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     await api.settings.set({ diagnosticMode: true })
     const saved = await api.settings.set({ model: 'gpt-5' })
     expect(saved.model).toBe('gpt-5')
+    expect(saved.diagnosticMode).toBe(true)
     const current = await api.settings.get()
     expect(current.model).toBe('gpt-5')
     expect(current.diagnosticMode).toBe(true)

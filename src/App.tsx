@@ -43,7 +43,7 @@ function App() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [settings, setSettings] = useState<AppSettings>({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', theme: 'dark' })
+  const [settings, setSettings] = useState<AppSettings>({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', diagnosticMode: false, theme: 'dark' })
   const [gitInfo, setGitInfo] = useState<GitInfo | null>(null)
   const [preview, setPreview] = useState<FilePreview | null>(null)
   const [memory, setMemory] = useState<WorkspaceMemory>({ content: '', rules: '', updatedAt: '' })
@@ -79,7 +79,7 @@ function App() {
   useEffect(() => {
     void Promise.all([window.nocturne.conversations.page(), window.nocturne.workspace.list(), window.nocturne.settings.get()]).then(async ([conversationPage, savedWorkspaces, savedSettings]) => {
       const conversations = conversationPage.items
-      const normalized = { model: savedSettings.model || '', sandbox: savedSettings.sandbox || 'workspace-write', approvalPolicy: savedSettings.approvalPolicy === 'untrusted' ? 'untrusted' : 'on-request', theme: 'dark' } as AppSettings
+      const normalized = { model: savedSettings.model || '', sandbox: savedSettings.sandbox || 'workspace-write', approvalPolicy: savedSettings.approvalPolicy === 'untrusted' ? 'untrusted' : 'on-request', diagnosticMode: savedSettings.diagnosticMode === true, theme: 'dark' } as AppSettings
       store.setConversations(conversations); void collections.initializeConversationHasMore(conversationPage.hasMore); setWorkspaces(savedWorkspaces); setSettings(normalized)
       if (conversations[0]) await openConversation(conversations[0].id, conversations, savedWorkspaces)
     }).catch((error) => store.setError(error.message))

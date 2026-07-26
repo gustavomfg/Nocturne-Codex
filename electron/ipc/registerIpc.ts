@@ -192,10 +192,11 @@ export function registerIpc(
     logger.info('ai', data.accepted ? 'Aprovação concedida' : 'Aprovação recusada', { approvalKey: data.key, risk: detail?.risk })
   })
 
-  ipcMain.handle('settings:get', () => {
+  const readSettings = () => {
     const saved = database.getSettings()
     return { ...saved, diagnosticMode: saved.diagnosticMode === 'true' }
-  })
+  }
+  ipcMain.handle('settings:get', () => readSettings())
   ipcMain.handle('settings:set', (_event, value: unknown) => {
     const data = z.object({ model: z.string().max(100).optional(), sandbox: z.enum(['read-only', 'workspace-write']).optional(), approvalPolicy: z.enum(['untrusted', 'on-request']).optional(), diagnosticMode: z.boolean().optional(), theme: z.literal('dark').default('dark') }).parse(value)
     if (data.diagnosticMode !== undefined) logger.setDiagnostic(data.diagnosticMode)
@@ -203,7 +204,7 @@ export function registerIpc(
     const updates: Record<string, string> = { ...rest }
     if (diagnosticMode !== undefined) updates.diagnosticMode = String(diagnosticMode)
     database.setSettings(updates)
-    return database.getSettings()
+    return readSettings()
   })
 
   ipcMain.handle('documents:saveMarkdown', async (_event, value: unknown) => {
