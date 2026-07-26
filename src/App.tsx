@@ -83,7 +83,12 @@ function App() {
       store.setConversations(conversations); void collections.initializeConversationHasMore(conversationPage.hasMore); setWorkspaces(savedWorkspaces); setSettings(normalized)
       if (conversations[0]) await openConversation(conversations[0].id, conversations, savedWorkspaces)
     }).catch((error) => store.setError(error.message))
-    const offStatus = window.nocturne.ai.onStatus(({ status, error }) => { store.setStatus(status); if (status === 'completed' && activeTurnRef.current) store.setFinalizing(true); if (error) store.setError(error) })
+    const offStatus = window.nocturne.ai.onStatus(({ status, conversationId, error }) => {
+      if (conversationId && conversationId !== activeTurnRef.current?.conversationId) return
+      store.setStatus(status)
+      if (status === 'completed' && activeTurnRef.current) store.setFinalizing(true)
+      if (error) store.setError(error)
+    })
     const offEvent = window.nocturne.ai.onEvent(handleAgentEvent)
     return () => { offStatus(); offEvent() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -221,6 +226,7 @@ function App() {
     activeTurnRef.current = { conversationId, mode, suggestionId: applyingSuggestionRef.current?.id ?? null, suggestionFiles: applyingSuggestionRef.current?.affectedFiles ?? [] }
     applyingSuggestionRef.current = null
     setAttachments([])
+    store.setStatus('planning')
     store.addMessage({ id: fakeId(), conversationId, role: 'user', content, metadata: JSON.stringify({ attachments: selectedAttachments.map((item) => item.path) }), createdAt: now() })
     try { await window.nocturne.ai.send(conversationId, content, selectedAttachments.map((item) => item.path), mode); await refresh() }
     catch (error) { activeTurnRef.current = null; applyingSuggestionRef.current = null; store.setFinalizing(false); store.setStatus('failed'); store.setError(error instanceof Error ? error.message : String(error)) }
@@ -271,14 +277,19 @@ function App() {
   async function cancelRun() {
     if (!store.activeId) return
     store.setStatus('cancelling')
-    store.setFinalizing(true)
-    activeTurnRef.current = null
-    applyingSuggestionRef.current = null
-    store.setStatus('ready')
-    store.setFinalizing(false)
+    try {
+      await window.nocturne.ai.cancel(store.activeId)
+    } catch (error) {
+      store.setStatus('failed')
+      store.setError(errorMessage(error))
+    }
   }
 
   function handleAgentEvent(event: AgentEvent) {
+    const conversationId = typeof event.params.conversationId === 'string'
+      ? event.params.conversationId
+      : undefined
+    if (conversationId && conversationId !== activeTurnRef.current?.conversationId) return
     routeAgentEvent(event, { stream: queueStreamDelta, activityDetail: appendActivityDetail, diff: store.setDiff, plan: store.setPlan, hasPlan: () => Boolean(useAppStore.getState().plan.length), itemStarted: addItemActivity, itemCompleted: completeItem, fsChanged: (paths) => { if (paths.length) store.upsertActivity({ id: 'fs-summary', type: 'file', label: `${paths.length} arquivo(s) observado(s)`, detail: paths.slice(-50).join('\n'), status: 'completed' }) }, approval: (value) => store.addApproval({ ...value, status: 'pending' }), turnCompleted: (params) => { void finishTurn(params).catch((error) => { store.setStatus('failed'); store.setError(`Falha ao finalizar a resposta: ${errorMessage(error)}`) }) }, error: (message) => { store.setError(message); store.upsertActivity({ id: `error-${Date.now()}`, type: 'error', label: 'Erro na execução', detail: message, status: 'failed' }) }, warning: (message) => store.upsertActivity({ id: `warning-${Date.now()}`, type: 'error', label: 'Aviso', detail: message, status: 'failed' }) })
   }
 

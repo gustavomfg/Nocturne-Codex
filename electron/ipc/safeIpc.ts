@@ -10,7 +10,11 @@ interface RateLimitConfig {
 const RATE_LIMITS: Record<string, RateLimitConfig> = {
   default: { windowMs: 1_000, maxCalls: 120 },
   'ai:send': { windowMs: 10_000, maxCalls: 5 },
+  'ai:cancel': { windowMs: 2_000, maxCalls: 10 },
   'ai:approve': { windowMs: 2_000, maxCalls: 20 },
+  'codex:accountStatus': { windowMs: 5_000, maxCalls: 10 },
+  'codex:login': { windowMs: 60_000, maxCalls: 2 },
+  'codex:logout': { windowMs: 10_000, maxCalls: 2 },
   'git:commit': { windowMs: 5_000, maxCalls: 5 },
   'data:import': { windowMs: 30_000, maxCalls: 2 },
   'data:export': { windowMs: 30_000, maxCalls: 5 },

@@ -7,7 +7,7 @@ import { SafeMarkdown } from '../../shared/SafeMarkdown'
 
 export function OnboardingDialog({ workspace, onWorkspace, onSettings, onDismiss, onComplete }: { settings: AppSettings; status: string; workspace: string; onWorkspace(): void; onSettings(): void; onRecheck?(): Promise<void>; onDismiss(): void; onComplete(): void }) {
   const [step, setStep] = useState(0)
-  const [apiReady, setApiReady] = useState(false)
+  const [aiReady, setAiReady] = useState(false)
   const dialogRef = useDialogA11y<HTMLDivElement>(onDismiss)
   const hasWorkspace = Boolean(workspace)
   useEffect(() => {
@@ -15,24 +15,34 @@ export function OnboardingDialog({ workspace, onWorkspace, onSettings, onDismiss
     void Promise.all([
       window.nocturne.providers.list(),
       workspace ? window.nocturne.models.bindings(workspace) : Promise.resolve(null),
-    ]).then(([providers, bindings]) => {
+      window.nocturne.codex.status(),
+    ]).then(([providers, bindings, codex]) => {
       if (!active) return
-      setApiReady(Boolean(
+      const providerReady = Boolean(
         bindings?.defaultBinding
         && providers.some((provider) => (
           provider.id === bindings.defaultBinding?.providerId && provider.enabled
         )),
+      )
+      setAiReady(Boolean(
+        providerReady
+        || (
+          codex.installed
+          && codex.compatible
+          && codex.authenticated
+          && codex.authenticationMethod === 'chatgpt'
+        ),
       ))
     }).catch(() => {
-      if (active) setApiReady(false)
+      if (active) setAiReady(false)
     })
     return () => {
       active = false
     }
   }, [workspace])
   const items = [
-    { title: 'Acesso à IA', ok: apiReady, required: true, body: apiReady ? 'Um serviço de IA está conectado e ativo.' : 'Nenhuma IA configurada. Conecte um serviço com chave de API.', fix: 'Abra Configurações → IA para adicionar uma conexão.' },
-    { title: 'Modelo ativo', ok: apiReady, required: true, body: apiReady ? 'Modelo de IA configurado.' : 'Selecione um modelo após conectar um serviço de IA.', fix: 'Abra Configurações → IA e escolha um modelo.' },
+    { title: 'Acesso à IA', ok: aiReady, required: true, body: aiReady ? 'Uma conta, API ou IA local está conectada.' : 'Escolha uma conta ChatGPT pelo Codex CLI, uma chave de API ou um modelo local.', fix: 'Abra Configurações → IA para escolher o tipo de acesso.' },
+    { title: 'Execução disponível', ok: aiReady, required: true, body: aiReady ? 'O backend de IA está pronto para uso.' : 'Conclua o login da conta ou selecione um modelo da API conectada.', fix: 'Abra Configurações → IA e conclua a conexão.' },
     { title: 'Primeiro workspace', ok: hasWorkspace, required: true, body: hasWorkspace ? 'Workspace selecionado e pronto.' : 'Escolha a pasta do primeiro projeto. O agente ficará limitado a essa raiz.', fix: 'Selecione uma pasta de projeto local.' },
     { title: 'Aprovações e segurança', ok: true, required: true, body: 'Review apenas sugere; Build pode modificar. Revise comandos sensíveis antes de aprovar.', fix: '' },
   ]

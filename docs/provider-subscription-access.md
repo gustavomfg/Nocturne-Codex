@@ -7,18 +7,23 @@ Data de referencia: Julho de 2026.
 
 ---
 
-## OpenAI — ChatGPT Plus / Pro
+## OpenAI — conta ChatGPT pelo Codex CLI
 
-**Suporte:** Sim, nativo.
+**Suporte no Nocturne:** Sim, pelo Codex CLI oficial.
 
-A OpenAI permite que ferramentas terceiras (OpenCode, Cursor, etc.) usem
-o plano ChatGPT Plus ou Pro via OAuth. O usuario faz login no navegador
-e a ferramenta recebe um token — sem necessidade de API key.
+A autenticação oficial do Codex diferencia dois caminhos:
 
-O OpenCode ja implementa isso com `opencode auth login`.
+- `codex login`, que abre o navegador e usa o acesso disponível na conta
+  ChatGPT;
+- `codex login --with-api-key`, cujo uso é cobrado pela OpenAI Platform.
 
-OpenAI e o unico provedor grande que mantem suporte explicito a OAuth
-para terceiros.
+O Nocturne chama o primeiro fluxo no processo principal, consulta
+`codex login status` e reutiliza a sessão protegida pelo próprio Codex CLI.
+As credenciais não atravessam o preload e não chegam ao renderer.
+
+Isso não transforma uma assinatura ChatGPT em uma chave de API genérica.
+A conexão “OpenAI API” continua separada e exige uma chave da Platform.
+Consulte a [documentação oficial de autenticação](https://learn.chatgpt.com/docs/auth.md).
 
 ---
 
@@ -100,5 +105,6 @@ apontando para `http://localhost:11434` (Ollama) ou `http://localhost:1234`
 | Ollama            | - | - | Sim |
 | LM Studio         | - | - | Sim |
 
-Se o Nocturne Codex quiser suportar conexao via plano/assinatura (sem API
-key), o unico provedor viavel hoje e a OpenAI, via OAuth.
+No Nocturne, acesso por plano mensal está implementado somente para conta
+ChatGPT através do Codex CLI. OpenAI Platform, DeepSeek e OpenRouter usam
+chaves de API separadas; Ollama e LM Studio permanecem locais.

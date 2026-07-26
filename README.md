@@ -1,4 +1,7 @@
-> **Documentação v0.8.0-beta · Compatibilidade Codex CLI: mínima 0.0.0**
+> **Documentação v0.8.0-beta · Compatibilidade Codex CLI: mínima e verificada 0.145.0**
+
+Documentação técnica: [arquitetura](docs/architecture.md), [segurança](docs/security.md)
+e [desenvolvimento](docs/development.md).
 
 # Nocturne Codex
 

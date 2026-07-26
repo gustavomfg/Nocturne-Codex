@@ -8,7 +8,7 @@ claramente qual parte do processo precisa de atenção.
 | Workflow | Gatilho | Responsabilidade |
 | --- | --- | --- |
 | `CI · source, renderer and packages` | pull request, `master`, tags e execução manual | valida workflows, código, testes de renderer e pacotes multiplataforma |
-| `Security · dependencies` | alterações de dependências, agenda semanal e execução manual | audita dependências de produção e gera um SBOM |
+| `Security · dependencies` | alterações de dependências em PR ou `master`, agenda semanal e execução manual | audita dependências de produção e gera um SBOM |
 | `Compatibility · Codex CLI` | somente execução manual | exercita o contrato experimental do App Server em uma instalação autenticada |
 | `Release · stable` | somente execução manual | valida a origem, assina as três plataformas e publica uma GitHub Release estável |
 
@@ -59,11 +59,11 @@ O environment é deliberado aqui: ele limita o acesso às chaves e permite
 proteção por aprovação. Os jobs de assinatura falham antes do empacotamento se
 alguma credencial obrigatória estiver ausente.
 
-Para publicar, abra `Release · stable`, informe a tag e o ID da execução do
-smoke e selecione a mesma tag no campo `Use workflow from`. O workflow rejeita
-uma execução iniciada a partir de outra referência. O gate final só cria ou
-atualiza a GitHub Release depois que os artifacts, checksums e assinaturas das
-três plataformas forem reunidos e verificados.
+Para publicar, abra `Release · stable` na branch padrão e informe a tag e o ID
+da execução do smoke. O workflow faz checkout da tag e confirma que ela aponta
+para o commit efetivamente validado. O gate final só cria ou atualiza a GitHub
+Release depois que os artifacts, checksums e assinaturas das três plataformas
+forem reunidos e verificados.
 
 Recomenda-se configurar no environment:
 

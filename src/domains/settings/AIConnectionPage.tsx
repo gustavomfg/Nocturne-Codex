@@ -11,12 +11,14 @@ import {
   Plus,
   Sparkles,
   Trash2,
+  UserRound,
 } from 'lucide-react'
 import type {
   ProviderConfigurationInput,
   ProviderConfigurationSummary,
 } from '../../../shared/ai/providerConfiguration'
 import type { ModelDescriptor, ModelReference } from '../../../shared/ai/model'
+import type { CodexAccountStatus } from '../../../shared/types'
 import { errorMessage } from '../../shared/format'
 
 type Step = 'list' | 'service' | 'auth' | 'model'
@@ -26,11 +28,12 @@ interface ServicePreset {
   name: string
   icon: typeof Bot
   baseUrl: string
-  authType: 'api-key' | 'local'
+  authType: 'account' | 'api-key' | 'local'
 }
 
 const presets: ServicePreset[] = [
-  { id: 'openai', name: 'OpenAI', icon: Sparkles, baseUrl: 'https://api.openai.com/v1', authType: 'api-key' },
+  { id: 'codex', name: 'Conta ChatGPT', icon: UserRound, baseUrl: '', authType: 'account' },
+  { id: 'openai', name: 'OpenAI API', icon: Sparkles, baseUrl: 'https://api.openai.com/v1', authType: 'api-key' },
   { id: 'deepseek', name: 'DeepSeek', icon: Brain, baseUrl: 'https://api.deepseek.com', authType: 'api-key' },
   { id: 'openrouter', name: 'OpenRouter', icon: Bot, baseUrl: 'https://openrouter.ai/api/v1', authType: 'api-key' },
   { id: 'ollama', name: 'Ollama', icon: Laptop, baseUrl: 'http://127.0.0.1:11434/v1', authType: 'local' },
@@ -47,6 +50,7 @@ export function AIConnectionPage({
   onNotify,
 }: AIConnectionPageProps) {
   const [services, setServices] = useState<ProviderConfigurationSummary[]>([])
+  const [codexAccount, setCodexAccount] = useState<CodexAccountStatus | null>(null)
   const [step, setStep] = useState<Step>('list')
   const [selectedPreset, setSelectedPreset] = useState<ServicePreset | null>(null)
   const [credential, setCredential] = useState('')
@@ -62,8 +66,15 @@ export function AIConnectionPage({
 
   useEffect(() => {
     let active = true
-    void window.nocturne.providers.list()
-      .then((items) => { if (active) setServices(items) })
+    void Promise.all([
+      window.nocturne.providers.list(),
+      window.nocturne.codex.status(),
+    ])
+      .then(([items, account]) => {
+        if (!active) return
+        setServices(items)
+        setCodexAccount(account)
+      })
       .catch((failure) => { if (active) setError(errorMessage(failure)) })
     return () => { active = false }
   }, [])
@@ -93,6 +104,13 @@ export function AIConnectionPage({
     setConnecting(true)
     setError(null)
     try {
+      if (selectedPreset.authType === 'account') {
+        const account = await window.nocturne.codex.login()
+        setCodexAccount(account)
+        onNotify('Conta ChatGPT conectada pelo Codex CLI.')
+        resetWizard()
+        return
+      }
       const effectiveUrl = customUrl.trim() || selectedPreset.baseUrl
       if (selectedPreset.authType === 'api-key' && !credential.trim()) {
         setError('Informe a chave de API.')
@@ -123,6 +141,20 @@ export function AIConnectionPage({
         setSelectedModel({ providerId: saved.id, modelId: available[0].modelId })
       }
       setStep('model')
+    } catch (failure) {
+      setError(errorMessage(failure))
+    } finally {
+      setConnecting(false)
+    }
+  }
+
+  const disconnectCodex = async () => {
+    if (connecting) return
+    setConnecting(true)
+    setError(null)
+    try {
+      setCodexAccount(await window.nocturne.codex.logout())
+      onNotify('Conta ChatGPT desconectada do Codex CLI.')
     } catch (failure) {
       setError(errorMessage(failure))
     } finally {
@@ -172,10 +204,24 @@ export function AIConnectionPage({
     {step === 'list' && <>
       <div className="ai-list-header">
         <h4 className="ai-list-heading">Conectar IA</h4>
-        <p className="ai-list-sub">Escolha sua inteligência preferida para começar.</p>
+        <p className="ai-list-sub">Use sua conta ChatGPT pelo Codex CLI, uma chave de API ou um modelo local.</p>
       </div>
 
-      {services.length > 0 && <div className="ai-list-connections">
+      {(codexAccount?.authenticated || services.length > 0) && <div className="ai-list-connections">
+        {codexAccount?.authenticated && <div className="ai-list-row">
+          <div className="ai-list-row-info">
+            <span className="ai-list-dot"/>
+            <span><strong>Conta ChatGPT</strong><small>Codex CLI {codexAccount.version}</small></span>
+          </div>
+          <div className="ai-list-row-actions">
+            <button
+              className="ai-list-remove"
+              aria-label="Desconectar conta ChatGPT"
+              disabled={connecting}
+              onClick={() => void disconnectCodex()}
+            >{connecting ? <LoaderCircle className="spin" size={13}/> : <Trash2 size={13}/>}</button>
+          </div>
+        </div>}
         {services.map((service) => (
           <div key={service.id} className="ai-list-row">
             <div className="ai-list-row-info">
@@ -195,14 +241,14 @@ export function AIConnectionPage({
       </div>}
 
       <button className="ai-add-btn" onClick={() => setStep('service')}>
-        <Plus size={16}/> Adicionar IA
+        <Plus size={16}/> Adicionar conta, API ou modelo local
       </button>
     </>}
 
     {step === 'service' && <div className="ai-step-box">
       <div className="ai-step-top">
         <button className="ai-step-back" aria-label="Voltar" onClick={() => setStep('list')}><ArrowLeft size={16}/></button>
-        <div className="ai-step-copy"><strong>Escolher IA</strong><small>Selecione o serviço que deseja conectar.</small></div>
+        <div className="ai-step-copy"><strong>Escolher acesso</strong><small>Assinatura ChatGPT e APIs são conexões diferentes.</small></div>
       </div>
       <div className="ai-service-list">
         {presets.map((preset) => {
@@ -221,12 +267,21 @@ export function AIConnectionPage({
         <ArrowLeft size={14}/> {selectedPreset.name}
       </button>
       <p className="ai-auth-desc">{
-        selectedPreset.authType === 'local'
+        selectedPreset.authType === 'account'
+          ? 'O navegador será aberto pelo Codex CLI. Uma assinatura ChatGPT compatível pode ser usada aqui, sem expor credenciais ao aplicativo.'
+          : selectedPreset.authType === 'local'
           ? `Conecte seu servidor ${selectedPreset.name} local.`
           : selectedPreset.id === 'other'
             ? 'Informe a chave de API e o endereço do serviço.'
-            : `Conecte sua conta ${selectedPreset.name}. Cole sua chave de API para listar os modelos disponíveis.`
+            : `Cole sua chave de ${selectedPreset.name}. A cobrança da API é separada de planos mensais de chat.`
       }</p>
+
+      {selectedPreset.authType === 'account' && codexAccount && !codexAccount.installed && (
+        <p className="ai-local-note">O Codex CLI 0.145.0 precisa estar instalado para usar uma conta ChatGPT.</p>
+      )}
+      {selectedPreset.authType === 'account' && codexAccount?.installed && !codexAccount.compatible && (
+        <p className="ai-local-note">Codex CLI {codexAccount.version || 'desconhecido'} não homologado. Instale a versão 0.145.0.</p>
+      )}
 
       {selectedPreset.authType === 'api-key' && <>
         <input
@@ -281,8 +336,14 @@ export function AIConnectionPage({
         </p>
       )}
 
-      <button className="ai-connect-btn" disabled={connecting} onClick={() => void connect()}>
-        {connecting ? <><LoaderCircle className="spin" size={15}/> Conectando…</> : 'Conectar'}
+      <button
+        className="ai-connect-btn"
+        disabled={connecting || (selectedPreset.authType === 'account' && (!codexAccount?.installed || !codexAccount.compatible))}
+        onClick={() => void connect()}
+      >
+        {connecting
+          ? <><LoaderCircle className="spin" size={15}/> Conectando…</>
+          : selectedPreset.authType === 'account' ? 'Entrar com ChatGPT' : 'Conectar'}
       </button>
     </div>}
 

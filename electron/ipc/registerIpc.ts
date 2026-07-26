@@ -10,7 +10,7 @@ import { LocalDatabase } from '../database/Database'
 import { Logger } from '../logging/Logger'
 import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
 import { sanitizeSuggestionTitle } from '../../shared/suggestions'
-import { approvalSchema, aiSendSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, saveAssistantSchema, saveMarkdownSchema } from '../../shared/ipc/schemas'
+import { approvalSchema, aiCancelSchema, aiSendSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, saveAssistantSchema, saveMarkdownSchema } from '../../shared/ipc/schemas'
 import { registerDataIpc } from './registerDataIpc'
 import { registerGitIpc } from './registerGitIpc'
 import { registerWorkspaceIpc } from './registerWorkspaceIpc'
@@ -27,10 +27,12 @@ import {
 } from './registerModelIpc'
 import { ModelRegistry } from '../ai/ModelRegistry'
 import { ProviderRegistry } from '../ai/ProviderRegistry'
-import { executeAiTurn } from '../ai/executeAiTurn'
+import { AiExecutionCoordinator } from '../ai/AiExecutionCoordinator'
 import { buildAttachmentMessages, buildHistoryMessages } from '../ai/conversationContext'
 import type { NormalizedTaskInput } from '../../shared/ai/task'
 import { AI_TASK_LIMITS } from '../../shared/ai/task'
+import { buildBrainMemoryContext } from '../memory/BrainMemoryContext'
+import { CodexAccountService } from '../codex/CodexAccountService'
 
 const execFileAsync = promisify(execFile)
 
@@ -54,6 +56,17 @@ export function registerIpc(
   ipcMain.handle('clipboard:writeText', (_event, value: unknown) => { clipboard.writeText(z.string().max(100_000).parse(value)) })
 
   const approvalDetails = new Map<string, { command?: string; risk?: string }>()
+  const codexAccount = new CodexAccountService()
+  const aiExecutions = new AiExecutionCoordinator(
+    win,
+    modelRegistry,
+    providerRegistry,
+    logger,
+    approvalDetails,
+  )
+  ipcMain.handle('codex:accountStatus', () => codexAccount.status())
+  ipcMain.handle('codex:login', () => codexAccount.login())
+  ipcMain.handle('codex:logout', () => codexAccount.logout())
 
   ipcMain.handle('files:attach', async (_event, value: unknown) => {
     const conversation = getAuthorizedConversation(database, idSchema.parse(value))
@@ -117,9 +130,10 @@ export function registerIpc(
 
     const bindings = database.workspaceModelBindings.get(conversation.workspace)
     const enabledProviders = providerConfigurations.list().filter((p) => p.enabled)
-    const hasActiveModel = enabledProviders.length > 0 && bindings?.defaultBinding
+    const hasActiveModel = Boolean(enabledProviders.length > 0 && bindings?.defaultBinding)
+    const useCodex = mode !== 'review' || !hasActiveModel
 
-    if (!hasActiveModel) {
+    if (!useCodex && (!bindings || !hasActiveModel)) {
       throw new Error('Nenhuma IA configurada. Abra Configurações > IA para conectar um provedor.')
     }
 
@@ -127,7 +141,13 @@ export function registerIpc(
     database.addMessage(conversationId, 'user', prompt, { attachments })
     if (conversation.title === 'Nova conversa') database.renameFromPrompt(conversationId, prompt)
 
-    const workspaceMemory = database.getWorkspaceMemory(conversation.workspace)
+    const workspaceMemory = await loadWorkspaceMemoryForAi(database, conversation.workspace)
+    const brainMemory = buildBrainMemoryContext(
+      database,
+      conversation.workspace,
+      conversationId,
+      prompt,
+    )
     const projectPath = path.join(conversation.workspace, '.nocturne', 'project.json')
     let projectName = path.basename(conversation.workspace)
     try {
@@ -143,7 +163,18 @@ export function registerIpc(
         title: 'Memória do workspace',
         content: workspaceMemory.content,
         scope: 'workspace',
-        potentiallyOutdated: false,
+        updatedAt: workspaceMemory.updatedAt || undefined,
+        potentiallyOutdated: true,
+      })
+    }
+    if (brainMemory.text) {
+      contextSources.push({
+        id: 'brain-memory',
+        type: 'memory',
+        title: 'Segundo Cérebro',
+        content: brainMemory.text,
+        scope: 'workspace-and-conversation',
+        potentiallyOutdated: true,
       })
     }
 
@@ -167,7 +198,35 @@ export function registerIpc(
       tools: [],
     }
 
-    await executeAiTurn(win, modelRegistry, providerRegistry, taskInput, bindings)
+    if (useCodex) {
+      const settings = database.getSettings()
+      await aiExecutions.startCodex({
+        conversationId,
+        workspace: conversation.workspace,
+        prompt: buildCodexPrompt(history, prompt),
+        attachments,
+        memory: joinMemoryContext(workspaceMemory.content, brainMemory.text),
+        mode,
+        settings: {
+          model: '',
+          sandbox: mode === 'review' ? 'read-only' : 'workspace-write',
+          approvalPolicy: settings.approvalPolicy === 'untrusted' ? 'untrusted' : 'on-request',
+          diagnosticMode: settings.diagnosticMode === 'true',
+          theme: 'dark',
+        },
+      })
+      database.markBrainMemoriesUsed(brainMemory.memoryIds)
+      return
+    }
+
+    await aiExecutions.startProvider(conversationId, taskInput, bindings!)
+    database.markBrainMemoriesUsed(brainMemory.memoryIds)
+  })
+
+  ipcMain.handle('ai:cancel', async (_event, value: unknown) => {
+    const { conversationId } = aiCancelSchema.parse(value)
+    getAuthorizedConversation(database, conversationId)
+    await aiExecutions.cancel(conversationId)
   })
 
   ipcMain.handle('ai:save-assistant', (_event, value: unknown) => {
@@ -184,8 +243,9 @@ export function registerIpc(
     return message
   })
 
-  ipcMain.handle('ai:approve', (_event, value: unknown) => {
+  ipcMain.handle('ai:approve', async (_event, value: unknown) => {
     const data = approvalSchema.parse(value)
+    await aiExecutions.resolveApproval(data.key, data.accepted, data.forSession)
     const detail = approvalDetails.get(data.key)
     database.recordApproval(data.key, data.accepted, detail?.command, detail?.risk)
     approvalDetails.delete(data.key)
@@ -231,6 +291,7 @@ export function registerIpc(
     return result.filePath
   })
   return () => {
+    aiExecutions.dispose()
     ipcMain.dispose()
     disposeKnowledge()
     disposeWorkspace()
@@ -239,6 +300,37 @@ export function registerIpc(
     disposeProviders()
     disposeModels()
   }
+}
+
+async function loadWorkspaceMemoryForAi(database: LocalDatabase, workspace: string) {
+  const [files, persisted] = await Promise.all([
+    readWorkspaceContext(workspace),
+    Promise.resolve(database.getWorkspaceMemory(workspace)),
+  ])
+  if (persisted.content && Date.parse(persisted.updatedAt) > Date.parse(files.updatedAt)) {
+    return persisted
+  }
+  return {
+    content: `${files.content}\n\n# Regras do projeto\n${files.rules}`.trim(),
+    updatedAt: files.updatedAt,
+  }
+}
+
+function joinMemoryContext(workspaceMemory: string, brainMemory: string) {
+  return [workspaceMemory, brainMemory].filter(Boolean).join('\n\n')
+}
+
+function buildCodexPrompt(
+  history: ReturnType<LocalDatabase['listMessages']>,
+  prompt: string,
+) {
+  const recent = history.slice(-40)
+  if (!recent.length) return prompt
+  const transcript = recent.map((message) => {
+    const role = message.role === 'assistant' ? 'Assistente' : 'Usuário'
+    return `${role}: ${message.content}`
+  }).join('\n\n')
+  return `Histórico recente desta conversa:\n\n${transcript}\n\nSolicitação atual do usuário:\n\n${prompt}`
 }
 
 function assertInsideWorkspace(filePath: string, workspace: string) {

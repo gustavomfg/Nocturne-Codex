@@ -42,10 +42,16 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       },
       ai: {
         send: noop,
+        cancel: noop,
         saveAssistant: async (conversationId: string, content: string) => ({ id: 'saved-message', conversationId, role: 'assistant', content, metadata: null, createdAt: now }),
         approve: noop,
         onEvent: (listener: (payload: unknown) => void) => { eventListeners.push(listener); return () => { const index = eventListeners.indexOf(listener); if (index >= 0) eventListeners.splice(index, 1) } },
         onStatus: (listener: (payload: unknown) => void) => { statusListeners.push(listener); return () => { const index = statusListeners.indexOf(listener); if (index >= 0) statusListeners.splice(index, 1) } },
+      },
+      codex: {
+        status: async () => ({ installed: true, authenticated: !signedOut, compatible: true, version: '0.145.0', authenticationMethod: 'chatgpt' as const }),
+        login: async () => ({ installed: true, authenticated: true, compatible: true, version: '0.145.0', authenticationMethod: 'chatgpt' as const }),
+        logout: async () => ({ installed: true, authenticated: false, compatible: true, version: '0.145.0' }),
       },
       files: { attach: async () => [], open: noop, preview: async (_id: string, filePath: string) => ({ kind: 'text', name: filePath.split('/').pop(), filePath, mime: 'text/plain', content: 'conteúdo', size: 8 }) },
       memory: { get: async () => { memoryReads += 1; return { content: '', rules: '', updatedAt: '' } }, set: async (_id: string, content: string, rules: string) => ({ content, rules, updatedAt: now }) },
