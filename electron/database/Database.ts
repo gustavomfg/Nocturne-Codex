@@ -53,7 +53,9 @@ export class LocalDatabase {
 
   constructor(userDataPath: string) {
     this.databasePath = path.join(userDataPath, 'nocturne.db')
+    restrictFileIfPresent(this.databasePath)
     this.db = new Database(this.databasePath)
+    restrictFileIfPresent(this.databasePath)
     const schemaVersion = this.db.pragma('user_version', { simple: true }) as number
     if (schemaVersion > DATABASE_SCHEMA_VERSION) {
       this.db.close()
@@ -64,6 +66,7 @@ export class LocalDatabase {
     this.db.pragma('busy_timeout = 5000')
     this.db.pragma('synchronous = NORMAL')
     this.db.pragma('temp_store = MEMORY')
+    this.restrictDatabaseFiles()
     if (schemaVersion > 0 && schemaVersion < DATABASE_SCHEMA_VERSION && fs.existsSync(this.databasePath)) {
       this.db.pragma('wal_checkpoint(FULL)')
       const backupPath = `${this.databasePath}.backup-${Date.now()}`
@@ -71,6 +74,7 @@ export class LocalDatabase {
       fs.chmodSync(backupPath, 0o600)
     }
     migrateDatabase(this.db, schemaVersion)
+    this.restrictDatabaseFiles()
     this.providerConfigurations = new ProviderConfigurationRepository(this.db)
     this.modelCatalog = new ModelCatalogRepository(this.db)
     this.workspaceModelBindings = new WorkspaceModelBindingRepository(this.db)
@@ -402,6 +406,21 @@ export class LocalDatabase {
     this.db.pragma('optimize')
     this.db.pragma('wal_checkpoint(PASSIVE)')
     this.db.close()
+    this.restrictDatabaseFiles()
+  }
+
+  private restrictDatabaseFiles() {
+    for (const suffix of ['', '-wal', '-shm']) {
+      restrictFileIfPresent(`${this.databasePath}${suffix}`)
+    }
+  }
+}
+
+function restrictFileIfPresent(filePath: string) {
+  try {
+    fs.chmodSync(filePath, 0o600)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
   }
 }
 

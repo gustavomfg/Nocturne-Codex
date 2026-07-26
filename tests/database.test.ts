@@ -24,6 +24,23 @@ const model: ModelDescriptor = {
 afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }) })
 
 describe('persistência SQLite', () => {
+  it('mantém o banco principal e arquivos auxiliares restritos ao usuário', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-permissions-'))
+    directories.push(directory)
+    const databasePath = path.join(directory, 'nocturne.db')
+    fs.writeFileSync(databasePath, '')
+    fs.chmodSync(databasePath, 0o644)
+    const db = new LocalDatabase(directory)
+    expect(fs.statSync(databasePath).mode & 0o777).toBe(0o600)
+    for (const suffix of ['-wal', '-shm']) {
+      const auxiliary = `${databasePath}${suffix}`
+      if (fs.existsSync(auxiliary)) {
+        expect(fs.statSync(auxiliary).mode & 0o777).toBe(0o600)
+      }
+    }
+    db.close()
+    expect(fs.statSync(databasePath).mode & 0o777).toBe(0o600)
+  })
   it('mantém migrações incrementais, ordenadas e sem lacunas', () => {
     expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
     expect(migrations[migrations.length - 1]?.version).toBe(DATABASE_SCHEMA_VERSION)
