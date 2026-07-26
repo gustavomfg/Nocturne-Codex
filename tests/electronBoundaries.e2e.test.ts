@@ -259,6 +259,15 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     expect(await api.providers.list()).toHaveLength(0)
   })
 
+  it('salva settings parciais sem apagar diagnosticMode', async () => {
+    await api.settings.set({ diagnosticMode: true })
+    const saved = await api.settings.set({ model: 'gpt-5' })
+    expect(saved.model).toBe('gpt-5')
+    const current = await api.settings.get()
+    expect(current.model).toBe('gpt-5')
+    expect(current.diagnosticMode).toBe(true)
+  })
+
   it('rejeita credenciais em backup e remove codexPath das settings importadas', async () => {
     const { backupSchema } = await import('../shared/ipc/backupSchemas')
     const backup = {

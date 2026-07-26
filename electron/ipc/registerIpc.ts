@@ -190,7 +190,10 @@ export function registerIpc(
   ipcMain.handle('settings:set', (_event, value: unknown) => {
     const data = z.object({ model: z.string().max(100).optional(), sandbox: z.enum(['read-only', 'workspace-write']).optional(), approvalPolicy: z.enum(['untrusted', 'on-request']).optional(), diagnosticMode: z.boolean().optional(), theme: z.literal('dark').default('dark') }).parse(value)
     if (data.diagnosticMode !== undefined) logger.setDiagnostic(data.diagnosticMode)
-    database.setSettings({ ...data, diagnosticMode: data.diagnosticMode !== undefined ? String(data.diagnosticMode) : undefined } as Record<string, string>)
+    const { diagnosticMode, ...rest } = data
+    const updates: Record<string, string> = { ...rest }
+    if (diagnosticMode !== undefined) updates.diagnosticMode = String(diagnosticMode)
+    database.setSettings(updates)
     return database.getSettings()
   })
 
