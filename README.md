@@ -212,6 +212,14 @@ Every architectural decision follows the same priorities:
 
 ---
 
+### Codex CLI
+
+Build Mode and Docs Mode currently require Codex CLI.
+
+**Minimum verified version:** `0.145.0`
+
+---
+
 # License
 
 This project is open source.
