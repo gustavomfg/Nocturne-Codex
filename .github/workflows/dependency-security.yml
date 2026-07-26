@@ -42,11 +42,11 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - name: Generate CycloneDX SBOM
-        run: npm sbom --sbom-format cyclonedx > nocturne-codex.cdx.json
+        run: npm sbom --sbom-format cyclonedx > nocturne-studio.cdx.json
       - name: Upload SBOM
         uses: actions/upload-artifact@v7
         with:
           name: dependency-sbom-${{ github.sha }}
-          path: nocturne-codex.cdx.json
+          path: nocturne-studio.cdx.json
           if-no-files-found: error
           retention-days: 30

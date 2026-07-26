@@ -36,7 +36,7 @@ export function extractSuggestions(content: string) {
 }
 
 export function reviewInstructions() {
-  return `Você está no Review Mode do Nocturne Codex. Analise e proponha; não altere arquivos, não instale dependências e não execute comandos que modifiquem o workspace. Use somente leitura. Toda melhoria concreta deve ser publicada ao final em um único bloco JSON válido:\n\n\`\`\`nocturne-suggestions\n[{"title":"...","description":"problema e impacto","reasoning":"evidências e justificativa","category":"architecture|security|performance|bug|cleanup|testing|documentation|dependency|accessibility","severity":"info|low|medium|high|critical","affectedFiles":["caminho/relativo"],"proposedChanges":"diff ou descrição precisa da solução","expectedBenefits":["benefício verificável"],"complexity":"low|medium|high","risk":"low|medium|high"}]\n\`\`\`\n\nNão aplique as propostas. O usuário decidirá separadamente.`
+  return `Você está no Review Mode do Nocturne Studio. Analise e proponha; não altere arquivos, não instale dependências e não execute comandos que modifiquem o workspace. Use somente leitura. Toda melhoria concreta deve ser publicada ao final em um único bloco JSON válido:\n\n\`\`\`nocturne-suggestions\n[{"title":"...","description":"problema e impacto","reasoning":"evidências e justificativa","category":"architecture|security|performance|bug|cleanup|testing|documentation|dependency|accessibility","severity":"info|low|medium|high|critical","affectedFiles":["caminho/relativo"],"proposedChanges":"diff ou descrição precisa da solução","expectedBenefits":["benefício verificável"],"complexity":"low|medium|high","risk":"low|medium|high"}]\n\`\`\`\n\nNão aplique as propostas. O usuário decidirá separadamente.`
 }
 const memoryBlockPattern = /```nocturne-memories\s*\n([\s\S]*?)```/gi
 const memoryCandidateSchema = z.object({ kind: z.enum(brainMemoryKinds), scope: z.enum(brainMemoryScopes), content: z.string().trim().min(1).max(8_000).refine(isSafeBrainMemoryContent, 'A memória parece conter uma credencial.'), confidence: z.number().int().min(0).max(100).default(60) }).strict()
@@ -63,8 +63,8 @@ export function brainMemoryCandidateInstructions() {
 }
 export function agentModeInstructions(mode: AgentMode) {
   const modeInstructions = mode === 'review' ? reviewInstructions()
-    : mode === 'docs' ? 'Você está no Docs Mode do Nocturne Codex neste turno. Restrições de Review Mode de turnos anteriores estão desativadas. Você pode criar ou alterar somente documentação diretamente relacionada ao pedido, respeitando o sandbox e as aprovações atuais. Valide links, comandos e exemplos quando possível.'
-      : 'Você está no Build Mode do Nocturne Codex neste turno. Restrições de Review Mode de turnos anteriores estão desativadas. Você pode modificar o workspace e executar validações conforme o pedido, sempre respeitando o sandbox e as aprovações atuais. Implemente a alteração solicitada em vez de apenas propor uma sugestão.'
+    : mode === 'docs' ? 'Você está no Docs Mode do Nocturne Studio neste turno. Restrições de Review Mode de turnos anteriores estão desativadas. Você pode criar ou alterar somente documentação diretamente relacionada ao pedido, respeitando o sandbox e as aprovações atuais. Valide links, comandos e exemplos quando possível.'
+      : 'Você está no Build Mode do Nocturne Studio neste turno. Restrições de Review Mode de turnos anteriores estão desativadas. Você pode modificar o workspace e executar validações conforme o pedido, sempre respeitando o sandbox e as aprovações atuais. Implemente a alteração solicitada em vez de apenas propor uma sugestão.'
   return `${modeInstructions}\n\n${brainMemoryCandidateInstructions()}`
 }
 export function sandboxModeForAgent(mode: AgentMode, configured: 'read-only' | 'workspace-write') { return mode === 'review' ? 'read-only' : configured }

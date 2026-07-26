@@ -3,11 +3,11 @@
 Documentação técnica: [arquitetura](docs/architecture.md), [segurança](docs/security.md)
 e [desenvolvimento](docs/development.md).
 
-# Nocturne Codex
+# Nocturne Studio
 
 > **A local-first workspace for software development, powered by your knowledge and your choice of AI.**
 
-Nocturne Codex is not an AI chatbot.
+Nocturne Studio is not an AI chatbot.
 
 It is a workspace designed to help developers understand, build, document and evolve software projects by combining structured knowledge, contextual awareness and artificial intelligence.
 
@@ -31,7 +31,7 @@ Projects accumulate:
 
 Most AI tools treat every conversation as an isolated prompt.
 
-Nocturne Codex takes a different approach.
+Nocturne Studio takes a different approach.
 
 Every interaction happens inside a persistent workspace that understands the project's structure, remembers approved knowledge and provides contextual assistance without forcing developers to repeatedly explain their software.
 
@@ -211,9 +211,9 @@ The workspace is the product.
 
 ---
 
-# What Nocturne Codex Is
+# What Nocturne Studio Is
 
-Nocturne Codex is:
+Nocturne Studio is:
 
 - a software engineering workspace;
 - a knowledge management platform;
@@ -224,9 +224,9 @@ Nocturne Codex is:
 
 ---
 
-# What Nocturne Codex Is Not
+# What Nocturne Studio Is Not
 
-Nocturne Codex is not:
+Nocturne Studio is not:
 
 - another AI chatbot;
 - another IDE;

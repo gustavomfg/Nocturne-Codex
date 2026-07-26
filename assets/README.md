@@ -1,6 +1,6 @@
-# Nocturne Codex brand assets
+# Nocturne Studio brand assets
 
-The crescent-and-stars mark is the canonical Nocturne Codex identity. Keep its geometry, dark base, and restrained violet gradient unchanged.
+The crescent-and-stars mark is the canonical Nocturne Studio identity. Keep its geometry, dark base, and restrained violet gradient unchanged.
 
 ## Logo files
 

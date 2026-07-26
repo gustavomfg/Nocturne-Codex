@@ -15,8 +15,8 @@ else verifyLinux()
 
 function verifyMac() {
   const app = firstExisting([
-    path.join(releaseDirectory, 'mac', 'Nocturne Codex.app'),
-    path.join(releaseDirectory, 'mac-arm64', 'Nocturne Codex.app'),
+    path.join(releaseDirectory, 'mac', 'Nocturne Studio.app'),
+    path.join(releaseDirectory, 'mac-arm64', 'Nocturne Studio.app'),
   ])
   execFileSync('codesign', ['--verify', '--deep', '--strict', '--verbose=2', app], { stdio: 'inherit' })
   execFileSync('spctl', ['--assess', '--type', 'execute', '--verbose=2', app], { stdio: 'inherit' })
@@ -56,4 +56,3 @@ function firstExisting(candidates) {
   if (!result) throw new Error(`Aplicativo empacotado não encontrado em ${releaseDirectory}.`)
   return result
 }
-

@@ -113,7 +113,7 @@ export function registerIpc(
   })
 
   ipcMain.handle('diagnostics:openLogs', () => shell.openPath(logger.path))
-  ipcMain.handle('diagnostics:copy', async () => JSON.stringify({ app: 'Nocturne Codex', platform: process.platform, arch: process.arch }, null, 2))
+  ipcMain.handle('diagnostics:copy', async () => JSON.stringify({ app: 'Nocturne Studio', platform: process.platform, arch: process.arch }, null, 2))
   ipcMain.handle('diagnostics:rendererError', (_event, value: unknown) => {
     const data = z.object({ type: z.enum(['error', 'unhandledRejection']), message: z.string().max(8_000), stack: z.string().max(20_000).optional() }).parse(value)
     logger.error('app', `Renderer ${data.type}`, data)

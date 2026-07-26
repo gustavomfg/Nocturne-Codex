@@ -1,8 +1,8 @@
-# Nocturne Codex — Agent Instructions
+# Nocturne Studio — Agent Instructions
 
 ## Product identity
 
-Nocturne Codex is a local desktop Engineering Workspace for coordinating
+Nocturne Studio is a local desktop Engineering Workspace for coordinating
 a developer, the Codex CLI, and the state of a real software project.
 
 It is not:

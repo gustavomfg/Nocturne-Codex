@@ -1,11 +1,11 @@
 {
-  "name": "nocturne-codex",
+  "name": "nocturne-studio",
   "private": true,
   "version": "0.8.0-beta",
   "description": "Cliente desktop local e independente para desenvolvimento assistido pelo Codex CLI.",
-  "desktopName": "Nocturne Codex",
+  "desktopName": "Nocturne Studio",
   "license": "MIT",
-  "author": "Nocturne Codex contributors",
+  "author": "Nocturne Studio contributors",
   "type": "module",
   "packageManager": "npm@11.18.0",
   "engines": {

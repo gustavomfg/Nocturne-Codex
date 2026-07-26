@@ -35,7 +35,7 @@ export function startUpdateService(logger: Logger, getWindow: () => BrowserWindo
     void showMessage(getWindow(), {
       type: 'info',
       title: 'Atualização disponível',
-      message: `Nocturne Codex ${info.version} está disponível.`,
+      message: `Nocturne Studio ${info.version} está disponível.`,
       detail: 'Deseja baixar a atualização agora? Você poderá continuar usando o aplicativo durante o download.',
       buttons: ['Baixar', 'Agora não'],
       defaultId: 0,
@@ -58,7 +58,7 @@ export function startUpdateService(logger: Logger, getWindow: () => BrowserWindo
     void showMessage(getWindow(), {
       type: 'info',
       title: 'Atualização pronta',
-      message: `Nocturne Codex ${info.version} foi baixado e verificado.`,
+      message: `Nocturne Studio ${info.version} foi baixado e verificado.`,
       detail: 'Reinicie agora para instalar. Se preferir, a atualização será aplicada quando você encerrar o aplicativo.',
       buttons: ['Reiniciar e instalar', 'Mais tarde'],
       defaultId: 0,

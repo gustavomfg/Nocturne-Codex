@@ -12,7 +12,7 @@
     "enableEmbeddedAsarIntegrityValidation": true,
     "onlyLoadAppFromAsar": true
   },
-  "productName": "Nocturne Codex",
+  "productName": "Nocturne Studio",
   "publish": [{
     "provider": "github",
     "owner": "gustavomfg",
@@ -35,7 +35,7 @@
     "gatekeeperAssess": false,
     "notarize": true,
     "target": ["dmg", "zip"],
-    "artifactName": "Nocturne-Codex-Mac-${version}-Installer.${ext}"
+    "artifactName": "Nocturne-Studio-Mac-${version}-Installer.${ext}"
   },
   "win": {
     "signAndEditExecutable": true,
@@ -47,7 +47,7 @@
         ]
       }
     ],
-    "artifactName": "Nocturne-Codex-Windows-${version}-Setup.${ext}"
+    "artifactName": "Nocturne-Studio-Windows-${version}-Setup.${ext}"
   },
   "nsis": {
     "oneClick": false,
@@ -61,10 +61,10 @@
       "AppImage",
       "tar.gz"
     ],
-    "artifactName": "Nocturne.Codex-Linux-${version}.${ext}",
+    "artifactName": "Nocturne.Studio-Linux-${version}.${ext}",
     "syncDesktopName": true,
     "category": "Development",
-    "synopsis": "Cliente desktop local para o Codex CLI",
-    "description": "Cliente independente para desenvolvimento assistido por IA usando a autenticação local do Codex CLI."
+    "synopsis": "Workspace desktop local para engenharia assistida por IA",
+    "description": "Workspace independente para desenvolvimento assistido por IA, com suporte ao Codex CLI e Providers configuráveis."
   }
 }

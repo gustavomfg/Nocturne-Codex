@@ -86,7 +86,7 @@ pre-pagos ou cartao. Sem OAuth.
 **Suporte:** Completamente gratuito e local.
 
 Modelos rodam 100% na maquina do usuario. Nao precisa de assinatura nem
-API key. O Nocturne Codex ja suporta via adaptador openai-compatible
+API key. O Nocturne Studio ja suporta via adaptador openai-compatible
 apontando para `http://localhost:11434` (Ollama) ou `http://localhost:1234`
 (LM Studio).
 
@@ -105,6 +105,11 @@ apontando para `http://localhost:11434` (Ollama) ou `http://localhost:1234`
 | Ollama            | - | - | Sim |
 | LM Studio         | - | - | Sim |
 
+<<<<<<< HEAD
 No Nocturne, acesso por plano mensal está implementado somente para conta
 ChatGPT através do Codex CLI. OpenAI Platform, DeepSeek e OpenRouter usam
 chaves de API separadas; Ollama e LM Studio permanecem locais.
+=======
+Se o Nocturne Studio quiser suportar conexao via plano/assinatura (sem API
+key), o unico provedor viavel hoje e a OpenAI, via OAuth.
+>>>>>>> 98e7a83 (refactor(brand): rename product to Nocturne Studio)

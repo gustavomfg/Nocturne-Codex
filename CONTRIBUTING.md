@@ -1,6 +1,6 @@
 # Contribuindo
 
-Obrigado por contribuir com o Nocturne Codex.
+Obrigado por contribuir com o Nocturne Studio.
 
 1. Abra uma issue para mudanças de comportamento relevantes.
 2. Crie uma branch curta e mantenha o escopo focado.
