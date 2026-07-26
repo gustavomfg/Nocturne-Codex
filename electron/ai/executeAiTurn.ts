@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto'
-import type { BrowserWindow } from 'electron'
 import type { WorkspaceModelBindings } from '../../shared/ai/bindings'
 import type { NormalizedTaskInput } from '../../shared/ai/task'
 import { TaskBuilder } from './TaskBuilder'
@@ -7,65 +5,54 @@ import { ModelResolver } from './ModelResolver'
 import { ModelRegistry } from './ModelRegistry'
 import { ProviderRegistry } from './ProviderRegistry'
 import { AIOrchestrator } from './AIOrchestrator'
-import type { NormalizedExecutionEvent, NormalizedProviderError } from '../../shared/ai/execution'
+import type { NormalizedExecutionEvent } from '../../shared/ai/execution'
+import type { ExecutionHandle } from './AIOrchestrator'
 
-function emitCodexEvent(win: BrowserWindow, method: string, params: Record<string, unknown>) {
-  if (!win.isDestroyed()) {
-    win.webContents.send('ai:event', { method, params })
-  }
+export interface ProviderAiTurn {
+  executionId: string
+  completion: Promise<void>
+  cancel(reason?: string): boolean
 }
 
-export async function executeAiTurn(
-  win: BrowserWindow,
+export async function startAiTurn(
   models: ModelRegistry,
   providers: ProviderRegistry,
   taskInput: NormalizedTaskInput,
   bindings: WorkspaceModelBindings,
-): Promise<void> {
-  try {
-    const taskBuilder = new TaskBuilder()
-    const task = taskBuilder.build(taskInput)
-    const resolver = new ModelResolver(models, providers)
-    const orchestrator = new AIOrchestrator(resolver, providers)
+  emit: (method: string, params: Record<string, unknown>) => void,
+): Promise<ProviderAiTurn> {
+  const task = new TaskBuilder().build(taskInput)
+  const resolver = new ModelResolver(models, providers)
+  const orchestrator = new AIOrchestrator(resolver, providers)
+  let executionError = 'A execução do Provider falhou.'
 
-    let executionError: NormalizedProviderError | undefined
-
-    const handle = await orchestrator.start(task, bindings, (event: NormalizedExecutionEvent) => {
+  const handle: ExecutionHandle = await orchestrator.start(
+    task,
+    bindings,
+    (event: NormalizedExecutionEvent) => {
       if (event.type === 'message.delta') {
-        emitCodexEvent(win, 'item/agentMessage/delta', { delta: event.delta })
+        emit('item/agentMessage/delta', { delta: event.delta })
+      } else if (event.type === 'execution.failed') {
+        executionError = event.error.message
       }
-      if (event.type === 'execution.failed') {
-        executionError = event.error
+    },
+  )
+
+  return {
+    executionId: handle.executionId,
+    cancel: (reason?: string) => handle.cancel(reason),
+    completion: handle.completion.then((outcome) => {
+      if (outcome.status === 'failed') {
+        emit('error', { message: executionError })
       }
-    })
-
-    const outcome = await handle.completion
-
-    if (outcome.status === 'failed') {
-      emitCodexEvent(win, 'error', {
-        message: executionError?.message ?? 'A execução do Provider falhou.',
+      emit('turn/completed', {
+        turn: {
+          id: outcome.executionId,
+          ...(outcome.status === 'failed'
+            ? { error: { message: executionError } }
+            : {}),
+        },
       })
-      emitCodexEvent(win, 'turn/completed', {
-        turn: { id: outcome.executionId, error: { message: executionError?.message ?? 'A execução do Provider falhou.' } },
-      })
-      return
-    }
-
-    if (outcome.status === 'cancelled') {
-      emitCodexEvent(win, 'turn/completed', {
-        turn: { id: outcome.executionId },
-      })
-      return
-    }
-
-    emitCodexEvent(win, 'turn/completed', {
-      turn: { id: outcome.executionId },
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Erro interno na execução de IA.'
-    emitCodexEvent(win, 'error', { message })
-    emitCodexEvent(win, 'turn/completed', {
-      turn: { id: randomUUID(), error: { message } },
-    })
+    }),
   }
 }

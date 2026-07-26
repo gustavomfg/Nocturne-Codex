@@ -2,9 +2,9 @@
 
 O Nocturne Codex e compativel com o Codex CLI.
 
-Compatibilidade minima: 0.0.0.
+Compatibilidade mínima e verificada: 0.145.0.
 
 ## Verificacao
 
-O contrato de compatibilidade e validado pelo smoke test:
-`npm run smoke:codex`
+O contrato de compatibilidade é validado pelo smoke test:
+`npm run smoke:codex`.

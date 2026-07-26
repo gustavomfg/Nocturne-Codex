@@ -66,10 +66,11 @@ export const nocturneApi: NocturneApi = {
   },
   ai: {
     send: (conversationId: string, prompt: string, attachments: string[] = [], mode = 'build') => ipcRenderer.invoke(channels.ai.send, { conversationId, prompt, attachments, mode }),
+    cancel: (conversationId: string) => ipcRenderer.invoke(channels.ai.cancel, { conversationId }),
     saveAssistant: (conversationId: string, content: string, metadata?: unknown) => ipcRenderer.invoke(channels.ai.saveAssistant, { conversationId, content, metadata }),
     approve: (key: string, accepted: boolean, forSession = false) => ipcRenderer.invoke(channels.ai.approve, { key, accepted, forSession }),
     onEvent: (listener: (payload: AgentEvent) => void) => on(channels.ai.event, listener),
-    onStatus: (listener: (payload: { status: string; error?: string }) => void) => on(channels.ai.status, listener),
+    onStatus: (listener: (payload: { status: string; conversationId?: string; error?: string }) => void) => on(channels.ai.status, listener),
   },
   files: {
     attach: (conversationId: string) => ipcRenderer.invoke(channels.files.attach, conversationId),

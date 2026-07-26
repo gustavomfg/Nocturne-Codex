@@ -10,7 +10,7 @@ import { LocalDatabase } from '../database/Database'
 import { Logger } from '../logging/Logger'
 import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
 import { sanitizeSuggestionTitle } from '../../shared/suggestions'
-import { approvalSchema, aiSendSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, saveAssistantSchema, saveMarkdownSchema } from '../../shared/ipc/schemas'
+import { approvalSchema, aiCancelSchema, aiSendSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, saveAssistantSchema, saveMarkdownSchema } from '../../shared/ipc/schemas'
 import { registerDataIpc } from './registerDataIpc'
 import { registerGitIpc } from './registerGitIpc'
 import { registerWorkspaceIpc } from './registerWorkspaceIpc'
@@ -27,7 +27,7 @@ import {
 } from './registerModelIpc'
 import { ModelRegistry } from '../ai/ModelRegistry'
 import { ProviderRegistry } from '../ai/ProviderRegistry'
-import { executeAiTurn } from '../ai/executeAiTurn'
+import { AiExecutionCoordinator } from '../ai/AiExecutionCoordinator'
 import { buildAttachmentMessages, buildHistoryMessages } from '../ai/conversationContext'
 import type { NormalizedTaskInput } from '../../shared/ai/task'
 import { AI_TASK_LIMITS } from '../../shared/ai/task'
@@ -54,6 +54,13 @@ export function registerIpc(
   ipcMain.handle('clipboard:writeText', (_event, value: unknown) => { clipboard.writeText(z.string().max(100_000).parse(value)) })
 
   const approvalDetails = new Map<string, { command?: string; risk?: string }>()
+  const aiExecutions = new AiExecutionCoordinator(
+    win,
+    modelRegistry,
+    providerRegistry,
+    logger,
+    approvalDetails,
+  )
 
   ipcMain.handle('files:attach', async (_event, value: unknown) => {
     const conversation = getAuthorizedConversation(database, idSchema.parse(value))
@@ -117,9 +124,10 @@ export function registerIpc(
 
     const bindings = database.workspaceModelBindings.get(conversation.workspace)
     const enabledProviders = providerConfigurations.list().filter((p) => p.enabled)
-    const hasActiveModel = enabledProviders.length > 0 && bindings?.defaultBinding
+    const hasActiveModel = Boolean(enabledProviders.length > 0 && bindings?.defaultBinding)
+    const useCodex = mode !== 'review' || !hasActiveModel
 
-    if (!hasActiveModel) {
+    if (!useCodex && (!bindings || !hasActiveModel)) {
       throw new Error('Nenhuma IA configurada. Abra Configurações > IA para conectar um provedor.')
     }
 
@@ -167,7 +175,33 @@ export function registerIpc(
       tools: [],
     }
 
-    await executeAiTurn(win, modelRegistry, providerRegistry, taskInput, bindings)
+    if (useCodex) {
+      const settings = database.getSettings()
+      await aiExecutions.startCodex({
+        conversationId,
+        workspace: conversation.workspace,
+        prompt: buildCodexPrompt(history, prompt),
+        attachments,
+        memory: workspaceMemory.content,
+        mode,
+        settings: {
+          model: '',
+          sandbox: mode === 'review' ? 'read-only' : 'workspace-write',
+          approvalPolicy: settings.approvalPolicy === 'untrusted' ? 'untrusted' : 'on-request',
+          diagnosticMode: settings.diagnosticMode === 'true',
+          theme: 'dark',
+        },
+      })
+      return
+    }
+
+    await aiExecutions.startProvider(conversationId, taskInput, bindings!)
+  })
+
+  ipcMain.handle('ai:cancel', async (_event, value: unknown) => {
+    const { conversationId } = aiCancelSchema.parse(value)
+    getAuthorizedConversation(database, conversationId)
+    await aiExecutions.cancel(conversationId)
   })
 
   ipcMain.handle('ai:save-assistant', (_event, value: unknown) => {
@@ -184,8 +218,9 @@ export function registerIpc(
     return message
   })
 
-  ipcMain.handle('ai:approve', (_event, value: unknown) => {
+  ipcMain.handle('ai:approve', async (_event, value: unknown) => {
     const data = approvalSchema.parse(value)
+    await aiExecutions.resolveApproval(data.key, data.accepted, data.forSession)
     const detail = approvalDetails.get(data.key)
     database.recordApproval(data.key, data.accepted, detail?.command, detail?.risk)
     approvalDetails.delete(data.key)
@@ -231,6 +266,7 @@ export function registerIpc(
     return result.filePath
   })
   return () => {
+    aiExecutions.dispose()
     ipcMain.dispose()
     disposeKnowledge()
     disposeWorkspace()
@@ -239,6 +275,19 @@ export function registerIpc(
     disposeProviders()
     disposeModels()
   }
+}
+
+function buildCodexPrompt(
+  history: ReturnType<LocalDatabase['listMessages']>,
+  prompt: string,
+) {
+  const recent = history.slice(-40)
+  if (!recent.length) return prompt
+  const transcript = recent.map((message) => {
+    const role = message.role === 'assistant' ? 'Assistente' : 'Usuário'
+    return `${role}: ${message.content}`
+  }).join('\n\n')
+  return `Histórico recente desta conversa:\n\n${transcript}\n\nSolicitação atual do usuário:\n\n${prompt}`
 }
 
 function assertInsideWorkspace(filePath: string, workspace: string) {
