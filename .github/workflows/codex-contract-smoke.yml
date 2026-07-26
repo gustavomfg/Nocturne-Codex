@@ -1,37 +1,36 @@
-name: Codex CLI contract smoke
+name: Compatibility · Codex CLI
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - master
-    paths:
-      - shared/codex-compatibility.json
-      - scripts/smoke-codex-cli.mjs
-      - .github/workflows/codex-contract-smoke.yml
-  schedule:
-    - cron: '17 06 * * 1'
 
 concurrency:
   group: codex-contract-smoke
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
   contract:
-    environment: codex-contract-smoke
-    runs-on: self-hosted
+    name: Validate App Server contract
+    # This smoke uses the operator's authenticated Codex installation. It is
+    # intentionally manual and must never run on a generic self-hosted runner.
+    runs-on: [self-hosted, nocturne-codex]
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - name: Check out the requested commit
+        uses: actions/checkout@v6
+      - name: Set up the supported Node.js version
+        uses: actions/setup-node@v6
         with:
-          node-version: 24
-      - run: npm ci
-      - run: npm run smoke:codex
-      - uses: actions/upload-artifact@v7
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Exercise the verified Codex App Server contract
+        run: npm run smoke:codex
+      - name: Upload the sanitized contract report
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: codex-contract-smoke-${{ github.run_id }}

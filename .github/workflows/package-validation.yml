@@ -1,4 +1,4 @@
-name: Package validation
+name: CI · source, renderer and packages
 
 on:
   workflow_dispatch:
@@ -14,7 +14,8 @@ on:
       - .nvmrc
       - playwright.config.ts
       - tests/renderer/**
-      - .github/workflows/package-validation.yml
+      - .github/actionlint.yaml
+      - .github/workflows/**
   push:
     branches:
       - master
@@ -24,10 +25,15 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: package-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+
 jobs:
   workflow-lint:
     name: Validate GitHub Actions workflows
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
       - name: Run actionlint 1.7.12
@@ -48,6 +54,7 @@ jobs:
     name: Verify source (Node ${{ matrix.node }})
     needs: workflow-lint
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -69,6 +76,7 @@ jobs:
     name: Renderer interaction and visual regression
     needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -92,6 +100,7 @@ jobs:
     needs: [verify, renderer]
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -128,3 +137,4 @@ jobs:
             release/*/*.yml
             release/*/SHA256SUMS
           if-no-files-found: error
+          retention-days: 14

@@ -54,8 +54,18 @@ describe('políticas de execução', () => {
     expect(workflow).toContain('npm run verify:release-assets -- release-assets')
     expect(workflow).toContain('gh release create "$RELEASE_TAG"')
     expect(workflow).toContain('tag !== \'v\'+v')
+    expect(workflow).toContain('refs/tags/$RELEASE_TAG')
     expect(workflow).not.toContain('${{ runner.os ==')
     expect(workflow).toContain("matrix.os == 'macos-latest'")
+    expect(workflow).toContain("matrix.os == 'windows-latest' && secrets.WIN_CSC_LINK")
+    expect(workflow).toContain('environment: stable-release')
+  })
+  it('não registra o smoke manual do Codex como deployment', () => {
+    const workflow = fs.readFileSync(path.join(process.cwd(), '.github/workflows/codex-contract-smoke.yml'), 'utf8')
+    expect(workflow).toContain('workflow_dispatch:')
+    expect(workflow).toContain('runs-on: [self-hosted, nocturne-codex]')
+    expect(workflow).not.toContain('environment:')
+    expect(workflow).not.toContain('schedule:')
   })
   it('mantém o atalho de editor integrado ao WebStorm', () => {
     const workspaceIpc = fs.readFileSync(path.join(process.cwd(), 'electron/ipc/registerWorkspaceIpc.ts'), 'utf8')

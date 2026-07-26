@@ -1,4 +1,4 @@
-name: Dependency security
+name: Security · dependencies
 
 on:
   pull_request:
@@ -13,22 +13,31 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: dependency-security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   audit-and-sbom:
+    name: Audit production dependencies and generate SBOM
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check out source
+        uses: actions/checkout@v6
+      - name: Set up the minimum supported Node.js version
+        uses: actions/setup-node@v6
         with:
-          node-version: 24.18.0
+          node-version-file: .nvmrc
           cache: npm
-      - run: npm ci --ignore-scripts
+      - name: Install dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - name: Generate CycloneDX SBOM
         run: npm sbom --sbom-format cyclonedx > nocturne-codex.cdx.json
-      - uses: actions/upload-artifact@v4
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v7
         with:
           name: dependency-sbom-${{ github.sha }}
           path: nocturne-codex.cdx.json
