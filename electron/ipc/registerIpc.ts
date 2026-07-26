@@ -31,6 +31,7 @@ import { AiExecutionCoordinator } from '../ai/AiExecutionCoordinator'
 import { buildAttachmentMessages, buildHistoryMessages } from '../ai/conversationContext'
 import type { NormalizedTaskInput } from '../../shared/ai/task'
 import { AI_TASK_LIMITS } from '../../shared/ai/task'
+import { buildBrainMemoryContext } from '../memory/BrainMemoryContext'
 
 const execFileAsync = promisify(execFile)
 
@@ -135,7 +136,13 @@ export function registerIpc(
     database.addMessage(conversationId, 'user', prompt, { attachments })
     if (conversation.title === 'Nova conversa') database.renameFromPrompt(conversationId, prompt)
 
-    const workspaceMemory = database.getWorkspaceMemory(conversation.workspace)
+    const workspaceMemory = await loadWorkspaceMemoryForAi(database, conversation.workspace)
+    const brainMemory = buildBrainMemoryContext(
+      database,
+      conversation.workspace,
+      conversationId,
+      prompt,
+    )
     const projectPath = path.join(conversation.workspace, '.nocturne', 'project.json')
     let projectName = path.basename(conversation.workspace)
     try {
@@ -151,7 +158,18 @@ export function registerIpc(
         title: 'Memória do workspace',
         content: workspaceMemory.content,
         scope: 'workspace',
-        potentiallyOutdated: false,
+        updatedAt: workspaceMemory.updatedAt || undefined,
+        potentiallyOutdated: true,
+      })
+    }
+    if (brainMemory.text) {
+      contextSources.push({
+        id: 'brain-memory',
+        type: 'memory',
+        title: 'Segundo Cérebro',
+        content: brainMemory.text,
+        scope: 'workspace-and-conversation',
+        potentiallyOutdated: true,
       })
     }
 
@@ -182,7 +200,7 @@ export function registerIpc(
         workspace: conversation.workspace,
         prompt: buildCodexPrompt(history, prompt),
         attachments,
-        memory: workspaceMemory.content,
+        memory: joinMemoryContext(workspaceMemory.content, brainMemory.text),
         mode,
         settings: {
           model: '',
@@ -192,10 +210,12 @@ export function registerIpc(
           theme: 'dark',
         },
       })
+      database.markBrainMemoriesUsed(brainMemory.memoryIds)
       return
     }
 
     await aiExecutions.startProvider(conversationId, taskInput, bindings!)
+    database.markBrainMemoriesUsed(brainMemory.memoryIds)
   })
 
   ipcMain.handle('ai:cancel', async (_event, value: unknown) => {
@@ -275,6 +295,24 @@ export function registerIpc(
     disposeProviders()
     disposeModels()
   }
+}
+
+async function loadWorkspaceMemoryForAi(database: LocalDatabase, workspace: string) {
+  const [files, persisted] = await Promise.all([
+    readWorkspaceContext(workspace),
+    Promise.resolve(database.getWorkspaceMemory(workspace)),
+  ])
+  if (persisted.content && Date.parse(persisted.updatedAt) > Date.parse(files.updatedAt)) {
+    return persisted
+  }
+  return {
+    content: `${files.content}\n\n# Regras do projeto\n${files.rules}`.trim(),
+    updatedAt: files.updatedAt,
+  }
+}
+
+function joinMemoryContext(workspaceMemory: string, brainMemory: string) {
+  return [workspaceMemory, brainMemory].filter(Boolean).join('\n\n')
 }
 
 function buildCodexPrompt(
