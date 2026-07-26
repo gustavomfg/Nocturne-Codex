@@ -57,7 +57,7 @@
     "@typescript-eslint/parser": "^8.64.0",
     "@vitejs/plugin-react": "^6.0.3",
     "electron": "^43.1.0",
-    "electron-builder": "^26.15.3",
+    "electron-builder": "^26.15.7",
     "eslint": "^10.7.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
@@ -72,7 +72,6 @@
   "allowScripts": {
     "electron@43.1.1": true,
     "better-sqlite3@12.11.1": true,
-    "esbuild@0.27.4": true,
     "electron-winstaller@5.4.0": true
   }
 }
