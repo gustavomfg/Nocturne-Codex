@@ -50,7 +50,7 @@ export const providerCatalog: readonly ProviderCatalogEntry[] = [
         kind: 'account',
         label: 'Conta ChatGPT',
         status: 'unavailable',
-        detail: 'Planos ChatGPT não concedem acesso geral à API.',
+        detail: 'Planos ChatGPT não concedem acesso geral à API; a integração de conta usa o Codex CLI separadamente.',
       },
     ],
   },

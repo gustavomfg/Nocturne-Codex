@@ -32,6 +32,7 @@ import { buildAttachmentMessages, buildHistoryMessages } from '../ai/conversatio
 import type { NormalizedTaskInput } from '../../shared/ai/task'
 import { AI_TASK_LIMITS } from '../../shared/ai/task'
 import { buildBrainMemoryContext } from '../memory/BrainMemoryContext'
+import { CodexAccountService } from '../codex/CodexAccountService'
 
 const execFileAsync = promisify(execFile)
 
@@ -55,6 +56,7 @@ export function registerIpc(
   ipcMain.handle('clipboard:writeText', (_event, value: unknown) => { clipboard.writeText(z.string().max(100_000).parse(value)) })
 
   const approvalDetails = new Map<string, { command?: string; risk?: string }>()
+  const codexAccount = new CodexAccountService()
   const aiExecutions = new AiExecutionCoordinator(
     win,
     modelRegistry,
@@ -62,6 +64,9 @@ export function registerIpc(
     logger,
     approvalDetails,
   )
+  ipcMain.handle('codex:accountStatus', () => codexAccount.status())
+  ipcMain.handle('codex:login', () => codexAccount.login())
+  ipcMain.handle('codex:logout', () => codexAccount.logout())
 
   ipcMain.handle('files:attach', async (_event, value: unknown) => {
     const conversation = getAuthorizedConversation(database, idSchema.parse(value))

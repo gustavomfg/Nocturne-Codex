@@ -272,8 +272,8 @@ test.describe('renderer do produto', () => {
     await expect(dialog.getByRole('heading', { name: 'IA', exact: true })).toBeVisible()
     await expect(dialog.locator('p').filter({ hasText: 'Conectar inteligência' })).toBeVisible()
 
-    await dialog.getByRole('button', { name: 'Adicionar IA' }).click()
-    await expect(dialog.getByText('Escolher IA')).toBeVisible()
+    await dialog.getByRole('button', { name: 'Adicionar conta, API ou modelo local' }).click()
+    await expect(dialog.getByText('Escolher acesso')).toBeVisible()
     await dialog.getByRole('button', { name: 'OpenRouter' }).click()
     await dialog.getByRole('textbox', { name: '' }).fill('sk-or-v1-test')
     await dialog.getByRole('button', { name: 'Conectar' }).click()
@@ -292,8 +292,8 @@ test.describe('renderer do produto', () => {
     await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
     const dialog = page.getByRole('dialog', { name: 'Configurações' })
     await expect(dialog.getByText('Conectar IA')).toBeVisible()
-    await dialog.getByRole('button', { name: 'Adicionar IA' }).click()
-    await expect(dialog.getByText('Escolher IA')).toBeVisible()
+    await dialog.getByRole('button', { name: 'Adicionar conta, API ou modelo local' }).click()
+    await expect(dialog.getByText('Escolher acesso')).toBeVisible()
 
     await dialog.getByRole('button', { name: 'OpenRouter' }).click()
     const secret = dialog.getByRole('textbox', { name: '' })
@@ -568,8 +568,10 @@ test('oferece login por conta e chave de API como caminhos separados', async ({ 
   const dialog = page.getByRole('dialog', { name: 'Configurações' })
   await expect(dialog.getByRole('heading', { name: 'IA', exact: true })).toBeVisible()
   await expect(dialog.getByText('Conectar IA')).toBeVisible()
-  await expect(dialog.getByText('Escolha sua inteligência preferida para começar.')).toBeVisible()
-  await expect(dialog.getByRole('button', { name: 'Adicionar IA' })).toBeVisible()
+  await expect(dialog.getByText('Use sua conta ChatGPT pelo Codex CLI, uma chave de API ou um modelo local.')).toBeVisible()
+  await dialog.getByRole('button', { name: 'Adicionar conta, API ou modelo local' }).click()
+  await expect(dialog.getByRole('button', { name: 'Conta ChatGPT' })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'OpenAI API' })).toBeVisible()
 })
 
 test('mantém o histórico isolado até reautorizar um workspace restaurado', async ({ page }) => {

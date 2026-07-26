@@ -72,6 +72,11 @@ export const nocturneApi: NocturneApi = {
     onEvent: (listener: (payload: AgentEvent) => void) => on(channels.ai.event, listener),
     onStatus: (listener: (payload: { status: string; conversationId?: string; error?: string }) => void) => on(channels.ai.status, listener),
   },
+  codex: {
+    status: () => ipcRenderer.invoke(channels.codex.status),
+    login: () => ipcRenderer.invoke(channels.codex.login),
+    logout: () => ipcRenderer.invoke(channels.codex.logout),
+  },
   files: {
     attach: (conversationId: string) => ipcRenderer.invoke(channels.files.attach, conversationId),
     open: (conversationId: string, filePath: string, action: 'file' | 'folder' | 'editor') => ipcRenderer.invoke(channels.files.open, { conversationId, filePath, action }),
