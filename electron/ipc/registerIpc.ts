@@ -28,7 +28,9 @@ import {
 import { ModelRegistry } from '../ai/ModelRegistry'
 import { ProviderRegistry } from '../ai/ProviderRegistry'
 import { executeAiTurn } from '../ai/executeAiTurn'
+import { buildAttachmentMessages, buildHistoryMessages } from '../ai/conversationContext'
 import type { NormalizedTaskInput } from '../../shared/ai/task'
+import { AI_TASK_LIMITS } from '../../shared/ai/task'
 
 const execFileAsync = promisify(execFile)
 
@@ -121,6 +123,7 @@ export function registerIpc(
       throw new Error('Nenhuma IA configurada. Abra Configurações > IA para conectar um provedor.')
     }
 
+    const history = database.listMessages(conversationId)
     database.addMessage(conversationId, 'user', prompt, { attachments })
     if (conversation.title === 'Nova conversa') database.renameFromPrompt(conversationId, prompt)
 
@@ -144,11 +147,17 @@ export function registerIpc(
       })
     }
 
+    const attachmentMessages = await buildAttachmentMessages(attachments, conversation.workspace)
+    const messages = [
+      ...buildHistoryMessages(history, AI_TASK_LIMITS.messages - attachmentMessages.length),
+      ...attachmentMessages,
+    ]
+
     const taskInput: NormalizedTaskInput = {
       workspace: { id: conversation.workspace, name: projectName },
       intent: prompt,
       mode: mode === 'review' ? 'review' : 'build',
-      messages: [],
+      messages,
       context: contextSources,
       constraints: [],
       requirements: ['chat', 'streaming'],
