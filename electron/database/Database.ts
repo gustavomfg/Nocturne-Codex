@@ -2,7 +2,7 @@ import Database from 'better-sqlite3'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
-import type { Suggestion, SuggestionStatus } from '../../shared/suggestions'
+import { suggestionIdentity, type Suggestion, type SuggestionInput, type SuggestionStatus } from '../../shared/suggestions'
 import type { BrainMemory, BrainMemoryCandidate, CreateBrainMemoryInput, UpdateBrainMemoryInput } from '../../shared/brainMemory'
 import { DATABASE_SCHEMA_VERSION } from '../../shared/constants'
 import { migrateDatabase } from './migrations'
@@ -285,12 +285,12 @@ export class LocalDatabase {
   recordApproval(key: string, accepted: boolean, command?: string, risk?: string) { this.db.prepare('INSERT INTO approval_audit(id,approval_key,decision,command,risk,created_at) VALUES(?,?,?,?,?,?)').run(randomUUID(), key, accepted ? 'accepted' : 'declined', command?.slice(0, 4_000) ?? null, risk ?? null, new Date().toISOString()) }
 
   listSuggestions(conversationId: string): Suggestion[] {
-    const rows = this.db.prepare(`SELECT id,workspace_id workspaceId,conversation_id conversationId,title,description,reasoning,category,severity,affected_files affectedFiles,proposed_changes proposedChanges,expected_benefits expectedBenefits,complexity,risk,status,created_at createdAt,updated_at updatedAt FROM suggestions WHERE conversation_id=? ORDER BY updated_at DESC`).all(conversationId) as Array<Omit<Suggestion, 'affectedFiles' | 'expectedBenefits'> & { affectedFiles: string; expectedBenefits: string }>
+    const rows = this.db.prepare(`SELECT id,workspace_id workspaceId,conversation_id conversationId,title,description,reasoning,category,severity,affected_files affectedFiles,proposed_changes proposedChanges,expected_benefits expectedBenefits,complexity,risk,status,created_at createdAt,updated_at updatedAt FROM suggestions WHERE conversation_id=? AND status IN ('pending','accepted') ORDER BY updated_at DESC`).all(conversationId) as Array<Omit<Suggestion, 'affectedFiles' | 'expectedBenefits'> & { affectedFiles: string; expectedBenefits: string }>
     return rows.map((row) => ({ ...row, affectedFiles: JSON.parse(row.affectedFiles) as string[], expectedBenefits: JSON.parse(row.expectedBenefits) as string[] }))
   }
 
   listSuggestionPage(conversationId: string, offset = 0, limit = 50) {
-    const rows = this.db.prepare(`SELECT id,workspace_id workspaceId,conversation_id conversationId,title,description,reasoning,category,severity,affected_files affectedFiles,proposed_changes proposedChanges,expected_benefits expectedBenefits,complexity,risk,status,created_at createdAt,updated_at updatedAt FROM suggestions WHERE conversation_id=? ORDER BY updated_at DESC LIMIT ? OFFSET ?`).all(conversationId, limit + 1, offset) as Array<Omit<Suggestion, 'affectedFiles' | 'expectedBenefits'> & { affectedFiles: string; expectedBenefits: string }>
+    const rows = this.db.prepare(`SELECT id,workspace_id workspaceId,conversation_id conversationId,title,description,reasoning,category,severity,affected_files affectedFiles,proposed_changes proposedChanges,expected_benefits expectedBenefits,complexity,risk,status,created_at createdAt,updated_at updatedAt FROM suggestions WHERE conversation_id=? AND status IN ('pending','accepted') ORDER BY updated_at DESC LIMIT ? OFFSET ?`).all(conversationId, limit + 1, offset) as Array<Omit<Suggestion, 'affectedFiles' | 'expectedBenefits'> & { affectedFiles: string; expectedBenefits: string }>
     return { items: decodeSuggestions(rows.slice(0, limit)), hasMore: rows.length > limit }
   }
 
@@ -299,11 +299,43 @@ export class LocalDatabase {
     return row ? decodeSuggestions([row])[0] : null
   }
 
-  addSuggestion(conversationId: string, workspaceId: string, value: Omit<Suggestion, 'id' | 'workspaceId' | 'conversationId' | 'createdAt' | 'updatedAt' | 'status'>): Suggestion {
+  addSuggestion(conversationId: string, workspaceId: string, value: SuggestionInput): Suggestion {
     const now = new Date().toISOString()
     const row: Suggestion = { id: randomUUID(), workspaceId, conversationId, ...value, status: 'pending', createdAt: now, updatedAt: now }
     this.db.prepare(`INSERT INTO suggestions(id,workspace_id,conversation_id,title,description,reasoning,category,severity,affected_files,proposed_changes,expected_benefits,complexity,risk,status,created_at,updated_at) VALUES(@id,@workspaceId,@conversationId,@title,@description,@reasoning,@category,@severity,@affectedFiles,@proposedChanges,@expectedBenefits,@complexity,@risk,@status,@createdAt,@updatedAt)`).run({ ...row, affectedFiles: JSON.stringify(row.affectedFiles), expectedBenefits: JSON.stringify(row.expectedBenefits) })
     return row
+  }
+
+  reconcileSuggestions(conversationId: string, workspaceId: string, values: SuggestionInput[]): Suggestion[] {
+    return this.db.transaction(() => {
+      const active = this.listSuggestions(conversationId)
+      const byIdentity = new Map<string, Suggestion>()
+      for (const suggestion of active) {
+        const identity = suggestionIdentity(suggestion)
+        const existing = byIdentity.get(identity)
+        if (!existing || (existing.status === 'pending' && suggestion.status === 'accepted')) byIdentity.set(identity, suggestion)
+      }
+      return values.map((value) => {
+        const identity = suggestionIdentity(value)
+        const existing = byIdentity.get(identity)
+        if (!existing) {
+          const created = this.addSuggestion(conversationId, workspaceId, value)
+          byIdentity.set(identity, created)
+          return created
+        }
+        if (existing.status === 'accepted') return existing
+        const updatedAt = new Date().toISOString()
+        this.db.prepare(`UPDATE suggestions SET title=@title,description=@description,reasoning=@reasoning,category=@category,severity=@severity,
+          affected_files=@affectedFiles,proposed_changes=@proposedChanges,expected_benefits=@expectedBenefits,complexity=@complexity,risk=@risk,updated_at=@updatedAt
+          WHERE id=@id AND conversation_id=@conversationId AND status='pending'`).run({
+          ...value, id: existing.id, conversationId, affectedFiles: JSON.stringify(value.affectedFiles),
+          expectedBenefits: JSON.stringify(value.expectedBenefits), updatedAt,
+        })
+        const updated = this.getSuggestion(existing.id, conversationId) as Suggestion
+        byIdentity.set(identity, updated)
+        return updated
+      })
+    })()
   }
 
   setSuggestionStatus(id: string, status: SuggestionStatus, result?: string): Suggestion {

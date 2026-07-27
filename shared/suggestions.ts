@@ -15,9 +15,16 @@ export interface Suggestion {
   category: SuggestionCategory; severity: SuggestionSeverity; affectedFiles: string[]; proposedChanges: string; expectedBenefits: string[]; complexity: 'low' | 'medium' | 'high'; risk: 'low' | 'medium' | 'high'
   createdAt: string; updatedAt: string; status: SuggestionStatus
 }
+export type SuggestionInput = Omit<Suggestion, 'id' | 'workspaceId' | 'conversationId' | 'createdAt' | 'updatedAt' | 'status'>
 
 export function sanitizeSuggestionTitle(value: string) {
   return value.replace(/\p{Cc}+/gu, ' ').replace(/\s+/g, ' ').trim()
+}
+
+export function suggestionIdentity(value: Pick<SuggestionInput, 'category' | 'title'>) {
+  const title = sanitizeSuggestionTitle(value.title).normalize('NFKD').replace(/\p{M}+/gu, '').toLocaleLowerCase('pt-BR')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+  return `${value.category}:${title}`
 }
 
 export const suggestionInputSchema = z.object({

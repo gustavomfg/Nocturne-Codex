@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { LocalDatabase } from '../electron/database/Database'
-import { extractSuggestions, sandboxModeForAgent, sanitizeSuggestionTitle, suggestedCommit } from '../shared/suggestions'
+import { extractSuggestions, sandboxModeForAgent, sanitizeSuggestionTitle, suggestedCommit, suggestionIdentity } from '../shared/suggestions'
 import { hasAppliedSuggestionChanges } from '../src/domains/agent/useTurnLifecycle'
 import { projectHealth } from '../src/domains/suggestions/projectHealth'
 import type { Suggestion } from '../src/types'
@@ -36,7 +36,8 @@ describe('sugestões', () => {
     expect(db.setSuggestionStatus(suggestion.id, 'accepted').status).toBe('accepted')
     expect(db.setSuggestionStatus(suggestion.id, 'applied', 'typecheck ok').status).toBe('applied')
     db.close(); db = new LocalDatabase(directory)
-    expect(db.listSuggestions(conversation.id)[0]).toMatchObject({ id: suggestion.id, status: 'applied', affectedFiles: input.affectedFiles })
+    expect(db.getSuggestion(suggestion.id, conversation.id)).toMatchObject({ id: suggestion.id, status: 'applied', affectedFiles: input.affectedFiles })
+    expect(db.listSuggestions(conversation.id)).toEqual([])
     db.close()
   })
 
@@ -45,6 +46,26 @@ describe('sugestões', () => {
     expect(db.setSuggestionStatus(suggestion.id, 'rejected').status).toBe('rejected')
     expect(() => db.setSuggestionStatus(suggestion.id, 'accepted')).toThrow(/Transição.*inválida/)
     db.close()
+  })
+
+  it('mantém somente sugestões abertas no painel e reconcilia repetições de novas análises', () => {
+    const db = new LocalDatabase(tempDirectory()); const conversation = db.createConversation('/tmp/project')
+    const pending = db.addSuggestion(conversation.id, conversation.workspace, input)
+    const repeated = db.reconcileSuggestions(conversation.id, conversation.workspace, [{ ...input, description: 'Descrição atualizada pela análise mais recente.', severity: 'critical' }])
+    expect(repeated).toHaveLength(1)
+    expect(repeated[0]).toMatchObject({ id: pending.id, status: 'pending', description: 'Descrição atualizada pela análise mais recente.', severity: 'critical' })
+    const accepted = db.setSuggestionStatus(pending.id, 'accepted')
+    const acceptedRepeat = db.reconcileSuggestions(conversation.id, conversation.workspace, [{ ...input, description: 'Não deve alterar o escopo já aprovado.' }])
+    expect(acceptedRepeat[0]).toMatchObject({ id: accepted.id, status: 'accepted', description: 'Descrição atualizada pela análise mais recente.' })
+    db.setSuggestionStatus(pending.id, 'applied')
+    expect(db.listSuggestions(conversation.id)).toEqual([])
+    expect(db.listSuggestionPage(conversation.id)).toEqual({ items: [], hasMore: false })
+    db.close()
+  })
+
+  it('compara sugestões equivalentes sem depender de caixa, acentos ou pontuação', () => {
+    expect(suggestionIdentity({ category: 'security', title: ' Restringir o IPC! ' })).toBe(suggestionIdentity({ category: 'security', title: 'restringir o ípc' }))
+    expect(suggestionIdentity({ category: 'bug', title: 'Restringir o IPC' })).not.toBe(suggestionIdentity({ category: 'security', title: 'Restringir o IPC' }))
   })
 
   it('Review Mode sempre usa somente leitura', () => {
