@@ -78,7 +78,7 @@ Each recommendation is designed to explain not only **what** should change, but 
 # 🔍 Suggestion Details
 
 <p align="center">
-  <img src="docs/images/suggestions-detail.png" alt="Suggestion Detail" width="45%">
+  <img src="docs/images/suggestions-detail.png" alt="Suggestion Detail" width="55%">
 </p>
 
 Every suggestion contains detailed engineering information, including:
