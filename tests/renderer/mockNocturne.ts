@@ -1,14 +1,16 @@
 import type { Page } from '@playwright/test'
 
-export async function installNocturneMock(page: Page, options: { empty?: boolean; unauthorized?: boolean; signedOut?: boolean; messageCount?: number } = {}) {
-  await page.addInitScript(({ empty, unauthorized, signedOut, messageCount }) => {
+export async function installNocturneMock(page: Page, options: { empty?: boolean; unauthorized?: boolean; moved?: boolean; signedOut?: boolean; messageCount?: number } = {}) {
+  await page.addInitScript(({ empty, unauthorized, moved, signedOut, messageCount }) => {
     localStorage.setItem('nocturne.onboarding.completed', 'true')
     const now = '2026-07-13T20:00:00.000Z'
     const workspace = '/workspace/sample-project'
     const conversation = { id: 'conversation-1', title: 'Lapidação da experiência', workspace, createdAt: now, updatedAt: now }
     const eventListeners: Array<(payload: unknown) => void> = []
     const statusListeners: Array<(payload: unknown) => void> = []
-    let authorized = !unauthorized
+    let authorized = !unauthorized && !moved
+    let unavailable = Boolean(moved)
+    let selectedWorkspace = workspace
     let selectedExpected: string | undefined
     let memoryReads = 0
     type MockBrainMemory = { id: string; workspaceId: string; conversationId: string | null; kind: 'fact' | 'decision' | 'preference' | 'constraint' | 'learning'; scope: 'workspace' | 'conversation'; status: 'candidate' | 'active' | 'outdated' | 'archived'; content: string; confidence: number; sourceType: 'manual' | 'agent'; sourceId: string | null; createdAt: string; updatedAt: string; lastConfirmedAt: string | null; lastUsedAt: string | null; useCount: number }
@@ -37,7 +39,23 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
     let appSettings = { model: '', sandbox: 'workspace-write' as const, approvalPolicy: 'on-request' as const, theme: 'dark' as const, defaultAgentMode: 'review' as const, authenticated: !signedOut, authStatus: signedOut ? 'Login necessário' : 'Autenticado', serverStatus: 'ready' }
     const noop = async () => undefined
     const api = {
-      workspace: { select: async (expected?: string) => { selectedExpected = expected; authorized = true; return workspace }, validate: async () => true, list: async () => [{ path: workspace, name: 'sample-project', favorite: true, authorized, availability: 'available', createdAt: now, lastOpenedAt: now }], remove: noop, favorite: noop, openTool: noop },
+      workspace: {
+        select: async (expected?: string) => {
+          selectedExpected = expected
+          if (unavailable) {
+            selectedWorkspace = '/workspace/renamed-project'
+            conversation.workspace = selectedWorkspace
+            unavailable = false
+          }
+          authorized = true
+          return selectedWorkspace
+        },
+        validate: async () => true,
+        list: async () => [{ path: selectedWorkspace, name: selectedWorkspace.split('/').pop(), favorite: true, authorized, availability: unavailable ? 'missing' : 'available', ...(unavailable ? { availabilityMessage: 'Pasta do projeto não encontrada.' } : {}), createdAt: now, lastOpenedAt: now }],
+        remove: noop,
+        favorite: noop,
+        openTool: noop,
+      },
       conversations: {
         list: async () => empty ? [] : [conversation],
         page: async () => ({ items: empty ? [] : [conversation], hasMore: false }),
@@ -155,5 +173,5 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       emitStatus: (payload: unknown) => statusListeners.forEach((listener) => listener(payload)),
       calls: () => ({ selectedExpected, memoryReads }),
     } })
-  }, { empty: Boolean(options.empty), unauthorized: Boolean(options.unauthorized), signedOut: Boolean(options.signedOut), messageCount: options.messageCount ?? 0 })
+  }, { empty: Boolean(options.empty), unauthorized: Boolean(options.unauthorized), moved: Boolean(options.moved), signedOut: Boolean(options.signedOut), messageCount: options.messageCount ?? 0 })
 }

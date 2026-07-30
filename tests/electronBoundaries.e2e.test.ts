@@ -239,6 +239,26 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     }))
   })
 
+  it('reassocia o histórico após confirmar a nova localização de um projeto movido', async () => {
+    const source = path.join(root, 'relocation-source')
+    const destination = path.join(root, 'relocation-destination')
+    fs.mkdirSync(source)
+    fs.mkdirSync(destination)
+    electron.dialogs.open.push({ canceled: false, filePaths: [source] })
+    await api.workspace.select()
+    const conversation = await api.conversations.create(source)
+    fs.rmSync(source, { recursive: true })
+
+    electron.dialogs.open.push({ canceled: false, filePaths: [destination] })
+    await expect(api.workspace.select(source)).resolves.toBe(destination)
+
+    expect(await api.workspace.list()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: destination, authorized: true, availability: 'available' }),
+    ]))
+    expect((await api.conversations.list()).find((item) => item.id === conversation.id)?.workspace).toBe(destination)
+    expect(fs.existsSync(path.join(destination, '.nocturne', 'project.json'))).toBe(true)
+  })
+
   it('rejeita caminhos de workspace fora do escopo durante a importação de backup', async () => {
     const backup = {
       schemaVersion: DATABASE_SCHEMA_VERSION, exportedAt: new Date().toISOString(),

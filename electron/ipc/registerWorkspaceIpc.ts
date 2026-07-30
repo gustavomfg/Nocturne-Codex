@@ -24,13 +24,41 @@ export function registerWorkspaceIpc(win: BrowserWindow, database: LocalDatabase
   const ipcMain = safeIpcMain(win)
   ipcMain.handle('workspace:select', async (_event, value: unknown) => {
     const expected = z.string().trim().min(1).max(4_000).optional().parse(value)
-    const expectedWorkspace = expected ? assertSafeWorkspaceScope(expected) : null
-    const result = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], title: expectedWorkspace ? 'Reautorizar workspace' : 'Selecionar workspace', ...(expectedWorkspace ? { defaultPath: expectedWorkspace } : {}) })
+    const expectedInspection = expected ? inspectWorkspaceScope(expected) : null
+    if (expectedInspection?.availability === 'invalid' || expectedInspection?.availability === 'permission-denied') {
+      throw new Error(expectedInspection.message)
+    }
+    const expectedWorkspace = expectedInspection?.path ?? null
+    const result = await dialog.showOpenDialog(win, {
+      properties: ['openDirectory', 'createDirectory'],
+      title: expectedWorkspace ? 'Reautorizar workspace' : 'Selecionar workspace',
+      ...(expectedWorkspace ? { defaultPath: expectedWorkspace } : {}),
+    })
     if (result.canceled || !result.filePaths[0]) return null
     const workspace = assertSafeWorkspaceScope(result.filePaths[0])
-    if (expectedWorkspace && workspace !== expectedWorkspace) throw new Error('Selecione a mesma pasta associada à conversa restaurada.')
+    if (expectedWorkspace && workspace !== expectedWorkspace && expectedInspection?.availability !== 'missing') {
+      throw new Error('Selecione a mesma pasta associada à conversa restaurada.')
+    }
+    if (expected && expectedWorkspace && workspace !== expectedWorkspace) {
+      const confirmation = await dialog.showMessageBox(win, {
+        type: 'warning',
+        title: 'Atualizar localização do projeto?',
+        message: 'A pasta original não foi encontrada.',
+        detail: `O Nocturne Studio atualizará conversas, memórias, sugestões, artefatos e configurações deste workspace para:\n\n${workspace}`,
+        buttons: ['Cancelar', 'Atualizar localização'],
+        defaultId: 1,
+        cancelId: 0,
+        noLink: true,
+      })
+      if (confirmation.response !== 1) return null
+      await dependencies.ensureWorkspace(workspace)
+      database.relocateWorkspace(expected, workspace)
+      return workspace
+    }
+    await dependencies.ensureWorkspace(workspace)
     const storedWorkspace = expected ?? workspace
-    database.touchWorkspace(storedWorkspace); await dependencies.ensureWorkspace(workspace); return storedWorkspace
+    database.touchWorkspace(storedWorkspace)
+    return storedWorkspace
   })
   ipcMain.handle('workspace:validate', (_event, value: unknown) => { try { return assertSafeWorkspaceScope(z.string().min(1).parse(value)) } catch { return null } })
   ipcMain.handle('workspaces:list', () => database.listWorkspaces().map((workspace) => {

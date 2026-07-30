@@ -137,6 +137,44 @@ export class LocalDatabase {
       .run(workspace, path.basename(workspace), now, now)
   }
 
+  relocateWorkspace(source: string, destination: string) {
+    if (source === destination) {
+      this.touchWorkspace(destination)
+      return
+    }
+    const modelBindings = this.workspaceModelBindings.get(source)
+    const relocate = this.db.transaction(() => {
+      const current = this.db.prepare(`SELECT path,name,favorite,authorized,created_at createdAt,last_opened_at lastOpenedAt
+        FROM workspaces WHERE path=?`).get(source) as {
+        path: string
+        name: string
+        favorite: number
+        authorized: number
+        createdAt: string
+        lastOpenedAt: string
+      } | undefined
+      if (!current) throw new Error('Workspace original não encontrado no histórico local.')
+      if (this.db.prepare('SELECT 1 FROM workspaces WHERE path=?').get(destination)) {
+        throw new Error('A pasta selecionada já pertence a outro workspace salvo.')
+      }
+
+      const now = new Date().toISOString()
+      this.db.prepare(`INSERT INTO workspaces(path,name,favorite,authorized,created_at,last_opened_at)
+        VALUES(?,?,?,1,?,?)`).run(destination, path.basename(destination), current.favorite, current.createdAt, now)
+      this.db.prepare('UPDATE conversations SET workspace=? WHERE workspace=?').run(destination, source)
+      this.db.prepare('UPDATE artifacts SET workspace=? WHERE workspace=?').run(destination, source)
+      this.db.prepare('UPDATE workspace_memory SET workspace=? WHERE workspace=?').run(destination, source)
+      this.db.prepare('UPDATE suggestions SET workspace_id=? WHERE workspace_id=?').run(destination, source)
+      this.db.prepare('UPDATE brain_memories SET workspace_id=? WHERE workspace_id=?').run(destination, source)
+      if (modelBindings) {
+        this.workspaceModelBindings.set({ ...modelBindings, workspaceId: destination })
+        this.workspaceModelBindings.delete(source)
+      }
+      this.db.prepare('DELETE FROM workspaces WHERE path=?').run(source)
+    })
+    relocate()
+  }
+
   removeWorkspace(workspace: string) { this.db.prepare('DELETE FROM workspaces WHERE path=?').run(workspace) }
   setWorkspaceFavorite(workspace: string, favorite: boolean) { this.db.prepare('UPDATE workspaces SET favorite=? WHERE path=?').run(favorite ? 1 : 0, workspace) }
 

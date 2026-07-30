@@ -674,3 +674,16 @@ test('mantém o histórico isolado até reautorizar um workspace restaurado', as
   await expect(page.getByText('Reautorizar workspace?')).toBeHidden()
   await expect.poll(() => page.evaluate(() => (window as unknown as { __nocturneTest: { calls(): { selectedExpected?: string; memoryReads: number } } }).__nocturneTest.calls())).toEqual({ selectedExpected: '/workspace/sample-project', memoryReads: 1 })
 })
+
+test('orienta a relocalização de um projeto movido sem perder a conversa', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-07-13T20:05:00.000Z'))
+  await installNocturneMock(page, { moved: true })
+  await page.setViewportSize({ width: 1180, height: 850 })
+  await ready(page)
+  await expect(page.getByText('Localizar projeto movido?')).toBeVisible()
+  await expect(page.getByText('Pasta do projeto não encontrada.')).toBeVisible()
+  await page.getByRole('button', { name: 'Localizar pasta' }).click()
+  await expect(page.getByText('Localizar projeto movido?')).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Workspace renamed-project' })).toBeVisible()
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __nocturneTest: { calls(): { selectedExpected?: string; memoryReads: number } } }).__nocturneTest.calls())).toEqual({ selectedExpected: '/workspace/sample-project', memoryReads: 1 })
+})

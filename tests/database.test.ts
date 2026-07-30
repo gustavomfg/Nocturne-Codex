@@ -52,6 +52,67 @@ describe('persistência SQLite', () => {
     expect(db.getWorkspaceMemory(workspace).content).toBe('decisão')
     expect(db.listArtifacts(conversation.id)[0].type).toBe('markdown'); db.close()
   })
+  it('relocaliza atomicamente todos os dados vinculados ao workspace', () => {
+    const db = create()
+    const source = '/tmp/project-before-move'
+    const destination = '/tmp/project-after-move'
+    const conversation = db.createConversation(source)
+    db.setWorkspaceFavorite(source, true)
+    db.setWorkspaceMemory(source, 'Contexto preservado')
+    db.addArtifact(conversation.id, source, 'markdown', 'Relatório')
+    const suggestion = db.addSuggestion(conversation.id, source, {
+      title: 'Preservar vínculos',
+      description: 'O caminho mudou.',
+      reasoning: 'Os dados pertencem ao mesmo projeto.',
+      category: 'bug',
+      severity: 'high',
+      affectedFiles: ['src/App.tsx'],
+      proposedChanges: 'Atualizar referências.',
+      expectedBenefits: ['Recuperação consistente'],
+      complexity: 'low',
+      risk: 'low',
+    })
+    const memory = db.createBrainMemory(source, {
+      kind: 'decision',
+      scope: 'workspace',
+      content: 'Continuar usando o mesmo projeto',
+      status: 'active',
+    })
+    db.modelCatalog.replaceProviderModels(model.providerId, [model])
+    db.workspaceModelBindings.set({
+      workspaceId: source,
+      defaultBinding: { providerId: model.providerId, modelId: model.modelId },
+    })
+
+    db.relocateWorkspace(source, destination)
+
+    expect(db.listWorkspaces()).toEqual([
+      expect.objectContaining({ path: destination, name: 'project-after-move', favorite: true, authorized: true }),
+    ])
+    expect(db.getConversation(conversation.id)?.workspace).toBe(destination)
+    expect(db.getWorkspaceMemory(destination).content).toBe('Contexto preservado')
+    expect(db.listArtifacts(conversation.id)[0].workspace).toBe(destination)
+    expect(db.getSuggestion(suggestion.id)?.workspaceId).toBe(destination)
+    expect(db.getBrainMemory(memory.id, destination)?.content).toBe('Continuar usando o mesmo projeto')
+    expect(db.workspaceModelBindings.get(destination)).toMatchObject({
+      workspaceId: destination,
+      defaultBinding: { providerId: model.providerId, modelId: model.modelId },
+    })
+    expect(db.workspaceModelBindings.get(source)).toBeNull()
+    db.close()
+  })
+  it('reverte a relocalização quando o destino já é outro workspace', () => {
+    const db = create()
+    const source = '/tmp/relocation-source'
+    const destination = '/tmp/relocation-destination'
+    const conversation = db.createConversation(source)
+    db.createConversation(destination)
+
+    expect(() => db.relocateWorkspace(source, destination)).toThrow(/outro workspace/)
+    expect(db.getConversation(conversation.id)?.workspace).toBe(source)
+    expect(db.listWorkspaces().map((workspace) => workspace.path)).toEqual(expect.arrayContaining([source, destination]))
+    db.close()
+  })
   it('persiste configurações de Provider sem expor a referência da credencial', () => {
     const db = create()
     const credentialReference = '9ba7e635-8746-48bd-a8e9-4609ff1690cb'

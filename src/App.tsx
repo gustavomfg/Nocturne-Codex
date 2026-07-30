@@ -181,7 +181,12 @@ function App() {
     const workspaceEntry = conversation && availableWorkspaces.find((item) => item.path === conversation.workspace)
     if (conversation && !workspaceEntry?.authorized) {
       setMemory({ content: '', rules: '', updatedAt: '' }); setGitInfo(null)
-      const accepted = await confirmation.confirm({ title: 'Reautorizar workspace?', description: `Esta conversa veio de um backup. Para proteger seus arquivos, confirme novamente a pasta antes de usar memória, Git ou IA.\n\n${conversation.workspace}`, confirmLabel: 'Selecionar pasta' })
+      const missingWorkspace = workspaceEntry?.availability === 'missing'
+      const accepted = await confirmation.confirm({
+        title: missingWorkspace ? 'Localizar projeto movido?' : 'Reautorizar workspace?',
+        description: `${missingWorkspace ? 'A pasta deste projeto não foi encontrada. Se ela foi movida ou renomeada, selecione a nova localização.' : 'Esta conversa veio de um backup. Para proteger seus arquivos, confirme novamente a pasta antes de usar memória, Git ou IA.'}\n\n${conversation.workspace}`,
+        confirmLabel: missingWorkspace ? 'Localizar pasta' : 'Selecionar pasta',
+      })
       if (requestId !== conversationRequestRef.current || useAppStore.getState().activeId !== id) return
       if (!accepted) { store.setError('Workspace não autorizado. A conversa permanece disponível somente para leitura do histórico.'); return }
       try {
@@ -189,6 +194,7 @@ function App() {
         if (!selected) { store.setError('Reautorização cancelada. A conversa permanece disponível somente para leitura do histórico.'); return }
         const refreshedWorkspaces = await window.nocturne.workspace.list()
         setWorkspaces(refreshedWorkspaces); setWorkspace(selected)
+        if (selected !== conversation.workspace) await refresh()
       } catch (error) { store.setError(errorMessage(error)); return }
     }
     const savedMemory = await window.nocturne.memory.get(id)
