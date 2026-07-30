@@ -99,8 +99,14 @@ export class AiExecutionCoordinator {
       }
       this.pushStatus('running', conversationId)
       void turn.completion
-        .then(() => {
-          this.pushStatus('completed', conversationId)
+        .then((outcome) => {
+          if (outcome.status === 'completed') {
+            this.pushStatus('completed', conversationId)
+          } else if (outcome.status === 'cancelled') {
+            this.pushStatus('ready', conversationId)
+          } else {
+            this.pushStatus('failed', conversationId, outcome.error?.message ?? 'A execução do Provider falhou.')
+          }
         })
         .catch((error: unknown) => {
           const message = error instanceof Error ? error.message : String(error)

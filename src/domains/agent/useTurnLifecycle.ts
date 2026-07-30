@@ -23,8 +23,9 @@ export function useTurnLifecycle({ flushStream, activeTurnRef, refreshGit }: { f
     store.setFinalizing(true)
     try {
       const error = turn?.error as Record<string, unknown> | undefined
+      const cancelled = turn?.status === 'cancelled'
       if (error) store.setError(String(error.message ?? 'A execução não foi concluída.'))
-      store.upsertActivity({ id: `completion-${String(turn?.id ?? Date.now())}`, type: 'completion', label: error ? 'Execução encerrada com erro' : 'Execução concluída', status: error ? 'failed' : 'completed' })
+      store.upsertActivity({ id: `completion-${String(turn?.id ?? Date.now())}`, type: 'completion', label: error ? 'Execução encerrada com erro' : cancelled ? 'Execução cancelada' : 'Execução concluída', status: error ? 'failed' : 'completed' })
       if (state.streaming) {
       const current = useAppStore.getState()
       let assistantContent = state.streaming
@@ -44,7 +45,7 @@ export function useTurnLifecycle({ flushStream, activeTurnRef, refreshGit }: { f
     }
     if (context.suggestionId) {
       const changedInApprovedScope = hasAppliedSuggestionChanges(context.suggestionFiles, useAppStore.getState().files.map((file) => file.path))
-      if (!error && changedInApprovedScope) await window.nocturne.suggestions.status(context.conversationId, context.suggestionId, 'applied', 'Turno concluído com alterações observadas no escopo aprovado; consulte a resposta do agente para os resultados de validação.')
+      if (!error && !cancelled && changedInApprovedScope) await window.nocturne.suggestions.status(context.conversationId, context.suggestionId, 'applied', 'Turno concluído com alterações observadas no escopo aprovado; consulte a resposta do agente para os resultados de validação.')
       if (useAppStore.getState().activeId === context.conversationId) store.setSuggestions((await window.nocturne.suggestions.page(context.conversationId)).items)
     }
       refreshGit(context.conversationId)

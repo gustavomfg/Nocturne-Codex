@@ -7,10 +7,11 @@ import { ProviderRegistry } from './ProviderRegistry'
 import { AIOrchestrator } from './AIOrchestrator'
 import type { NormalizedExecutionEvent } from '../../shared/ai/execution'
 import type { ExecutionHandle } from './AIOrchestrator'
+import type { ExecutionOutcome } from '../../shared/ai/providerExecution'
 
 export interface ProviderAiTurn {
   executionId: string
-  completion: Promise<void>
+  completion: Promise<ExecutionOutcome>
   cancel(reason?: string): boolean
 }
 
@@ -48,11 +49,13 @@ export async function startAiTurn(
       emit('turn/completed', {
         turn: {
           id: outcome.executionId,
+          status: outcome.status,
           ...(outcome.status === 'failed'
             ? { error: { message: executionError } }
             : {}),
         },
       })
+      return outcome
     }),
   }
 }
