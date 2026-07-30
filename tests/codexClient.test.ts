@@ -74,6 +74,49 @@ async function createThread(client: CodexClient, process: FakeCodexProcess) {
 }
 
 describe('CodexClient', () => {
+  it('lista e valida os modelos disponíveis para a conta', async () => {
+    const { client, process } = await readyClient()
+    const listed = client.listModels()
+    await waitForRequest(process, 'model/list')
+    expect(process.request('model/list')?.params).toEqual({
+      limit: 100,
+      includeHidden: false,
+    })
+    process.respond('model/list', {
+      data: [
+        {
+          id: 'gpt-5.6-sol',
+          model: 'gpt-5.6-sol',
+          displayName: 'GPT-5.6 Sol',
+          defaultReasoningEffort: 'medium',
+          isDefault: true,
+          hidden: false,
+        },
+        {
+          id: 'gpt-5.6-luna',
+          model: 'gpt-5.6-luna',
+          displayName: 'GPT-5.6 Luna',
+          isDefault: false,
+          hidden: false,
+        },
+      ],
+      nextCursor: null,
+    })
+    await expect(listed).resolves.toEqual([
+      {
+        model: 'gpt-5.6-sol',
+        displayName: 'GPT-5.6 Sol',
+        defaultReasoningEffort: 'medium',
+        isDefault: true,
+      },
+      {
+        model: 'gpt-5.6-luna',
+        displayName: 'GPT-5.6 Luna',
+        isDefault: false,
+      },
+    ])
+  })
+
   it('inicializa threads efêmeras e mantém Build limitado ao workspace', async () => {
     const { client, process } = await readyClient()
     const created = client.createThread('/workspace')
@@ -125,6 +168,33 @@ describe('CodexClient', () => {
     await waitForRequest(process, 'turn/start')
     expect(process.request('turn/start')?.params).toMatchObject({
       sandboxPolicy: { type: 'readOnly', networkAccess: false },
+    })
+    process.respond('turn/start', { turn: { id: 'turn-1' } })
+    await turn
+  })
+
+  it('encaminha o modelo escolhido para a thread e para o turno', async () => {
+    const { client, process } = await readyClient()
+    const created = client.createThread('/workspace', { model: 'gpt-5.6-luna' })
+    await waitForRequest(process, 'thread/start')
+    expect(process.request('thread/start')?.params).toMatchObject({
+      model: 'gpt-5.6-luna',
+    })
+    process.respond('thread/start', { thread: { id: 'thread-1' } })
+    await created
+
+    const turn = client.sendTurn(
+      'thread-1',
+      '/workspace',
+      'Revise',
+      { model: 'gpt-5.6-luna' },
+      [],
+      '',
+      'review',
+    )
+    await waitForRequest(process, 'turn/start')
+    expect(process.request('turn/start')?.params).toMatchObject({
+      model: 'gpt-5.6-luna',
     })
     process.respond('turn/start', { turn: { id: 'turn-1' } })
     await turn

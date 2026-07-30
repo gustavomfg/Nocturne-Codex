@@ -303,6 +303,22 @@ test.describe('renderer do produto', () => {
     await expect(dialog.getByText('OpenRouter')).toBeVisible()
   })
 
+  test('lista e seleciona modelos disponíveis pela conta ChatGPT', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await ready(page)
+    await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
+    const dialog = page.getByRole('dialog', { name: 'Configurações' })
+
+    await dialog.getByRole('button', { name: 'Escolher modelo da conta ChatGPT' }).click()
+    await expect(dialog.getByText('Modelo da conta ChatGPT')).toBeVisible()
+    await expect(dialog.getByRole('button', { name: /GPT-5.6 Sol/ })).toBeVisible()
+    await dialog.getByRole('button', { name: /GPT-5.6 Luna/ }).click()
+    await dialog.getByRole('button', { name: 'Usar este modelo' }).click()
+
+    await expect(page.locator('.product-toast')).toContainText('Usando GPT-5.6 Luna pela conta ChatGPT.')
+    await expect(dialog.getByText(/gpt-5\.6-luna/)).toBeVisible()
+  })
+
   test('gerencia conexões por API com credencial transitória e estados explícitos', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await ready(page)

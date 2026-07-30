@@ -19,9 +19,10 @@ import type {
 } from '../../../shared/ai/providerConfiguration'
 import type { ModelDescriptor, ModelReference } from '../../../shared/ai/model'
 import type { CodexAccountStatus } from '../../../shared/types'
+import type { CodexModel } from '../../../shared/codexModels'
 import { errorMessage } from '../../shared/format'
 
-type Step = 'list' | 'service' | 'auth' | 'model'
+type Step = 'list' | 'service' | 'auth' | 'model' | 'codex-model'
 
 interface ServicePreset {
   id: string
@@ -43,14 +44,19 @@ const presets: ServicePreset[] = [
 interface AIConnectionPageProps {
   workspaceId: string
   onNotify(message: string): void
+  onCodexModelChange(modelId: string): Promise<void>
 }
 
 export function AIConnectionPage({
   workspaceId,
   onNotify,
+  onCodexModelChange,
 }: AIConnectionPageProps) {
   const [services, setServices] = useState<ProviderConfigurationSummary[]>([])
   const [codexAccount, setCodexAccount] = useState<CodexAccountStatus | null>(null)
+  const [codexModels, setCodexModels] = useState<CodexModel[]>([])
+  const [codexModelId, setCodexModelId] = useState('')
+  const [selectedCodexModel, setSelectedCodexModel] = useState<CodexModel | null>(null)
   const [step, setStep] = useState<Step>('list')
   const [selectedPreset, setSelectedPreset] = useState<ServicePreset | null>(null)
   const [credential, setCredential] = useState('')
@@ -58,6 +64,7 @@ export function AIConnectionPage({
   const [models, setModels] = useState<ModelDescriptor[]>([])
   const [selectedModel, setSelectedModel] = useState<ModelReference | null>(null)
   const [connecting, setConnecting] = useState(false)
+  const [loadingCodexModels, setLoadingCodexModels] = useState(false)
   const [saving, setSaving] = useState(false)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
@@ -69,11 +76,13 @@ export function AIConnectionPage({
     void Promise.all([
       window.nocturne.providers.list(),
       window.nocturne.codex.status(),
+      window.nocturne.settings.get(),
     ])
-      .then(([items, account]) => {
+      .then(([items, account, settings]) => {
         if (!active) return
         setServices(items)
         setCodexAccount(account)
+        setCodexModelId(settings.model || '')
       })
       .catch((failure) => { if (active) setError(errorMessage(failure)) })
     return () => { active = false }
@@ -86,8 +95,33 @@ export function AIConnectionPage({
     setCustomUrl('')
     setModels([])
     setSelectedModel(null)
+    setSelectedCodexModel(null)
     setShowAdvanced(false)
     setError(null)
+  }
+
+  const openCodexModels = async () => {
+    if (loadingCodexModels) return
+    setStep('codex-model')
+    setLoadingCodexModels(true)
+    setError(null)
+    try {
+      const available = await window.nocturne.codex.models()
+      setCodexModels(available)
+      setSelectedCodexModel(
+        available.find((model) => model.model === codexModelId)
+        ?? available.find((model) => model.isDefault)
+        ?? available[0]
+        ?? null,
+      )
+      if (available.length === 0) {
+        setError('A conta ChatGPT não retornou modelos disponíveis.')
+      }
+    } catch (failure) {
+      setError(errorMessage(failure))
+    } finally {
+      setLoadingCodexModels(false)
+    }
   }
 
   const pickService = (preset: ServicePreset) => {
@@ -108,7 +142,8 @@ export function AIConnectionPage({
         const account = await window.nocturne.codex.login()
         setCodexAccount(account)
         onNotify('Conta ChatGPT conectada pelo Codex CLI.')
-        resetWizard()
+        setConnecting(false)
+        await openCodexModels()
         return
       }
       const effectiveUrl = customUrl.trim() || selectedPreset.baseUrl
@@ -184,6 +219,22 @@ export function AIConnectionPage({
     }
   }
 
+  const saveCodexModel = async () => {
+    if (!selectedCodexModel || saving) return
+    setSaving(true)
+    setError(null)
+    try {
+      await onCodexModelChange(selectedCodexModel.model)
+      setCodexModelId(selectedCodexModel.model)
+      onNotify(`Usando ${selectedCodexModel.displayName} pela conta ChatGPT.`)
+      resetWizard()
+    } catch (failure) {
+      setError(errorMessage(failure))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const remove = async (id: string) => {
     if (confirmRemove !== id) { setConfirmRemove(id); return }
     setRemovingId(id)
@@ -213,9 +264,15 @@ export function AIConnectionPage({
         {codexAccount?.authenticated && <div className="ai-list-row">
           <div className="ai-list-row-info">
             <span className="ai-list-dot"/>
-            <span><strong>Conta ChatGPT</strong><small>Codex CLI {codexAccount.version}</small></span>
+            <span><strong>Conta ChatGPT</strong><small>Codex CLI {codexAccount.version}{codexModelId ? ` · ${codexModelId}` : ''}</small></span>
           </div>
           <div className="ai-list-row-actions">
+            <button
+              className="ai-list-config"
+              aria-label="Escolher modelo da conta ChatGPT"
+              disabled={loadingCodexModels || connecting}
+              onClick={() => void openCodexModels()}
+            >{loadingCodexModels ? <LoaderCircle className="spin" size={13}/> : <Bot size={13}/>}</button>
             <button
               className="ai-list-remove"
               aria-label="Desconectar conta ChatGPT"
@@ -376,6 +433,35 @@ export function AIConnectionPage({
       <div className="ai-step-foot">
         {!workspaceId && <span className="ai-workspace-required">Selecione um workspace para ativar o modelo.</span>}
         <button disabled={saving || !selectedModel || !workspaceId} className="ai-use-btn" onClick={() => void saveAndBind()}>
+          {saving ? 'Salvando…' : 'Usar este modelo'}
+        </button>
+      </div>
+    </div>}
+
+    {step === 'codex-model' && <div className="ai-step-box">
+      <div className="ai-step-top">
+        <button className="ai-step-back" aria-label="Voltar" onClick={() => setStep('list')}><ArrowLeft size={16}/></button>
+        <div className="ai-step-copy"><strong>Modelo da conta ChatGPT</strong><small>Modelos disponibilizados pelo Codex CLI para sua conta.</small></div>
+      </div>
+      <div className="ai-step-body">
+        {loadingCodexModels
+          ? <div className="ai-searching"><LoaderCircle className="spin" size={20}/><span>Buscando modelos…</span></div>
+          : codexModels.length === 0
+            ? <p className="ai-no-models">Nenhum modelo disponível para esta conta.</p>
+            : <div className="ai-model-list">{codexModels.map((model) => (
+                <button
+                  key={model.model}
+                  className={`ai-model-opt ${selectedCodexModel?.model === model.model ? 'active' : ''}`}
+                  onClick={() => setSelectedCodexModel(model)}
+                >
+                  <Check size={14} className="ai-model-check"/>
+                  <span className="ai-model-name">{model.displayName}</span>
+                  {model.isDefault && <small>Recomendado</small>}
+                </button>
+              ))}</div>}
+      </div>
+      <div className="ai-step-foot">
+        <button disabled={saving || !selectedCodexModel} className="ai-use-btn" onClick={() => void saveCodexModel()}>
           {saving ? 'Salvando…' : 'Usar este modelo'}
         </button>
       </div>

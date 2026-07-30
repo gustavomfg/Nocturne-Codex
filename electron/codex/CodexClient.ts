@@ -4,6 +4,11 @@ import type { CodexEvent, CodexStatus, RpcId, RpcMessage, RpcResponse } from './
 import { AgentStateMachine } from '../../shared/agentState'
 import { agentModeInstructions, sandboxModeForAgent, type AgentMode } from '../../shared/suggestions'
 import packageMetadata from '../../package.json'
+import {
+  codexModelListResultSchema,
+  codexModelSchema,
+  type CodexModel,
+} from '../../shared/codexModels'
 
 const APPROVAL_METHODS = new Set([
   'item/commandExecution/requestApproval',
@@ -117,6 +122,27 @@ export class CodexClient extends EventEmitter {
       this.setStatus('failed', `Falha ao criar thread: ${errorMessage(error)}`)
       throw error
     }
+  }
+
+  async listModels(): Promise<CodexModel[]> {
+    await this.start()
+    const result = codexModelListResultSchema.parse(await this.call('model/list', {
+      limit: 100,
+      includeHidden: false,
+    }))
+    const identifiers = new Set<string>()
+    return result.data.map((model) => {
+      if (identifiers.has(model.model)) {
+        throw new Error(`O Codex retornou um modelo duplicado: ${model.model}.`)
+      }
+      identifiers.add(model.model)
+      return codexModelSchema.parse({
+        model: model.model,
+        displayName: model.displayName,
+        defaultReasoningEffort: model.defaultReasoningEffort,
+        isDefault: model.isDefault === true,
+      })
+    })
   }
 
   async sendTurn(

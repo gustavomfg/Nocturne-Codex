@@ -8,7 +8,7 @@ const executable = process.env.CODEX_PATH || 'codex'
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-codex-contract-'))
 const reportPath = path.resolve(process.env.CODEX_SMOKE_REPORT || 'test-results/codex-contract-smoke.json')
 const compatibility = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'shared/codex-compatibility.json'), 'utf8'))
-const report = { ok: false, version: '', verifiedVersion: false, initialize: false, configRead: false, threadStart: false, turnStart: false, turnCompleted: false, agentResponse: false, interrupt: false, approvalsObserved: 0, approvalsDeclined: 0, notifications: 0 }
+const report = { ok: false, version: '', verifiedVersion: false, initialize: false, modelList: false, configRead: false, threadStart: false, turnStart: false, turnCompleted: false, agentResponse: false, interrupt: false, approvalsObserved: 0, approvalsDeclined: 0, notifications: 0 }
 let child
 let nextId = 1
 const pending = new Map()
@@ -31,6 +31,14 @@ try {
   await call('initialize', { clientInfo: { name: 'nocturne-contract-smoke', title: 'Nocturne contract smoke', version: '1' }, capabilities: { experimentalApi: true, requestAttestation: false } })
   report.initialize = true
   notify('initialized')
+  const models = await call('model/list', { limit: 100, includeHidden: false })
+  if (!Array.isArray(models?.data) || !models.data.some((model) => (
+    typeof model?.model === 'string'
+    && typeof model?.displayName === 'string'
+  ))) {
+    throw new Error('model/list não retornou modelos selecionáveis.')
+  }
+  report.modelList = true
   await call('config/read', {})
   report.configRead = true
   const created = await call('thread/start', { cwd: root, runtimeWorkspaceRoots: [root], approvalPolicy: 'on-request', approvalsReviewer: 'user', sandbox: 'read-only', ephemeral: true })

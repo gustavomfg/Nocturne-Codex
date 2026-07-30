@@ -126,13 +126,14 @@
 .ai-list-dot { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: var(--color-success); box-shadow: 0 0 6px #6fd1a040; }
 .ai-list-row-info strong { font-size: var(--font-body); font-weight: 500; color: var(--color-text); }
 
-.ai-list-remove {
+.ai-list-remove, .ai-list-config {
   width: 30px; height: 30px; place-items: center;
   color: var(--color-text-muted); background: transparent;
   border: 1px solid transparent; border-radius: var(--radius-xs); display: grid; cursor: pointer;
   transition: var(--transition-interactive);
 }
 .ai-list-remove:hover { color: var(--color-danger); background: #21181a; border-color: #513237; }
+.ai-list-config:hover { color: var(--color-accent); background: var(--color-accent-surface); border-color: var(--color-accent); }
 
 .ai-add-btn {
   display: flex; align-items: center; justify-content: center; gap: var(--spacing-xs);

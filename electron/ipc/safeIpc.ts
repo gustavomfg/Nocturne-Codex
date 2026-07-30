@@ -13,6 +13,7 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   'ai:cancel': { windowMs: 2_000, maxCalls: 10 },
   'ai:approve': { windowMs: 2_000, maxCalls: 20 },
   'codex:accountStatus': { windowMs: 5_000, maxCalls: 10 },
+  'codex:models': { windowMs: 5_000, maxCalls: 5 },
   'codex:login': { windowMs: 60_000, maxCalls: 2 },
   'codex:logout': { windowMs: 10_000, maxCalls: 2 },
   'git:commit': { windowMs: 5_000, maxCalls: 5 },

@@ -76,6 +76,7 @@ export const nocturneApi: NocturneApi = {
     status: () => ipcRenderer.invoke(channels.codex.status),
     login: () => ipcRenderer.invoke(channels.codex.login),
     logout: () => ipcRenderer.invoke(channels.codex.logout),
+    models: () => ipcRenderer.invoke(channels.codex.models),
   },
   files: {
     attach: (conversationId: string) => ipcRenderer.invoke(channels.files.attach, conversationId),

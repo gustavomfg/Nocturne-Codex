@@ -86,6 +86,10 @@ export class AiExecutionCoordinator {
     }
   }
 
+  listCodexModels() {
+    return this.codex.listModels()
+  }
+
   async startProvider(
     conversationId: string,
     taskInput: NormalizedTaskInput,

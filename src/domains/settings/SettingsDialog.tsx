@@ -14,7 +14,7 @@ const settingsPages: Array<{ id: SettingsPage; label: string; description: strin
   { id: 'diagnostics', label: 'Diagnóstico', description: 'Status e manutenção', icon: Activity },
 ]
 
-export function SettingsDialog({ value, workspace, workspaces, onClose, onSave, onNotify, onOnboarding }: { value: AppSettings; status: string; workspace: string; workspaces: Workspace[]; onClose(): void; onSave(value: AppSettings): void | Promise<void>; onNotify(message: string): void; onOnboarding(): void }) {
+export function SettingsDialog({ value, workspace, workspaces, onClose, onSave, onCodexModelChange, onNotify, onOnboarding }: { value: AppSettings; status: string; workspace: string; workspaces: Workspace[]; onClose(): void; onSave(value: AppSettings): void | Promise<void>; onCodexModelChange(modelId: string): Promise<void>; onNotify(message: string): void; onOnboarding(): void }) {
   const [form, setForm] = useState(value)
   const [page, setPage] = useState<SettingsPage>('ai')
   const [diagnostic, setDiagnostic] = useState('Abra esta seção para carregar o diagnóstico.')
@@ -29,6 +29,10 @@ export function SettingsDialog({ value, workspace, workspaces, onClose, onSave, 
   const dialogRef = useDialogA11y<HTMLDivElement>(() => requestExit())
   useEffect(() => { if (page === 'diagnostics') setDiagnostic('Informações do sistema carregadas.') }, [page])
   const save = async () => { if (saving) return; setSaving(true); setSaveError(null); try { await onSave(form) } catch (error) { setSaveError(errorMessage(error)) } finally { setSaving(false) } }
+  const selectCodexModel = async (modelId: string) => {
+    await onCodexModelChange(modelId)
+    setForm((current) => ({ ...current, model: modelId }))
+  }
   const runOperation = async (name: string, operationTask: () => Promise<string | null | void>, success: string) => {
     if (operation) return
     setOperation(name)
@@ -47,7 +51,7 @@ export function SettingsDialog({ value, workspace, workspaces, onClose, onSave, 
         </nav>
         <main className="settings-content">
           <div className="settings-page-title"><span><currentPage.icon size={19}/></span><div><h2>{currentPage.label}</h2><p>{currentPage.description}</p></div></div>
-          {page === 'ai' && <AISettingsPage workspaceId={workspace} onNotify={onNotify}/>}
+          {page === 'ai' && <AISettingsPage workspaceId={workspace} onNotify={onNotify} onCodexModelChange={selectCodexModel}/>}
           {page === 'workspace' && <SettingsSection title="Projetos recentes"><div className="settings-workspaces">{workspaces.slice(0, 6).map((workspace) => <div key={workspace.path}><span className="workspace-setting-icon"><Folder size={15}/></span><span><strong title={workspace.name}>{workspace.name}</strong><small title={workspace.path}>{workspace.path}</small></span>{workspace.favorite && <Star className="workspace-setting-star" size={13} fill="currentColor"/>}</div>)}{!workspaces.length && <p className="settings-empty">Nenhum workspace recente.</p>}</div></SettingsSection>}
           {page === 'application' && <SettingsSection title="Preferências"><div className="settings-columns"><label>Tema<select value="dark" disabled><option value="dark">Nocturne escuro</option></select></label></div><label className="check-label"><input type="checkbox" checked={Boolean(form.diagnosticMode)} onChange={(event) => setForm({ ...form, diagnosticMode: event.target.checked })}/><span><strong>Logs detalhados</strong><small>Registra mais informações para diagnóstico</small></span></label><button className="secondary-setting" onClick={() => requestExit('onboarding')}>Reabrir primeira execução</button></SettingsSection>}
           {page === 'diagnostics' && <SettingsSection title="Informações do sistema"><pre className="diagnostic-summary" aria-live="polite">{diagnostic}</pre><div className="diagnostic-actions"><button disabled={Boolean(operation)} onClick={() => void runOperation('logs', () => window.nocturne.diagnostics.openLogs(), 'Pasta de logs aberta.')}>Abrir logs</button><button disabled={Boolean(operation)} onClick={() => void runOperation('copy', async () => { const content = await window.nocturne.diagnostics.copy(); await window.nocturne.clipboard.writeText(content); setCopied(true) }, 'Informações de diagnóstico copiadas.')}>{operation === 'copy' ? 'Copiando…' : copied ? 'Informações copiadas' : 'Copiar informações'}</button><button disabled={Boolean(operation)} onClick={() => void runOperation('export', () => window.nocturne.data.export(), 'Backup exportado com sucesso.')}>{operation === 'export' ? 'Exportando…' : 'Exportar dados'}</button></div></SettingsSection>}

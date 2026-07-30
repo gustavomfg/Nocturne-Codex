@@ -2,7 +2,7 @@ export const IPC_CHANNELS = {
   workspace: { select: 'workspace:select', validate: 'workspace:validate', list: 'workspaces:list', remove: 'workspaces:remove', favorite: 'workspaces:favorite', openTool: 'workspace:openTool' },
   conversations: { list: 'conversations:list', page: 'conversations:page', create: 'conversations:create', messages: 'conversations:messages', messagePage: 'conversations:messagePage', delete: 'conversations:delete' },
   ai: { send: 'ai:send', cancel: 'ai:cancel', event: 'ai:event', saveAssistant: 'ai:save-assistant', approve: 'ai:approve', status: 'ai:status' },
-  codex: { status: 'codex:accountStatus', login: 'codex:login', logout: 'codex:logout' },
+  codex: { status: 'codex:accountStatus', login: 'codex:login', logout: 'codex:logout', models: 'codex:models' },
   files: { attach: 'files:attach', open: 'files:open', preview: 'files:preview' },
   memory: { get: 'memory:get', set: 'memory:set' },
   brain: { page: 'brain:page', create: 'brain:create', update: 'brain:update', delete: 'brain:delete', extract: 'brain:extract' },

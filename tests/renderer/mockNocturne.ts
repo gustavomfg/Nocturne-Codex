@@ -23,6 +23,7 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       { providerId: 'legacy-provider', modelId: 'offline-model', displayName: 'Modelo anterior', source: 'remote' as const, capabilities: ['chat'] as const, availability: 'offline' as const },
     ]
     let modelBindings: MockModelBindings | null = null
+    let appSettings = { model: '', sandbox: 'workspace-write' as const, approvalPolicy: 'on-request' as const, theme: 'dark' as const, defaultAgentMode: 'review' as const, authenticated: !signedOut, authStatus: signedOut ? 'Login necessário' : 'Autenticado', serverStatus: 'ready' }
     const noop = async () => undefined
     const api = {
       workspace: { select: async (expected?: string) => { selectedExpected = expected; authorized = true; return workspace }, validate: async () => true, list: async () => [{ path: workspace, name: 'nocturne-codex', favorite: true, authorized, createdAt: now, lastOpenedAt: now }], remove: noop, favorite: noop, openTool: noop },
@@ -52,6 +53,10 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
         status: async () => ({ installed: true, authenticated: !signedOut, compatible: true, version: '0.145.0', authenticationMethod: 'chatgpt' as const }),
         login: async () => ({ installed: true, authenticated: true, compatible: true, version: '0.145.0', authenticationMethod: 'chatgpt' as const }),
         logout: async () => ({ installed: true, authenticated: false, compatible: true, version: '0.145.0' }),
+        models: async () => [
+          { model: 'gpt-5.6-sol', displayName: 'GPT-5.6 Sol', defaultReasoningEffort: 'medium', isDefault: true },
+          { model: 'gpt-5.6-luna', displayName: 'GPT-5.6 Luna', defaultReasoningEffort: 'low', isDefault: false },
+        ],
       },
       files: { attach: async () => [], open: noop, preview: async (_id: string, filePath: string) => ({ kind: 'text', name: filePath.split('/').pop(), filePath, mime: 'text/plain', content: 'conteúdo', size: 8 }) },
       memory: { get: async () => { memoryReads += 1; return { content: '', rules: '', updatedAt: '' } }, set: async (_id: string, content: string, rules: string) => ({ content, rules, updatedAt: now }) },
@@ -89,7 +94,14 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       suggestions: { list: async () => [], page: async () => ({ items: [], hasMore: false }), create: async (_id: string, content: string) => ({ suggestions: [], content }), status: noop },
       data: { export: async () => '/tmp/backup.json', import: async () => true },
       diagnostics: { openLogs: noop, copy: async () => 'diagnóstico', rendererError: noop, rendererStats: noop },
-      settings: { get: async () => ({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', theme: 'dark', defaultAgentMode: 'review', authenticated: !signedOut, authStatus: signedOut ? 'Login necessário' : 'Autenticado', serverStatus: 'ready' }), check: async () => ({ model: '', sandbox: 'workspace-write', approvalPolicy: 'on-request', theme: 'dark', defaultAgentMode: 'review', authenticated: !signedOut, authStatus: signedOut ? 'Login necessário' : 'Autenticado', serverStatus: 'ready' }), set: async (value: unknown) => value },
+      settings: {
+        get: async () => ({ ...appSettings }),
+        check: async () => ({ ...appSettings }),
+        set: async (value: Partial<typeof appSettings>) => {
+          appSettings = { ...appSettings, ...value }
+          return { ...appSettings }
+        },
+      },
       providers: {
         list: async () => providerConfigurations.map((item) => ({ ...item })),
         create: async (configuration: Omit<MockProviderConfiguration, 'id' | 'credentialConfigured' | 'createdAt' | 'updatedAt'>, credential?: string) => {

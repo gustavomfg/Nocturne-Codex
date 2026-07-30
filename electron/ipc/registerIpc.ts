@@ -70,6 +70,13 @@ export function registerIpc(
   ipcMain.handle('codex:accountStatus', () => codexAccount.status())
   ipcMain.handle('codex:login', () => codexAccount.login())
   ipcMain.handle('codex:logout', () => codexAccount.logout())
+  ipcMain.handle('codex:models', async () => {
+    const account = await codexAccount.status()
+    if (!account.authenticated || account.authenticationMethod !== 'chatgpt') {
+      throw new Error('Conecte uma conta ChatGPT antes de listar os modelos do Codex.')
+    }
+    return aiExecutions.listCodexModels()
+  })
 
   ipcMain.handle('files:attach', async (_event, value: unknown) => {
     const conversation = getAuthorizedConversation(database, idSchema.parse(value))
@@ -211,7 +218,7 @@ export function registerIpc(
         memory: joinMemoryContext(workspaceMemory.content, brainMemory.text),
         mode,
         settings: {
-          model: '',
+          model: settings.model || '',
           sandbox: mode === 'review' ? 'read-only' : 'workspace-write',
           approvalPolicy: settings.approvalPolicy === 'untrusted' ? 'untrusted' : 'on-request',
           diagnosticMode: settings.diagnosticMode === 'true',
