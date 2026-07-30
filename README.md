@@ -251,7 +251,9 @@ Currently under development:
 
 Build Mode and Docs Mode currently require Codex CLI.
 
-**Minimum verified version:** `0.145.0`
+**Minimum supported version:** `0.145.0`
+
+**Verified versions:** `0.145.0` and `0.146.0`
 
 ---
 
