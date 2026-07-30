@@ -1,4 +1,4 @@
-import { isIP } from 'node:net'
+import { BlockList, isIP } from 'node:net'
 import { z } from 'zod'
 import type { ProviderSource } from '../../../../shared/ai/provider'
 import { PROVIDER_CONFIGURATION_LIMITS } from '../../../../shared/ai/providerConfiguration'
@@ -79,25 +79,55 @@ function isLoopbackHost(hostname: string) {
     || normalized === '::1'
 }
 
+const unsafeRemoteIpv4Addresses = new BlockList()
+const unsafeRemoteIpv6Addresses = new BlockList()
+
+for (const [network, prefix] of [
+  ['0.0.0.0', 8],
+  ['10.0.0.0', 8],
+  ['100.64.0.0', 10],
+  ['127.0.0.0', 8],
+  ['169.254.0.0', 16],
+  ['172.16.0.0', 12],
+  ['192.0.0.0', 24],
+  ['192.0.2.0', 24],
+  ['192.168.0.0', 16],
+  ['198.18.0.0', 15],
+  ['198.51.100.0', 24],
+  ['203.0.113.0', 24],
+  ['224.0.0.0', 4],
+  ['240.0.0.0', 4],
+] as const) {
+  unsafeRemoteIpv4Addresses.addSubnet(network, prefix, 'ipv4')
+}
+
+for (const [network, prefix] of [
+  ['::', 128],
+  ['::1', 128],
+  ['::ffff:0:0', 96],
+  ['64:ff9b:1::', 48],
+  ['100::', 64],
+  ['2001:2::', 48],
+  ['2001:db8::', 32],
+  ['fc00::', 7],
+  ['fe80::', 10],
+  ['ff00::', 8],
+] as const) {
+  unsafeRemoteIpv6Addresses.addSubnet(network, prefix, 'ipv6')
+}
+
+export function isPublicRemoteAddress(address: string) {
+  const normalized = address.replace(/^\[(.*)]$/, '$1').toLowerCase()
+  const family = isIP(normalized)
+  if (family === 0) return false
+  return family === 4
+    ? !unsafeRemoteIpv4Addresses.check(normalized, 'ipv4')
+    : !unsafeRemoteIpv6Addresses.check(normalized, 'ipv6')
+}
+
 function isUnsafeRemoteHost(hostname: string) {
   const normalized = hostname.replace(/^\[(.*)]$/, '$1').toLowerCase()
   if (normalized === 'localhost' || normalized === 'metadata.google.internal') return true
   const family = isIP(normalized)
-  if (family === 4) {
-    const parts = normalized.split('.').map(Number)
-    return parts[0] === 10
-      || parts[0] === 127
-      || (parts[0] === 169 && parts[1] === 254)
-      || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31)
-      || (parts[0] === 192 && parts[1] === 168)
-      || parts[0] === 0
-  }
-  if (family === 6) {
-    return normalized === '::1'
-      || normalized === '::'
-      || normalized.startsWith('fc')
-      || normalized.startsWith('fd')
-      || /^fe[89ab]/.test(normalized)
-  }
-  return false
+  return family !== 0 && !isPublicRemoteAddress(normalized)
 }

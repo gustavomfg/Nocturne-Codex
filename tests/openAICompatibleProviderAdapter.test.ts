@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ProviderExecutionError } from '../electron/ai/ProviderExecutionError'
-import { OpenAICompatibleProviderAdapter } from '../electron/ai/providers/openai-compatible/adapter'
+import {
+  createPinnedLookup,
+  createRemoteProviderTransport,
+  OpenAICompatibleProviderAdapter,
+} from '../electron/ai/providers/openai-compatible/adapter'
 import { OpenAICompatibleAdapterFactory } from '../electron/ai/providers/openai-compatible/factory'
 import { ModelRegistry } from '../electron/ai/ModelRegistry'
 import {
+  isPublicRemoteAddress,
   parseOpenAICompatibleConfig,
   providerEndpoint,
 } from '../electron/ai/providers/openai-compatible/config'
@@ -131,6 +136,34 @@ describe('OpenAI-compatible configuration', () => {
   ])('recusa endpoint inseguro %s', (baseUrl) => {
     expect(() => parseOpenAICompatibleConfig({ ...config, baseUrl })).toThrow()
   })
+
+  it.each([
+    '0.0.0.1',
+    '10.0.0.1',
+    '100.64.0.1',
+    '127.0.0.1',
+    '169.254.169.254',
+    '172.16.0.1',
+    '192.168.0.1',
+    '198.51.100.1',
+    '224.0.0.1',
+    '::1',
+    '::ffff:127.0.0.1',
+    '2001:db8::1',
+    'fc00::1',
+    'fe80::1',
+    'ff00::1',
+  ])('classifica o endereço não público %s como inseguro', (address) => {
+    expect(isPublicRemoteAddress(address)).toBe(false)
+  })
+
+  it.each([
+    '8.8.8.8',
+    '1.1.1.1',
+    '2606:4700:4700::1111',
+  ])('aceita o endereço público %s', (address) => {
+    expect(isPublicRemoteAddress(address)).toBe(true)
+  })
 })
 
 describe('OpenAICompatibleAdapterFactory', () => {
@@ -151,6 +184,60 @@ describe('OpenAICompatibleAdapterFactory', () => {
       normalized,
       async () => undefined,
     )).not.toThrow()
+  })
+})
+
+describe('OpenAI-compatible remote transport', () => {
+  it('recusa respostas DNS privadas ou mistas antes de abrir a conexão', async () => {
+    const requestAddress = vi.fn().mockResolvedValue(Response.json({}))
+    const privateTransport = createRemoteProviderTransport(
+      async () => [{ address: '127.0.0.1', family: 4 }],
+      requestAddress,
+    )
+    const mixedTransport = createRemoteProviderTransport(
+      async () => [
+        { address: '8.8.8.8', family: 4 },
+        { address: '169.254.169.254', family: 4 },
+      ],
+      requestAddress,
+    )
+
+    await expect(privateTransport('https://provider.example/v1/models'))
+      .rejects.toThrow(/endereço não público/i)
+    await expect(mixedTransport('https://provider.example/v1/models'))
+      .rejects.toThrow(/endereço não público/i)
+    expect(requestAddress).not.toHaveBeenCalled()
+  })
+
+  it('fixa a conexão no endereço público previamente validado', async () => {
+    const response = Response.json({ object: 'list', data: [] })
+    const requestAddress = vi.fn().mockResolvedValue(response)
+    const transport = createRemoteProviderTransport(
+      async () => [
+        { address: '203.0.114.10', family: 4 },
+        { address: '2001:4860:4860::8888', family: 6 },
+      ],
+      requestAddress,
+    )
+
+    await expect(transport('https://provider.example/v1/models', {
+      method: 'GET',
+    })).resolves.toBe(response)
+    expect(requestAddress).toHaveBeenCalledWith(
+      new URL('https://provider.example/v1/models'),
+      { method: 'GET' },
+      { address: '203.0.114.10', family: 4 },
+    )
+  })
+
+  it('fornece ao socket apenas o endereço fixado', () => {
+    const pinned = { address: '8.8.8.8', family: 4 as const }
+    const resolver = createPinnedLookup(pinned)
+    const callback = vi.fn()
+
+    resolver('provider.example', { all: true }, callback)
+
+    expect(callback).toHaveBeenCalledWith(null, [pinned])
   })
 })
 

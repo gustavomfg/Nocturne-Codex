@@ -18,8 +18,10 @@ Review é somente leitura. Build pelo Codex usa `workspaceWrite` limitado à rai
 rede desabilitada e aprovações do usuário para operações solicitadas pelo App
 Server.
 
-Providers HTTP recusam redirects e endereços remotos reservados. HTTP sem TLS é
-aceito apenas para loopback local.
+Providers HTTP recusam redirects e endereços remotos reservados. Antes de cada
+conexão remota, todos os endereços resolvidos por DNS são validados e a conexão
+é fixada em um deles para impedir DNS rebinding. HTTP sem TLS é aceito apenas
+para loopback local.
 
 ## Credenciais e persistência
 

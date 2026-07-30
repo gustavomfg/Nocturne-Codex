@@ -1,3 +1,7 @@
+import { lookup } from 'node:dns/promises'
+import { request as httpsRequest } from 'node:https'
+import type { LookupFunction } from 'node:net'
+import { Readable } from 'node:stream'
 import type { NormalizedErrorCode } from '../../../../shared/ai/execution'
 import type { ModelDescriptor } from '../../../../shared/ai/model'
 import type { ProviderAvailability } from '../../../../shared/ai/provider'
@@ -11,6 +15,7 @@ import { ProviderExecutionError } from '../../ProviderExecutionError'
 import type { ProviderAdapter } from '../../ProviderRegistry'
 import {
   OPENAI_COMPATIBLE_LIMITS,
+  isPublicRemoteAddress,
   parseOpenAICompatibleConfig,
   providerEndpoint,
   type OpenAICompatibleConfig,
@@ -28,6 +33,21 @@ export interface OpenAICompatibleDependencies {
   resolveCredential: () => string | undefined | Promise<string | undefined>
   fetch?: typeof fetch
 }
+
+interface ResolvedProviderAddress {
+  address: string
+  family: 4 | 6
+}
+
+type ProviderHostResolver = (
+  hostname: string,
+) => Promise<readonly ResolvedProviderAddress[]>
+
+type PinnedProviderRequest = (
+  url: URL,
+  init: RequestInit | undefined,
+  resolved: ResolvedProviderAddress,
+) => Promise<Response>
 
 export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
   readonly definition
@@ -49,7 +69,11 @@ export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
       }
       return cloneModel(parsed)
     })
-    this.request = dependencies.fetch ?? globalThis.fetch
+    this.request = dependencies.fetch ?? (
+      this.config.source === 'remote'
+        ? createRemoteProviderTransport()
+        : globalThis.fetch
+    )
   }
 
   async getAvailability(): Promise<ProviderAvailability> {
@@ -205,6 +229,100 @@ export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
       request.dispose()
     }
   }
+}
+
+export function createRemoteProviderTransport(
+  resolveHost: ProviderHostResolver = resolveProviderHost,
+  requestAddress: PinnedProviderRequest = requestPinnedAddress,
+): typeof fetch {
+  return async (input, init) => {
+    const url = requestUrl(input)
+    if (url.protocol !== 'https:') {
+      throw new Error('O transporte remoto exige HTTPS.')
+    }
+    const addresses = await resolveHost(url.hostname)
+    if (addresses.length === 0 || addresses.some(({ address }) => (
+      !isPublicRemoteAddress(address)
+    ))) {
+      throw new Error('O endpoint remoto resolveu para um endereço não público.')
+    }
+    return requestAddress(url, init, addresses[0])
+  }
+}
+
+export async function resolveProviderHost(
+  hostname: string,
+): Promise<readonly ResolvedProviderAddress[]> {
+  const addresses = await lookup(hostname, { all: true, verbatim: true })
+  return addresses.map(({ address, family }) => {
+    if (family !== 4 && family !== 6) {
+      throw new Error('O endpoint remoto resolveu para uma família de rede inválida.')
+    }
+    return { address, family }
+  })
+}
+
+export function createPinnedLookup(
+  resolved: ResolvedProviderAddress,
+): LookupFunction {
+  return (_hostname, options, callback) => {
+    if (options.all) {
+      callback(null, [{ ...resolved }])
+      return
+    }
+    callback(null, resolved.address, resolved.family)
+  }
+}
+
+function requestUrl(input: RequestInfo | URL) {
+  if (input instanceof URL) return new URL(input)
+  if (typeof input === 'string') return new URL(input)
+  return new URL(input.url)
+}
+
+function requestPinnedAddress(
+  url: URL,
+  init: RequestInit | undefined,
+  resolved: ResolvedProviderAddress,
+) {
+  return new Promise<Response>((resolve, reject) => {
+    const request = httpsRequest(url, {
+      method: init?.method,
+      headers: Object.fromEntries(new Headers(init?.headers).entries()),
+      signal: init?.signal ?? undefined,
+      agent: false,
+      lookup: createPinnedLookup(resolved),
+    }, (incoming) => {
+      const headers = new Headers()
+      for (const [name, value] of Object.entries(incoming.headers)) {
+        if (Array.isArray(value)) {
+          for (const item of value) headers.append(name, item)
+        } else if (value !== undefined) {
+          headers.set(name, value)
+        }
+      }
+      resolve(new Response(
+        Readable.toWeb(incoming) as ReadableStream<Uint8Array>,
+        {
+          status: incoming.statusCode ?? 500,
+          statusText: incoming.statusMessage,
+          headers,
+        },
+      ))
+    })
+    request.once('error', reject)
+    if (init?.body === undefined || init.body === null) {
+      request.end()
+    } else if (
+      typeof init.body === 'string'
+      || init.body instanceof Uint8Array
+      || init.body instanceof ArrayBuffer
+    ) {
+      request.end(init.body)
+    } else {
+      request.destroy(new TypeError('O corpo da requisição do Provider não é suportado.'))
+    }
+  })
 }
 
 function requestHeaders(credential: string | undefined) {
