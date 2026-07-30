@@ -4,7 +4,7 @@ import { performance } from 'node:perf_hooks'
 import type { LocalDatabase } from '../database/Database'
 import type { Logger } from '../logging/Logger'
 import { backupSchema } from '../../shared/ipc/backupSchemas'
-import { assertBackupByteLimit, assertBackupRecordLimit, countBackupRecords } from '../../shared/ipc/backupLimits'
+import { assertBackupByteLimit, assertBackupMetrics, assertBackupRecordLimit, countBackupRecords } from '../../shared/ipc/backupLimits'
 import { safeIpcMain } from './safeIpc'
 import { parseBackupInWorker, serializeBackupInWorker } from './backupWorkers'
 import { assertSafeWorkspaceScope } from '../security/WorkspaceTrust'
@@ -17,6 +17,8 @@ export function registerDataIpc(win: BrowserWindow, database: LocalDatabase, log
     const result = await dialog.showSaveDialog(win, { title: 'Exportar dados do Nocturne', defaultPath: 'nocturne-backup.json', filters: [{ name: 'JSON', extensions: ['json'] }] })
     if (result.canceled || !result.filePath) return null
     const startedAt = performance.now()
+    const metrics = database.getExportMetrics()
+    assertBackupMetrics(metrics.records, metrics.estimatedBytes)
     const exported = database.exportData()
     assertBackupRecordLimit(exported)
     const serialized = await serializeBackupInWorker(exported)

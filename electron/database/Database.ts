@@ -43,6 +43,7 @@ const importColumns: Record<string, ReadonlySet<string>> = {
   model_catalog: new Set(['provider_id', 'model_id', 'descriptor', 'updated_at']),
   workspace_model_bindings: new Set(['workspace_id', 'bindings', 'updated_at']),
 }
+const exportTables = ['conversations', 'workspaces', 'messages', 'artifacts', 'workspace_memory', 'brain_memories', 'suggestions', 'suggestion_decisions', 'provider_configs', 'model_catalog', 'workspace_model_bindings', 'settings'] as const
 
 export class LocalDatabase {
   private db: Database.Database
@@ -361,6 +362,19 @@ export class LocalDatabase {
 
   exportData() {
     return { schemaVersion: DATABASE_SCHEMA_VERSION, exportedAt: new Date().toISOString(), conversations: this.db.prepare('SELECT * FROM conversations').all(), workspaces: this.db.prepare('SELECT * FROM workspaces').all(), messages: this.db.prepare('SELECT * FROM messages ORDER BY created_at').all(), artifacts: this.db.prepare('SELECT * FROM artifacts ORDER BY created_at').all(), memories: this.db.prepare('SELECT * FROM workspace_memory').all(), brainMemories: this.db.prepare('SELECT * FROM brain_memories ORDER BY created_at').all(), suggestions: this.db.prepare('SELECT * FROM suggestions').all(), suggestionDecisions: this.db.prepare('SELECT * FROM suggestion_decisions').all(), providerConfigs: this.db.prepare(`SELECT id,provider_type,display_name,source,base_url,enabled,requires_authentication,timeout_ms,created_at,updated_at FROM provider_configs ORDER BY created_at`).all(), modelCatalog: this.db.prepare('SELECT provider_id,model_id,descriptor,updated_at FROM model_catalog ORDER BY provider_id,model_id').all(), workspaceModelBindings: this.db.prepare('SELECT workspace_id,bindings,updated_at FROM workspace_model_bindings ORDER BY workspace_id').all(), settings: this.getSettings() }
+  }
+
+  getExportMetrics() {
+    let records = 0
+    let contentBytes = 0
+    for (const table of exportTables) {
+      const columns = (this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map(({ name }) => name)
+      const byteExpression = columns.map((column) => `COALESCE(LENGTH(CAST("${column}" AS BLOB)),0)`).join('+') || '0'
+      const metric = this.db.prepare(`SELECT COUNT(*) records, COALESCE(SUM(${byteExpression}),0) contentBytes FROM ${table}`).get() as { records: number; contentBytes: number }
+      records += metric.records
+      contentBytes += metric.contentBytes
+    }
+    return { records, estimatedBytes: contentBytes + records * 64 + 1_024 }
   }
 
   importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[]; brainMemories?: unknown[]; suggestions?: unknown[]; suggestionDecisions?: unknown[]; providerConfigs?: unknown[]; modelCatalog?: unknown[]; workspaceModelBindings?: unknown[]; settings?: Record<string, string> }) {

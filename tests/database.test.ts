@@ -202,6 +202,14 @@ describe('persistência SQLite', () => {
     expect(JSON.stringify(data)).not.toContain('9ba7e635-8746-48bd-a8e9-4609ff1690cb')
     const target = create(); target.importData(data); expect(target.listConversations()).toHaveLength(1); expect(target.listMessages(conversation.id)[0].content).toBe('Resposta simulada'); expect(target.getBrainMemory(memory.id, '/tmp/project')?.content).toContain('Segundo Cérebro'); expect(target.retrieveBrainMemories('/tmp/project', conversation.id, 'backup')[0].id).toBe(memory.id); expect(target.getSettings().model).toBe('modelo-teste'); expect(target.listWorkspaces()[0].authorized).toBe(false); expect(target.providerConfigurations.get(provider.id)).toMatchObject({ displayName: 'Backup Provider', credentialConfigured: false }); expect(target.providerConfigurations.getCredentialReference(provider.id)).toBeNull(); expect(target.modelCatalog.list()).toEqual([model]); expect(target.workspaceModelBindings.get('/tmp/project')?.defaultBinding).toEqual({ providerId: model.providerId, modelId: model.modelId }); target.close()
   })
+  it('estima o tamanho do backup antes de materializar todas as coleções', () => {
+    const db = create(); const conversation = db.createConversation('/tmp/export-metrics')
+    db.addMessage(conversation.id, 'assistant', 'x'.repeat(2_000))
+    const metrics = db.getExportMetrics()
+    expect(metrics.records).toBeGreaterThanOrEqual(3)
+    expect(metrics.estimatedBytes).toBeGreaterThan(2_000)
+    db.close()
+  })
   it('substitui dados locais ao restaurar em vez de mesclar históricos', () => {
     const source = create(); const restored = source.createConversation('/tmp/restored'); const data = source.exportData(); source.close()
     const target = create(); target.createConversation('/tmp/old'); target.importData(data)

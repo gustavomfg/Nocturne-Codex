@@ -1,4 +1,4 @@
-export const BACKUP_COLLECTION_KEYS = ['conversations', 'workspaces', 'messages', 'artifacts', 'memories', 'brainMemories', 'suggestions', 'suggestionDecisions', 'providerConfigs'] as const
+export const BACKUP_COLLECTION_KEYS = ['conversations', 'workspaces', 'messages', 'artifacts', 'memories', 'brainMemories', 'suggestions', 'suggestionDecisions', 'providerConfigs', 'modelCatalog', 'workspaceModelBindings'] as const
 
 export const BACKUP_LIMITS = Object.freeze({
   maxBytes: 25_000_000,
@@ -27,6 +27,11 @@ export function assertBackupRecordLimit(value: unknown) {
 
 export function assertBackupByteLimit(bytes: number) {
   if (bytes > BACKUP_LIMITS.maxBytes) throw new Error(`O backup excede o limite de ${formatMegabytes(BACKUP_LIMITS.maxBytes)} MB.`)
+}
+
+export function assertBackupMetrics(records: number, estimatedBytes: number) {
+  if (records > BACKUP_LIMITS.maxRecords) throw new Error(`O backup excede o limite agregado de ${formatCount(BACKUP_LIMITS.maxRecords)} registros.`)
+  assertBackupByteLimit(estimatedBytes)
 }
 
 function formatCount(value: number) { return new Intl.NumberFormat('pt-BR').format(value) }

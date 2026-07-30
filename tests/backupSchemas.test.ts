@@ -5,7 +5,7 @@ import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { afterEach, describe, expect, it } from 'vitest'
 import { backupSchema } from '../shared/ipc/backupSchemas'
-import { assertBackupByteLimit, assertBackupRecordLimit, BACKUP_LIMITS, PERSISTENCE_PERFORMANCE_BUDGETS } from '../shared/ipc/backupLimits'
+import { assertBackupByteLimit, assertBackupRecordLimit, BACKUP_LIMITS, countBackupRecords, PERSISTENCE_PERFORMANCE_BUDGETS } from '../shared/ipc/backupLimits'
 import { parseBackupInWorker, serializeBackupInWorker } from '../electron/ipc/backupWorkers'
 
 const now = new Date().toISOString()
@@ -103,6 +103,7 @@ describe('schema de backup', () => {
     expect(() => assertBackupRecordLimit({ messages: new Array(BACKUP_LIMITS.maxRecords + 1) })).toThrow(/200\.000 registros/)
     expect(() => assertBackupByteLimit(BACKUP_LIMITS.maxBytes)).not.toThrow()
     expect(() => assertBackupByteLimit(BACKUP_LIMITS.maxBytes + 1)).toThrow(/25 MB/)
+    expect(countBackupRecords({ modelCatalog: [{}, {}], workspaceModelBindings: [{}] })).toBe(3)
   })
 
   it('serializa e reabre no worker backups acima do antigo limite de 50.000 registros', async () => {
