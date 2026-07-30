@@ -164,15 +164,17 @@ export function AIConnectionPage({
 
   const saveAndBind = async () => {
     if (!selectedPreset || !selectedModel || saving) return
+    if (!workspaceId) {
+      setError('Selecione um workspace antes de ativar este modelo.')
+      return
+    }
     setSaving(true)
     setError(null)
     try {
-      if (workspaceId) {
-        await window.nocturne.models.setBindings({
-          workspaceId,
-          defaultBinding: selectedModel,
-        })
-      }
+      await window.nocturne.models.setBindings({
+        workspaceId,
+        defaultBinding: selectedModel,
+      })
       onNotify(`Usando ${selectedModel.modelId}.`)
       resetWizard()
     } catch (failure) {
@@ -372,7 +374,8 @@ export function AIConnectionPage({
             </>}
       </div>
       <div className="ai-step-foot">
-        <button disabled={saving || !selectedModel} className="ai-use-btn" onClick={() => void saveAndBind()}>
+        {!workspaceId && <span className="ai-workspace-required">Selecione um workspace para ativar o modelo.</span>}
+        <button disabled={saving || !selectedModel || !workspaceId} className="ai-use-btn" onClick={() => void saveAndBind()}>
           {saving ? 'Salvando…' : 'Usar este modelo'}
         </button>
       </div>

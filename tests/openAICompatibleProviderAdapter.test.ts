@@ -302,6 +302,34 @@ describe('OpenAICompatibleProviderAdapter', () => {
     })
   })
 
+  it('distingue ausência de créditos de um limite temporário', async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(
+      JSON.stringify({
+        error: {
+          type: 'insufficient_quota',
+          code: 'insufficient_quota',
+          message: 'You exceeded your current quota. Bearer segredo-interno',
+        },
+      }),
+      { status: 429 },
+    ))
+
+    await expect(adapter(request).execute(execution(), {
+      signal: new AbortController().signal,
+      emit: vi.fn(),
+    })).rejects.toSatisfy((error: unknown) => {
+      expect(error).toBeInstanceOf(ProviderExecutionError)
+      const normalized = (error as ProviderExecutionError).normalized
+      expect(normalized).toEqual({
+        code: 'insufficient-credits',
+        message: 'A API não possui créditos ou cota disponível. Adicione créditos na plataforma do Provider ou escolha outra conexão.',
+        retryable: false,
+      })
+      expect(JSON.stringify(normalized)).not.toContain('segredo-interno')
+      return true
+    })
+  })
+
   it('recusa conteúdo não-SSE e tool calls não autorizadas', async () => {
     const invalid = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json({ choices: [] }),

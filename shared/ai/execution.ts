@@ -1,6 +1,7 @@
 export const normalizedErrorCodes = [
   'authentication-failed',
   'permission-denied',
+  'insufficient-credits',
   'rate-limited',
   'model-unavailable',
   'provider-unavailable',

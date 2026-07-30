@@ -121,7 +121,7 @@ export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
           signal: request.signal,
         },
       )
-      if (!response.ok) throw errorFromStatus(response.status)
+      if (!response.ok) throw await errorFromResponse(response)
       return await consumeOpenAICompatibleStream(
         response,
         execution.executionId,
@@ -178,7 +178,7 @@ export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
         redirect: 'error',
         signal: request.signal,
       })
-      if (!response.ok) throw errorFromStatus(response.status)
+      if (!response.ok) throw await errorFromResponse(response)
       return normalizeModelCatalog(
         await readBoundedJson(response),
         this.config,
@@ -251,6 +251,23 @@ function availabilityFromError(error: ProviderExecutionError): ProviderAvailabil
   }
 }
 
+async function errorFromResponse(response: Response) {
+  if (response.status === 429) {
+    try {
+      if (isInsufficientCredits(await readBoundedJson(response))) {
+        return providerError(
+          'insufficient-credits',
+          'A API não possui créditos ou cota disponível. Adicione créditos na plataforma do Provider ou escolha outra conexão.',
+          false,
+        )
+      }
+    } catch {
+      // Preserve the generic, sanitized rate-limit response below.
+    }
+  }
+  return errorFromStatus(response.status)
+}
+
 function errorFromStatus(status: number) {
   if (status === 401 || status === 403) {
     return providerError(
@@ -275,6 +292,21 @@ function errorFromStatus(status: number) {
       : 'O Provider recusou a solicitação.',
     status >= 500,
   )
+}
+
+function isInsufficientCredits(value: unknown) {
+  const body = asRecord(value)
+  const error = asRecord(body?.error)
+  const identifiers = [
+    body?.code,
+    body?.type,
+    error?.code,
+    error?.type,
+  ].filter((item): item is string => typeof item === 'string')
+  return identifiers.some((identifier) => (
+    /insufficient[_-]?quota|billing[_-]?(?:hard[_-]?limit|not[_-]?active)|usage[_-]?limit|credit/i
+      .test(identifier)
+  ))
 }
 
 function providerError(

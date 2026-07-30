@@ -332,6 +332,22 @@ test.describe('renderer do produto', () => {
     await expect(page.locator('.product-toast')).toContainText('Conexão removida.')
   })
 
+  test('não confirma um modelo de API sem workspace ativo', async ({ page }) => {
+    await installNocturneMock(page, { empty: true })
+    await page.reload()
+    await ready(page)
+    await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
+    const dialog = page.getByRole('dialog', { name: 'Configurações' })
+    await dialog.getByRole('button', { name: 'Adicionar conta, API ou modelo local' }).click()
+    await dialog.getByRole('button', { name: 'OpenRouter' }).click()
+    await dialog.getByRole('textbox', { name: '' }).fill('temporary-renderer-secret')
+    await dialog.getByRole('button', { name: 'Conectar' }).click()
+
+    await expect(dialog.getByText('Selecione um workspace para ativar o modelo.')).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Usar este modelo' })).toBeDisabled()
+    await expect(page.locator('.product-toast')).toHaveCount(0)
+  })
+
   test('protege alterações não salvas nas configurações', async ({ page }) => {
     await page.setViewportSize({ width: 720, height: 800 })
     await ready(page)
