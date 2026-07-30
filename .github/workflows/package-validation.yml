@@ -18,7 +18,7 @@ on:
       - .github/workflows/**
   push:
     branches:
-      - master
+      - main
     tags:
       - 'v*'
 
@@ -36,6 +36,35 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
+      - name: Verify workflow push branches match the repository default
+        shell: bash
+        env:
+          REPOSITORY_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          for workflow in \
+            .github/workflows/package-validation.yml \
+            .github/workflows/dependency-security.yml
+          do
+            mapfile -t configured_branches < <(
+              awk '
+                /^  push:/ { in_push = 1; next }
+                in_push && /^[^ ]/ { in_push = 0 }
+                in_push && /^    branches:/ { in_branches = 1; next }
+                in_branches && /^    [^ ]/ { in_branches = 0 }
+                in_push && in_branches && /^      - / {
+                  sub(/^      - /, "")
+                  print
+                }
+              ' "$workflow"
+            )
+
+            if [[ ${#configured_branches[@]} -ne 1 ||
+                  "${configured_branches[0]}" != "$REPOSITORY_DEFAULT_BRANCH" ]]
+            then
+              echo "::error file=$workflow::push.branches must contain only the repository default branch ($REPOSITORY_DEFAULT_BRANCH)"
+              exit 1
+            fi
+          done
       - name: Run actionlint 1.7.12
         shell: bash
         run: |
