@@ -343,6 +343,7 @@ export class LocalDatabase {
     const current = this.db.prepare('SELECT status FROM suggestions WHERE id=?').get(id) as { status: SuggestionStatus } | undefined
     if (!current) throw new Error('Sugestão não encontrada.')
     const allowed: Record<SuggestionStatus, SuggestionStatus[]> = { pending: ['accepted', 'rejected'], accepted: ['applied', 'rejected'], rejected: [], applied: [] }
+    if (current.status === status) return this.getSuggestion(id) as Suggestion
     if (current.status !== status && !allowed[current.status].includes(status)) throw new Error(`Transição de sugestão inválida: ${current.status} → ${status}.`)
     const changed = this.db.prepare('UPDATE suggestions SET status=?,result=?,updated_at=? WHERE id=?').run(status, result?.slice(0, 20_000) ?? null, updatedAt, id)
     if (!changed.changes) throw new Error('Sugestão não encontrada.')

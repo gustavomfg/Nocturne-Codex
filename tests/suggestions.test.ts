@@ -44,7 +44,9 @@ describe('sugestões', () => {
   it('persiste rejeição e impede reabrir uma decisão terminal', () => {
     const db = new LocalDatabase(tempDirectory()); const conversation = db.createConversation('/tmp/project'); const suggestion = db.addSuggestion(conversation.id, conversation.workspace, input)
     expect(db.setSuggestionStatus(suggestion.id, 'rejected').status).toBe('rejected')
+    expect(db.setSuggestionStatus(suggestion.id, 'rejected').status).toBe('rejected')
     expect(() => db.setSuggestionStatus(suggestion.id, 'accepted')).toThrow(/Transição.*inválida/)
+    expect((db.exportData().suggestionDecisions as unknown[])).toHaveLength(1)
     db.close()
   })
 

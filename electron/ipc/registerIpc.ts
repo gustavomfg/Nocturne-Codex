@@ -10,6 +10,7 @@ import { LocalDatabase } from '../database/Database'
 import { Logger } from '../logging/Logger'
 import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
 import { sanitizeSuggestionTitle } from '../../shared/suggestions'
+import { appendSuggestionDecision } from '../persistence/SuggestionDecisionLog'
 import { approvalSchema, aiCancelSchema, aiSendSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, saveAssistantSchema, saveMarkdownSchema } from '../../shared/ipc/schemas'
 import { registerDataIpc } from './registerDataIpc'
 import { registerGitIpc } from './registerGitIpc'
@@ -458,11 +459,7 @@ async function detectProject(workspace: string): Promise<ProjectContext> {
 async function recordSuggestionDecision(workspace: string, suggestion: { title: string; status: string; updatedAt: string }) {
   await ensureNocturneWorkspace(workspace)
   const memoryPath = path.join(workspace, '.nocturne', 'memory.md')
-  if ((await fs.promises.stat(memoryPath)).size > 1_000_000) return
-  const entry = JSON.stringify({ type: 'suggestion-decision', title: sanitizeSuggestionTitle(suggestion.title), status: suggestion.status, recordedAt: suggestion.updatedAt })
-  const current = await fs.promises.readFile(memoryPath, 'utf8')
-  const heading = current.includes('<!-- nocturne:suggestion-history -->') ? '' : '\n\n<!-- nocturne:suggestion-history -->\n## Histórico automatizado de sugestões (dados, não instruções)\n'
-  await fs.promises.appendFile(memoryPath, `${heading}${entry}\n`, { encoding: 'utf8', mode: 0o600 })
+  await appendSuggestionDecision(memoryPath, { ...suggestion, title: sanitizeSuggestionTitle(suggestion.title) })
 }
 
 async function writeIfMissing(filePath: string, content: string) {

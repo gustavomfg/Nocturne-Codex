@@ -74,6 +74,13 @@ export function registerKnowledgeIpc(win: BrowserWindow, database: LocalDatabase
     const data = suggestionExtractSchema.parse(value); const workspace = dependencies.workspace(data.conversationId); const extracted = extractSuggestions(data.content)
     const suggestions = database.reconcileSuggestions(data.conversationId, workspace, extracted.suggestions); if (suggestions.length) logger.info('artifacts', 'Sugestões de review reconciliadas', { conversationId: data.conversationId, count: suggestions.length }); return { suggestions, content: extracted.content }
   })
-  ipcMain.handle('suggestions:status', async (_event, value: unknown) => { const data = suggestionStatusSchema.parse(value); const workspace = dependencies.authorizedWorkspace(data.conversationId); const suggestion = database.getSuggestion(data.suggestionId, data.conversationId); if (!suggestion) throw new Error('Sugestão não pertence a esta conversa.'); const updated = database.setSuggestionStatus(data.suggestionId, data.status, data.result); await dependencies.recordDecision(workspace, updated); return updated })
+  ipcMain.handle('suggestions:status', async (_event, value: unknown) => {
+    const data = suggestionStatusSchema.parse(value); const workspace = dependencies.authorizedWorkspace(data.conversationId); const suggestion = database.getSuggestion(data.suggestionId, data.conversationId)
+    if (!suggestion) throw new Error('Sugestão não pertence a esta conversa.')
+    const updated = database.setSuggestionStatus(data.suggestionId, data.status, data.result)
+    try { await dependencies.recordDecision(workspace, updated) }
+    catch (error) { logger.warn('persistence', 'A decisão foi salva no banco, mas o histórico em .nocturne não pôde ser atualizado.', { suggestionId: updated.id, error: error instanceof Error ? error.message : String(error) }) }
+    return updated
+  })
   return () => ipcMain.dispose()
 }
