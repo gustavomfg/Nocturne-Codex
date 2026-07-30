@@ -308,12 +308,14 @@ export class LocalDatabase {
 
   reconcileSuggestions(conversationId: string, workspaceId: string, values: SuggestionInput[]): Suggestion[] {
     return this.db.transaction(() => {
-      const active = this.listSuggestions(conversationId)
+      const history = this.listSuggestionHistory(conversationId)
       const byIdentity = new Map<string, Suggestion>()
-      for (const suggestion of active) {
+      for (const suggestion of history) {
         const identity = suggestionIdentity(suggestion)
         const existing = byIdentity.get(identity)
-        if (!existing || (existing.status === 'pending' && suggestion.status === 'accepted')) byIdentity.set(identity, suggestion)
+        const suggestionIsActive = suggestion.status === 'pending' || suggestion.status === 'accepted'
+        const existingIsActive = existing?.status === 'pending' || existing?.status === 'accepted'
+        if (!existing || (!existingIsActive && suggestionIsActive) || (existing.status === 'pending' && suggestion.status === 'accepted')) byIdentity.set(identity, suggestion)
       }
       return values.map((value) => {
         const identity = suggestionIdentity(value)
@@ -323,7 +325,7 @@ export class LocalDatabase {
           byIdentity.set(identity, created)
           return created
         }
-        if (existing.status === 'accepted') return existing
+        if (existing.status !== 'pending') return existing
         const updatedAt = new Date().toISOString()
         this.db.prepare(`UPDATE suggestions SET title=@title,description=@description,reasoning=@reasoning,category=@category,severity=@severity,
           affected_files=@affectedFiles,proposed_changes=@proposedChanges,expected_benefits=@expectedBenefits,complexity=@complexity,risk=@risk,updated_at=@updatedAt
@@ -336,6 +338,11 @@ export class LocalDatabase {
         return updated
       })
     })()
+  }
+
+  private listSuggestionHistory(conversationId: string): Suggestion[] {
+    const rows = this.db.prepare(`SELECT id,workspace_id workspaceId,conversation_id conversationId,title,description,reasoning,category,severity,affected_files affectedFiles,proposed_changes proposedChanges,expected_benefits expectedBenefits,complexity,risk,status,created_at createdAt,updated_at updatedAt FROM suggestions WHERE conversation_id=? ORDER BY updated_at DESC`).all(conversationId) as Array<Omit<Suggestion, 'affectedFiles' | 'expectedBenefits'> & { affectedFiles: string; expectedBenefits: string }>
+    return decodeSuggestions(rows)
   }
 
   setSuggestionStatus(id: string, status: SuggestionStatus, result?: string): Suggestion {

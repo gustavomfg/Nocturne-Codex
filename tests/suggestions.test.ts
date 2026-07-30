@@ -62,6 +62,9 @@ describe('sugestões', () => {
     db.setSuggestionStatus(pending.id, 'applied')
     expect(db.listSuggestions(conversation.id)).toEqual([])
     expect(db.listSuggestionPage(conversation.id)).toEqual({ items: [], hasMore: false })
+    const completedRepeat = db.reconcileSuggestions(conversation.id, conversation.workspace, [{ ...input, description: 'A IA repetiu a sugestão já concluída.' }])
+    expect(completedRepeat[0]).toMatchObject({ id: pending.id, status: 'applied' })
+    expect(db.listSuggestions(conversation.id)).toEqual([])
     db.close()
   })
 
