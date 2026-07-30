@@ -24,7 +24,7 @@ ou secret do repositório.
 Para habilitá-lo:
 
 1. registre um runner dedicado, no escopo deste repositório;
-2. adicione ao runner o label `nocturne-codex`;
+2. adicione ao runner o label `nocturne-studio`;
 3. instale e autentique uma versão do Codex CLI listada em
    `shared/codex-compatibility.json`;
 4. execute manualmente `Compatibility · Codex CLI` sobre o commit desejado.

@@ -1,0 +1,10 @@
+{
+  "displayName": "Nocturne Studio",
+  "packageName": "nocturne-studio",
+  "applicationId": "com.nocturne.codex",
+  "currentUserDataDirectory": "Nocturne Studio",
+  "legacyUserDataDirectory": "Nocturne Codex",
+  "repository": "Nocturne-Codex",
+  "codexClientName": "nocturne-studio",
+  "runnerLabel": "nocturne-studio"
+}

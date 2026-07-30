@@ -576,7 +576,7 @@ test.describe('renderer do produto', () => {
     await ready(page)
     await page.evaluate(() => {
       const suggestion: Suggestion = {
-        id: 'suggestion-persistence', workspaceId: '/workspace/nocturne-codex', conversationId: 'conversation-1', title: 'Persistir antes de aplicar', description: 'A decisão precisa ser durável.', reasoning: 'O fluxo de aprovação depende do registro local.', category: 'bug', severity: 'high', affectedFiles: ['src/App.tsx'], proposedChanges: '+ correção', expectedBenefits: ['Auditoria consistente'], complexity: 'low', risk: 'low', status: 'pending', createdAt: '2026-07-13T20:00:00.000Z', updatedAt: '2026-07-13T20:00:00.000Z',
+        id: 'suggestion-persistence', workspaceId: '/workspace/sample-project', conversationId: 'conversation-1', title: 'Persistir antes de aplicar', description: 'A decisão precisa ser durável.', reasoning: 'O fluxo de aprovação depende do registro local.', category: 'bug', severity: 'high', affectedFiles: ['src/App.tsx'], proposedChanges: '+ correção', expectedBenefits: ['Auditoria consistente'], complexity: 'low', risk: 'low', status: 'pending', createdAt: '2026-07-13T20:00:00.000Z', updatedAt: '2026-07-13T20:00:00.000Z',
       }
       window.nocturne.suggestions.page = async () => ({ items: [suggestion], hasMore: false })
       window.nocturne.suggestions.status = async () => { throw new Error('Falha ao persistir decisão.') }
@@ -595,7 +595,7 @@ test.describe('renderer do produto', () => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await ready(page)
     await page.evaluate(() => {
-      const common = { workspaceId: '/workspace/nocturne-codex', conversationId: 'conversation-1', description: 'A arquitetura precisa de uma fronteira mais clara.', reasoning: 'Responsabilidades observadas no mesmo módulo.', category: 'architecture' as const, affectedFiles: ['src/App.tsx'], proposedChanges: '+ extrair responsabilidade', expectedBenefits: ['Arquitetura mais clara'], complexity: 'low' as const, risk: 'low' as const, status: 'pending' as const, createdAt: '2026-07-13T20:00:00.000Z', updatedAt: '2026-07-13T20:00:00.000Z' }
+      const common = { workspaceId: '/workspace/sample-project', conversationId: 'conversation-1', description: 'A arquitetura precisa de uma fronteira mais clara.', reasoning: 'Responsabilidades observadas no mesmo módulo.', category: 'architecture' as const, affectedFiles: ['src/App.tsx'], proposedChanges: '+ extrair responsabilidade', expectedBenefits: ['Arquitetura mais clara'], complexity: 'low' as const, risk: 'low' as const, status: 'pending' as const, createdAt: '2026-07-13T20:00:00.000Z', updatedAt: '2026-07-13T20:00:00.000Z' }
       const suggestions: Suggestion[] = [
         { ...common, id: 'suggestion-live-health', title: 'Refinar fronteiras', severity: 'medium' },
         { ...common, id: 'suggestion-remaining', title: 'Separar domínio restante', severity: 'high' },
@@ -672,5 +672,5 @@ test('mantém o histórico isolado até reautorizar um workspace restaurado', as
   expect(before).toMatchObject({ memoryReads: 0 })
   await page.getByRole('button', { name: 'Selecionar pasta' }).click()
   await expect(page.getByText('Reautorizar workspace?')).toBeHidden()
-  await expect.poll(() => page.evaluate(() => (window as unknown as { __nocturneTest: { calls(): { selectedExpected?: string; memoryReads: number } } }).__nocturneTest.calls())).toEqual({ selectedExpected: '/workspace/nocturne-codex', memoryReads: 1 })
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __nocturneTest: { calls(): { selectedExpected?: string; memoryReads: number } } }).__nocturneTest.calls())).toEqual({ selectedExpected: '/workspace/sample-project', memoryReads: 1 })
 })

@@ -5,7 +5,7 @@ import path from 'node:path'
 import readline from 'node:readline'
 
 const executable = process.env.CODEX_PATH || 'codex'
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-codex-contract-'))
+const root = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-studio-contract-'))
 const reportPath = path.resolve(process.env.CODEX_SMOKE_REPORT || 'test-results/codex-contract-smoke.json')
 const compatibility = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'shared/codex-compatibility.json'), 'utf8'))
 const report = { ok: false, version: '', verifiedVersion: false, initialize: false, modelList: false, configRead: false, threadStart: false, turnStart: false, turnCompleted: false, agentResponse: false, interrupt: false, approvalsObserved: 0, approvalsDeclined: 0, notifications: 0 }

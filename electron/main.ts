@@ -14,6 +14,7 @@ import { ProviderCredentialVault } from './security/ProviderCredentialVault'
 import { ElectronCredentialEncryption } from './security/ElectronCredentialEncryption'
 import { ModelCatalogService } from './ai/ModelCatalogService'
 import { migrateProductUserData } from './persistence/ProductUserData'
+import productIdentity from '../shared/product-identity.json'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const softwareRendering = process.env.NOCTURNE_DISABLE_GPU === '1' || process.argv.includes('--disable-gpu')
@@ -22,12 +23,16 @@ process.env.APP_ROOT = path.join(__dirname, '..')
 process.env.NOCTURNE_APP_RUNNING = '1'
 export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
-const APP_NAME = 'Nocturne Studio'
-const LEGACY_APP_NAME = 'Nocturne Codex'
+const APP_NAME = productIdentity.displayName
+const LEGACY_APP_NAME = productIdentity.legacyUserDataDirectory
 const APP_ICON = path.join(process.env.APP_ROOT, 'build', 'icon.png')
 app.setName(APP_NAME)
 if (!app.commandLine.hasSwitch('user-data-dir')) {
-  app.setPath('userData', migrateProductUserData(app.getPath('appData'), APP_NAME, LEGACY_APP_NAME))
+  app.setPath('userData', migrateProductUserData(
+    app.getPath('appData'),
+    productIdentity.currentUserDataDirectory,
+    LEGACY_APP_NAME,
+  ))
 }
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 

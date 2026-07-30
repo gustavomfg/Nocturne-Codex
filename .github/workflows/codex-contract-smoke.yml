@@ -15,7 +15,7 @@ jobs:
     name: Validate App Server contract
     # This smoke uses the operator's authenticated Codex installation. It is
     # intentionally manual and must never run on a generic self-hosted runner.
-    runs-on: [self-hosted, nocturne-codex]
+    runs-on: [self-hosted, nocturne-studio]
     timeout-minutes: 10
     steps:
       - name: Check out the requested commit

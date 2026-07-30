@@ -63,7 +63,7 @@ describe('políticas de execução', () => {
   it('não registra o smoke manual do Codex como deployment', () => {
     const workflow = fs.readFileSync(path.join(process.cwd(), '.github/workflows/codex-contract-smoke.yml'), 'utf8')
     expect(workflow).toContain('workflow_dispatch:')
-    expect(workflow).toContain('runs-on: [self-hosted, nocturne-codex]')
+    expect(workflow).toContain('runs-on: [self-hosted, nocturne-studio]')
     expect(workflow).not.toContain('environment:')
     expect(workflow).not.toContain('schedule:')
   })
