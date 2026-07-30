@@ -2,7 +2,7 @@
 
 Requer Node.js >=24.18 <25 e npm >=11 <12.
 
-Codex CLI: mínima e verificada 0.145.0.
+Codex CLI: versão mínima 0.145.0; versões verificadas 0.145.0 e 0.146.0.
 
 ## Comandos
 

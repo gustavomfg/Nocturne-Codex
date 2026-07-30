@@ -20,6 +20,7 @@ import type {
 import type { ModelDescriptor, ModelReference } from '../../../shared/ai/model'
 import type { CodexAccountStatus } from '../../../shared/types'
 import type { CodexModel } from '../../../shared/codexModels'
+import codexCompatibility from '../../../shared/codex-compatibility.json'
 import { errorMessage } from '../../shared/format'
 
 type Step = 'list' | 'service' | 'auth' | 'model' | 'codex-model'
@@ -40,6 +41,7 @@ const presets: ServicePreset[] = [
   { id: 'ollama', name: 'Ollama', icon: Laptop, baseUrl: 'http://127.0.0.1:11434/v1', authType: 'local' },
   { id: 'other', name: 'Outro', icon: Globe, baseUrl: '', authType: 'api-key' },
 ]
+const verifiedCodexVersions = codexCompatibility.verified.join(' ou ')
 
 interface AIConnectionPageProps {
   workspaceId: string
@@ -336,10 +338,10 @@ export function AIConnectionPage({
       }</p>
 
       {selectedPreset.authType === 'account' && codexAccount && !codexAccount.installed && (
-        <p className="ai-local-note">O Codex CLI 0.145.0 precisa estar instalado para usar uma conta ChatGPT.</p>
+        <p className="ai-local-note">Instale uma versão homologada do Codex CLI ({verifiedCodexVersions}) para usar uma conta ChatGPT.</p>
       )}
       {selectedPreset.authType === 'account' && codexAccount?.installed && !codexAccount.compatible && (
-        <p className="ai-local-note">Codex CLI {codexAccount.version || 'desconhecido'} não homologado. Instale a versão 0.145.0.</p>
+        <p className="ai-local-note">Codex CLI {codexAccount.version || 'desconhecido'} não homologado. Use {verifiedCodexVersions}.</p>
       )}
 
       {selectedPreset.authType === 'api-key' && <>

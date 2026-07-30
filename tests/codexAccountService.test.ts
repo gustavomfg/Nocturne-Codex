@@ -57,4 +57,20 @@ describe('CodexAccountService', () => {
     }))
     await expect(service.login()).rejects.toThrow(/não foi homologada/)
   })
+
+  it('aceita a versão 0.146.0 após validação explícita do contrato', async () => {
+    const service = new CodexAccountService(async (args) => ({
+      stdout: args[0] === '--version'
+        ? 'codex-cli 0.146.0'
+        : 'Logged in using ChatGPT',
+      stderr: '',
+    }))
+    await expect(service.status()).resolves.toMatchObject({
+      installed: true,
+      authenticated: true,
+      compatible: true,
+      version: '0.146.0',
+      authenticationMethod: 'chatgpt',
+    })
+  })
 })

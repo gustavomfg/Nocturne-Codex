@@ -2,7 +2,9 @@
 
 O Nocturne Studio é compatível com o Codex CLI.
 
-Compatibilidade mínima e verificada: 0.145.0.
+Compatibilidade mínima: 0.145.0.
+
+Versões verificadas: 0.145.0 e 0.146.0.
 
 ## Verificação
 
