@@ -4,7 +4,7 @@ import type { LocalDatabase } from '../database/Database'
 import type { Logger } from '../logging/Logger'
 import { extractBrainMemoryCandidates, extractSuggestions } from '../../shared/suggestions'
 import { isSafeBrainMemoryContent } from '../../shared/brainMemory'
-import { brainMemoryCreateSchema, brainMemoryDeleteSchema, brainMemoryExtractSchema, brainMemoryPageSchema, brainMemoryUpdateSchema, conversationPageSchema, idSchema, suggestionStatusSchema } from '../../shared/ipc/schemas'
+import { brainMemoryCreateSchema, brainMemoryDeleteSchema, brainMemoryExtractSchema, brainMemoryPageSchema, brainMemoryUpdateSchema, conversationPageSchema, idSchema, suggestionExtractSchema, suggestionStatusSchema } from '../../shared/ipc/schemas'
 import { safeIpcMain } from './safeIpc'
 
 interface WorkspaceContext { content: string; rules: string; updatedAt: string }
@@ -71,7 +71,7 @@ export function registerKnowledgeIpc(win: BrowserWindow, database: LocalDatabase
   ipcMain.handle('suggestions:list', (_event, value: unknown) => database.listSuggestions(idSchema.parse(value)))
   ipcMain.handle('suggestions:page', (_event, value: unknown) => { const data = conversationPageSchema.parse(value); return database.listSuggestionPage(data.conversationId, data.offset, data.limit) })
   ipcMain.handle('suggestions:create', (_event, value: unknown) => {
-    const data = z.object({ conversationId: idSchema, content: z.string().max(1_000_000) }).parse(value); const workspace = dependencies.workspace(data.conversationId); const extracted = extractSuggestions(data.content)
+    const data = suggestionExtractSchema.parse(value); const workspace = dependencies.workspace(data.conversationId); const extracted = extractSuggestions(data.content)
     const suggestions = database.reconcileSuggestions(data.conversationId, workspace, extracted.suggestions); if (suggestions.length) logger.info('artifacts', 'Sugestões de review reconciliadas', { conversationId: data.conversationId, count: suggestions.length }); return { suggestions, content: extracted.content }
   })
   ipcMain.handle('suggestions:status', async (_event, value: unknown) => { const data = suggestionStatusSchema.parse(value); const workspace = dependencies.authorizedWorkspace(data.conversationId); const suggestion = database.getSuggestion(data.suggestionId, data.conversationId); if (!suggestion) throw new Error('Sugestão não pertence a esta conversa.'); const updated = database.setSuggestionStatus(data.suggestionId, data.status, data.result); await dependencies.recordDecision(workspace, updated); return updated })
