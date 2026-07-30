@@ -4,6 +4,7 @@ export type Role = 'user' | 'assistant' | 'system'
 export interface Conversation { id: string; title: string; workspace: string; createdAt: string; updatedAt: string }
 export type WorkspaceAvailability = 'available' | 'missing' | 'permission-denied' | 'invalid'
 export interface Workspace { path: string; name: string; favorite: boolean; authorized: boolean; availability: WorkspaceAvailability; availabilityMessage?: string; createdAt: string; lastOpenedAt: string }
+export interface WorkspaceChangeEvent { workspace: string; paths: string[]; overflow: boolean; detectedAt: string; error?: string }
 export interface Message { id: string; conversationId: string; role: Role; content: string; metadata: string | null; createdAt: string }
 export interface CollectionPage<T> { items: T[]; hasMore: boolean }
 export interface MessagePage { items: Message[]; hasMore: boolean }

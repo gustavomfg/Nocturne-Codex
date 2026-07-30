@@ -22,7 +22,11 @@ const electron = vi.hoisted(() => {
   let exposed: NocturneApi | null = null
   let clipboardText = ''
   const mainFrame = { routingId: 1, url: 'file:///nocturne/index.html' }
-  const mainWebContents: { send(channel: string, payload: unknown): void; mainFrame: typeof mainFrame; getURL(): string } = { send: () => undefined, mainFrame, getURL: () => mainFrame.url }
+  const mainWebContents: { send(channel: string, payload: unknown): void; mainFrame: typeof mainFrame; getURL(): string } = {
+    send: (channel, payload) => rendererListeners.get(channel)?.forEach((listener) => listener({}, payload)),
+    mainFrame,
+    getURL: () => mainFrame.url,
+  }
   return {
     handlers,
     rendererListeners,
@@ -216,6 +220,27 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     const paginated = await api.conversations.page(0, 3)
     expect(paginated.items).toHaveLength(3)
     expect(paginated.hasMore).toBe(true)
+  })
+
+  it('propaga mudanças externas pelo canal nomeado do preload', async () => {
+    const changed = new Promise<Parameters<Parameters<typeof api.workspace.onChanged>[0]>[0]>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Mudança externa não detectada.')), 3_000)
+      const off = api.workspace.onChanged((event) => {
+        if (!event.paths.includes('external-change.txt')) return
+        clearTimeout(timeout)
+        off()
+        resolve(event)
+      })
+    })
+    await api.workspace.watch(workspace)
+    fs.writeFileSync(path.join(workspace, 'external-change.txt'), 'mudança externa')
+
+    await expect(changed).resolves.toMatchObject({
+      workspace,
+      paths: expect.arrayContaining(['external-change.txt']),
+      overflow: false,
+    })
+    await api.workspace.watch(null)
   })
 
   it('revoga a autorização efetiva quando a pasta salva deixa de existir', async () => {

@@ -8,6 +8,7 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
     const conversation = { id: 'conversation-1', title: 'Lapidação da experiência', workspace, createdAt: now, updatedAt: now }
     const eventListeners: Array<(payload: unknown) => void> = []
     const statusListeners: Array<(payload: unknown) => void> = []
+    const workspaceChangeListeners: Array<(payload: unknown) => void> = []
     let authorized = !unauthorized && !moved
     let unavailable = Boolean(moved)
     let selectedWorkspace = workspace
@@ -55,6 +56,8 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
         remove: noop,
         favorite: noop,
         openTool: noop,
+        watch: noop,
+        onChanged: (listener: (payload: unknown) => void) => { workspaceChangeListeners.push(listener); return () => { const index = workspaceChangeListeners.indexOf(listener); if (index >= 0) workspaceChangeListeners.splice(index, 1) } },
       },
       conversations: {
         list: async () => empty ? [] : [conversation],
@@ -171,6 +174,7 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
     Object.defineProperty(window, '__nocturneTest', { configurable: true, value: {
       emitEvent: (payload: unknown) => eventListeners.forEach((listener) => listener(payload)),
       emitStatus: (payload: unknown) => statusListeners.forEach((listener) => listener(payload)),
+      emitWorkspaceChange: (payload: unknown) => workspaceChangeListeners.forEach((listener) => listener(payload)),
       calls: () => ({ selectedExpected, memoryReads }),
     } })
   }, { empty: Boolean(options.empty), unauthorized: Boolean(options.unauthorized), moved: Boolean(options.moved), signedOut: Boolean(options.signedOut), messageCount: options.messageCount ?? 0 })

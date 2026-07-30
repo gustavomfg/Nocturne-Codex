@@ -7,6 +7,8 @@ import type { LocalDatabase } from '../database/Database'
 import { idSchema, pageSchema, workspaceFavoriteSchema, workspaceToolSchema } from '../../shared/ipc/schemas'
 import { safeIpcMain } from './safeIpc'
 import { assertSafeWorkspaceScope, inspectWorkspaceScope } from '../security/WorkspaceTrust'
+import { WorkspaceChangeWatcher } from '../workspaces/WorkspaceChangeWatcher'
+import { IPC_CHANNELS } from '../../shared/ipc/channels'
 
 const execFileAsync = promisify(execFile)
 
@@ -22,6 +24,7 @@ interface Dependencies {
 
 export function registerWorkspaceIpc(win: BrowserWindow, database: LocalDatabase, dependencies: Dependencies) {
   const ipcMain = safeIpcMain(win)
+  const changeWatcher = new WorkspaceChangeWatcher((event) => win.webContents.send(IPC_CHANNELS.workspace.changed, event))
   ipcMain.handle('workspace:select', async (_event, value: unknown) => {
     const expected = z.string().trim().min(1).max(4_000).optional().parse(value)
     const expectedInspection = expected ? inspectWorkspaceScope(expected) : null
@@ -72,6 +75,15 @@ export function registerWorkspaceIpc(win: BrowserWindow, database: LocalDatabase
   }))
   ipcMain.handle('workspaces:remove', (_event, value: unknown) => database.removeWorkspace(z.string().min(1).parse(value)))
   ipcMain.handle('workspaces:favorite', (_event, value: unknown) => { const data = workspaceFavoriteSchema.parse(value); dependencies.assertKnownWorkspace(data.workspace); database.setWorkspaceFavorite(data.workspace, data.favorite) })
+  ipcMain.handle('workspace:watch', (_event, value: unknown) => {
+    const requested = z.string().trim().min(1).max(4_000).nullable().parse(value)
+    if (requested === null) {
+      changeWatcher.stop()
+      return
+    }
+    const workspace = dependencies.assertKnownWorkspace(requested)
+    changeWatcher.start(workspace)
+  })
   ipcMain.handle('workspace:openTool', async (_event, value: unknown) => {
     const data = workspaceToolSchema.parse(value); const workspace = dependencies.assertKnownWorkspace(data.workspace)
     if (!fs.existsSync(workspace)) throw new Error('Workspace não encontrado.')
@@ -99,5 +111,8 @@ export function registerWorkspaceIpc(win: BrowserWindow, database: LocalDatabase
     return database.listMessagePage(data.id, data.offset, data.limit)
   })
   ipcMain.handle('conversations:delete', (_event, value: unknown) => database.deleteConversation(idSchema.parse(value)))
-  return () => ipcMain.dispose()
+  return () => {
+    changeWatcher.stop()
+    ipcMain.dispose()
+  }
 }

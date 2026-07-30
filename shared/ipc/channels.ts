@@ -1,5 +1,5 @@
 export const IPC_CHANNELS = {
-  workspace: { select: 'workspace:select', validate: 'workspace:validate', list: 'workspaces:list', remove: 'workspaces:remove', favorite: 'workspaces:favorite', openTool: 'workspace:openTool' },
+  workspace: { select: 'workspace:select', validate: 'workspace:validate', list: 'workspaces:list', remove: 'workspaces:remove', favorite: 'workspaces:favorite', openTool: 'workspace:openTool', watch: 'workspace:watch', changed: 'workspace:changed' },
   conversations: { list: 'conversations:list', page: 'conversations:page', create: 'conversations:create', messages: 'conversations:messages', messagePage: 'conversations:messagePage', delete: 'conversations:delete' },
   ai: { send: 'ai:send', cancel: 'ai:cancel', event: 'ai:event', saveAssistant: 'ai:save-assistant', approve: 'ai:approve', status: 'ai:status' },
   codex: { status: 'codex:accountStatus', login: 'codex:login', logout: 'codex:logout', models: 'codex:models' },

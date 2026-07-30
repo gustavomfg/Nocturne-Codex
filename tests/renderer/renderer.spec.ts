@@ -687,3 +687,21 @@ test('orienta a relocalização de um projeto movido sem perder a conversa', asy
   await expect(page.getByRole('button', { name: 'Workspace renamed-project' })).toBeVisible()
   await expect.poll(() => page.evaluate(() => (window as unknown as { __nocturneTest: { calls(): { selectedExpected?: string; memoryReads: number } } }).__nocturneTest.calls())).toEqual({ selectedExpected: '/workspace/sample-project', memoryReads: 1 })
 })
+
+test('recarrega o contexto quando arquivos da .nocturne mudam externamente', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-07-13T20:05:00.000Z'))
+  await installNocturneMock(page)
+  await page.setViewportSize({ width: 1180, height: 850 })
+  await ready(page)
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __nocturneTest: { calls(): { memoryReads: number } } }).__nocturneTest.calls().memoryReads)).toBe(1)
+  await page.evaluate(() => {
+    const bridge = (window as unknown as { __nocturneTest: { emitWorkspaceChange(payload: unknown): void } }).__nocturneTest
+    bridge.emitWorkspaceChange({
+      workspace: '/workspace/sample-project',
+      paths: ['.nocturne/memory.md', 'src/App.tsx'],
+      overflow: false,
+      detectedAt: new Date().toISOString(),
+    })
+  })
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __nocturneTest: { calls(): { memoryReads: number } } }).__nocturneTest.calls().memoryReads)).toBe(2)
+})

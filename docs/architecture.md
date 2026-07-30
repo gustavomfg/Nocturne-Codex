@@ -42,7 +42,10 @@ processo principal falhe.
 SQLite é a fonte de verdade para conversas, catálogo, bindings e conhecimento
 estruturado. Migrações são transacionais, restaurações mantêm workspaces sem
 autorização e snapshots precedem importações. Contexto editável do projeto
-também é mantido em `.nocturne/` com escrita atômica.
+também é mantido em `.nocturne/` com escrita atômica. O processo principal
+mantém no máximo um observador nativo para o workspace ativo. Mudanças são
+agrupadas, limitadas e enviadas por um canal nomeado do preload; a interface
+atualiza o estado Git e recarrega memória/regras quando esses arquivos mudam.
 
 O Segundo Cérebro injeta somente memórias aprovadas e relevantes, sempre
 marcadas como potencialmente desatualizadas e serializadas como dados não

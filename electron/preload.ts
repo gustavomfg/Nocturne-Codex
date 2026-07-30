@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC_CHANNELS as channels } from '../shared/ipc/channels'
-import type { AgentEvent } from '../shared/types'
+import type { AgentEvent, WorkspaceChangeEvent } from '../shared/types'
 import type {
   NocturneApi,
   ModelIpcResult,
@@ -55,6 +55,8 @@ export const nocturneApi: NocturneApi = {
     remove: (workspace: string) => ipcRenderer.invoke(channels.workspace.remove, workspace),
     favorite: (workspace: string, favorite: boolean) => ipcRenderer.invoke(channels.workspace.favorite, { workspace, favorite }),
     openTool: (workspace: string, tool: 'editor' | 'terminal') => ipcRenderer.invoke(channels.workspace.openTool, { workspace, tool }),
+    watch: (workspace: string | null) => ipcRenderer.invoke(channels.workspace.watch, workspace),
+    onChanged: (listener: (event: WorkspaceChangeEvent) => void) => on(channels.workspace.changed, listener),
   },
   conversations: {
     list: () => ipcRenderer.invoke(channels.conversations.list),

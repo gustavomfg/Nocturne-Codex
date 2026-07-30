@@ -80,6 +80,7 @@ function App() {
   const historyOffsetRef = useRef(0)
   const active = store.conversations.find((item) => item.id === store.activeId)
   const filtered = store.conversations.filter((item) => item.title.toLowerCase().includes(search.toLowerCase()) && (!workspace || item.workspace === workspace))
+  const workspaceAuthorized = Boolean(workspaces.find((item) => item.path === workspace)?.authorized)
   const finishTurn = useTurnLifecycle({ flushStream, activeTurnRef, refreshGit })
   const collections = usePagedCollections(store.setError)
   const interactionLocked = () => { const state = useAppStore.getState(); return isBusy(state.status) || state.finalizing }
@@ -138,6 +139,44 @@ function App() {
     const timer = setInterval(() => { const state = useAppStore.getState(); void window.nocturne.diagnostics.rendererStats({ responseSize: state.streaming.length, activities: state.activities.length, messages: state.messages.length }) }, UI_TIMING.diagnosticsIntervalMs)
     return () => clearInterval(timer)
   }, [store.status])
+  useEffect(() => {
+    if (!workspace || !workspaceAuthorized) return
+    let refreshTimer: number | null = null
+    let refreshContext = false
+    const flushExternalChanges = () => {
+      refreshTimer = null
+      const state = useAppStore.getState()
+      const conversation = state.conversations.find((item) => item.id === state.activeId)
+      if (!conversation || conversation.workspace !== workspace) return
+      void window.nocturne.git.status(conversation.id).then((info) => {
+        if (useAppStore.getState().activeId === conversation.id) setGitInfo(info)
+      }).catch(() => {
+        if (useAppStore.getState().activeId === conversation.id) setGitInfo(null)
+      })
+      if (refreshContext) {
+        refreshContext = false
+        void window.nocturne.memory.get(conversation.id).then((next) => {
+          if (useAppStore.getState().activeId === conversation.id) setMemory(next)
+        }).catch((error) => useAppStore.getState().setError(errorMessage(error)))
+      }
+    }
+    const offChanged = window.nocturne.workspace.onChanged((event) => {
+      if (event.workspace !== workspace) return
+      if (event.error) {
+        useAppStore.getState().setError(event.error)
+        return
+      }
+      refreshContext ||= event.overflow || event.paths.some((changedPath) => /^\.nocturne\/(?:memory\.md|rules\.md|project\.json)$/i.test(changedPath))
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer)
+      refreshTimer = window.setTimeout(flushExternalChanges, 300)
+    })
+    void window.nocturne.workspace.watch(workspace).catch((error) => useAppStore.getState().setError(errorMessage(error)))
+    return () => {
+      offChanged()
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer)
+      void window.nocturne.workspace.watch(null).catch(() => undefined)
+    }
+  }, [workspace, workspaceAuthorized])
 
   async function selectWorkspace() {
     if (interactionLocked()) { store.setError('Aguarde a resposta ser concluída antes de trocar de workspace.'); return }
