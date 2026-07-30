@@ -9,7 +9,7 @@ import { Composer } from './domains/chat/Composer'
 import { ChatViewport } from './domains/chat/ChatViewport'
 import { errorMessage, isBusy } from './shared/format'
 import { UI_TIMING } from '../shared/constants'
-import { useTurnLifecycle, type ActiveTurnContext } from './domains/agent/useTurnLifecycle'
+import { persistedAssistantMessage, useTurnLifecycle, type ActiveTurnContext } from './domains/agent/useTurnLifecycle'
 import { routeAgentEvent } from './domains/agent/routeCodexEvent'
 import { useBufferedAgentEvents } from './domains/agent/useBufferedCodexEvents'
 import { useConfirmDialog } from './shared/ConfirmDialog'
@@ -289,7 +289,16 @@ function App() {
     const conversationId = typeof event.params.conversationId === 'string'
       ? event.params.conversationId
       : undefined
-    if (conversationId && conversationId !== activeTurnRef.current?.conversationId) return
+    if (conversationId && conversationId !== activeTurnRef.current?.conversationId) {
+      const recovered = event.method === 'turn/completed' ? persistedAssistantMessage(event.params.persistedMessage, conversationId) : null
+      if (recovered && useAppStore.getState().activeId === conversationId && !useAppStore.getState().messages.some((message) => message.id === recovered.id)) {
+        store.addMessage(recovered)
+        useAppStore.setState({ streaming: '' })
+        void collections.loadConversationCollections(conversationId)
+        void refreshGit(conversationId)
+      }
+      return
+    }
     routeAgentEvent(event, { stream: queueStreamDelta, activityDetail: appendActivityDetail, diff: store.setDiff, plan: store.setPlan, hasPlan: () => Boolean(useAppStore.getState().plan.length), itemStarted: addItemActivity, itemCompleted: completeItem, fsChanged: (paths) => { if (paths.length) store.upsertActivity({ id: 'fs-summary', type: 'file', label: `${paths.length} arquivo(s) observado(s)`, detail: paths.slice(-50).join('\n'), status: 'completed' }) }, approval: (value) => store.addApproval({ ...value, status: 'pending' }), turnCompleted: (params) => { void finishTurn(params).catch((error) => { store.setStatus('failed'); store.setError(`Falha ao finalizar a resposta: ${errorMessage(error)}`) }) }, error: (message) => { store.setError(message); store.upsertActivity({ id: `error-${Date.now()}`, type: 'error', label: 'Erro na execução', detail: message, status: 'failed' }) }, warning: (message) => store.upsertActivity({ id: `warning-${Date.now()}`, type: 'error', label: 'Aviso', detail: message, status: 'failed' }) })
   }
 

@@ -1,5 +1,5 @@
 import { useRef, type MutableRefObject } from 'react'
-import type { AgentMode } from '../../types'
+import type { AgentMode, Message } from '../../types'
 import { useAppStore } from '../../store'
 import { useShallow } from 'zustand/react/shallow'
 
@@ -24,9 +24,19 @@ export function useTurnLifecycle({ flushStream, activeTurnRef, refreshGit }: { f
     try {
       const error = turn?.error as Record<string, unknown> | undefined
       const cancelled = turn?.status === 'cancelled'
+      const persistedMessage = persistedAssistantMessage(params.persistedMessage, context.conversationId)
+      const persistenceWarning = typeof params.persistenceWarning === 'string' ? params.persistenceWarning : ''
       if (error) store.setError(String(error.message ?? 'A execução não foi concluída.'))
+      if (persistenceWarning) store.setError(persistenceWarning)
       store.upsertActivity({ id: `completion-${String(turn?.id ?? Date.now())}`, type: 'completion', label: error ? 'Execução encerrada com erro' : cancelled ? 'Execução cancelada' : 'Execução concluída', status: error ? 'failed' : 'completed' })
-      if (state.streaming) {
+      if (persistedMessage) {
+        if (useAppStore.getState().activeId === context.conversationId && !useAppStore.getState().messages.some((message) => message.id === persistedMessage.id)) store.addMessage(persistedMessage)
+        useAppStore.setState({ streaming: '' })
+        if (useAppStore.getState().activeId === context.conversationId) {
+          store.setSuggestions((await window.nocturne.suggestions.page(context.conversationId)).items)
+          store.setArtifacts((await window.nocturne.artifacts.page(context.conversationId)).items)
+        }
+      } else if (state.streaming) {
       const current = useAppStore.getState()
       let assistantContent = state.streaming
       const memoryExtraction = await window.nocturne.brain.extract(context.conversationId, assistantContent)
@@ -70,3 +80,10 @@ export function hasAppliedSuggestionChanges(expectedFiles: string[], observedFil
 }
 
 function normalizePath(value: string) { return value.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+|\/+$/g, '') }
+
+export function persistedAssistantMessage(value: unknown, conversationId: string): Message | null {
+  if (!value || typeof value !== 'object') return null
+  const message = value as Partial<Message>
+  if (message.role !== 'assistant' || message.conversationId !== conversationId || typeof message.id !== 'string' || typeof message.content !== 'string' || typeof message.createdAt !== 'string') return null
+  return { id: message.id, conversationId, role: 'assistant', content: message.content, metadata: typeof message.metadata === 'string' ? message.metadata : null, createdAt: message.createdAt }
+}

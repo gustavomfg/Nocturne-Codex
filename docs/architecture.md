@@ -29,6 +29,14 @@ O renderer recebe eventos normalizados com o identificador da conversa. Uma
 única execução pode ficar ativa por vez, e aprovações nativas são resolvidas
 somente no processo principal.
 
+O processo principal acumula a resposta normalizada e persiste, em uma única
+transação, a mensagem e seus artefatos antes de publicar `turn/completed`.
+Extrações de sugestões e candidatas do Segundo Cérebro também acontecem nessa
+fronteira. Assim, reiniciar o renderer não torna a resposta concluída
+dependente de estado React transitório; o renderer apenas reflete a mensagem
+já persistida e mantém um caminho legado de recuperação caso a finalização no
+processo principal falhe.
+
 ## Estado local
 
 SQLite é a fonte de verdade para conversas, catálogo, bindings e conhecimento

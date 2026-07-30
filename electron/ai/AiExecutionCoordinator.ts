@@ -2,6 +2,7 @@ import type { BrowserWindow } from 'electron'
 import type { WorkspaceModelBindings } from '../../shared/ai/bindings'
 import type { NormalizedTaskInput } from '../../shared/ai/task'
 import type { AgentMode, AppSettings } from '../../shared/types'
+import { PERSISTENCE_LIMITS } from '../../shared/constants'
 import { assessCommand } from '../security/ExecutionPolicy'
 import type { Logger } from '../logging/Logger'
 import { CodexClient } from '../codex/CodexClient'
@@ -9,13 +10,22 @@ import type { CodexEvent } from '../codex/protocol'
 import type { ModelRegistry } from './ModelRegistry'
 import type { ProviderRegistry } from './ProviderRegistry'
 import { startAiTurn } from './executeAiTurn'
+import type { CompletedTurnSnapshot, PersistedTurn } from './TurnPersistence'
 
 export type ApprovalDetails = Map<string, { command?: string; risk?: string }>
 
 interface ActiveExecution {
   conversationId: string
+  workspace: string
+  mode: AgentMode
   kind: 'codex' | 'provider'
   threadId?: string
+  content: string
+  diff: string
+  files: string[]
+  plan: unknown[]
+  planExplanation: string
+  finishing: boolean
   cancel(): Promise<void>
 }
 
@@ -40,6 +50,7 @@ export class AiExecutionCoordinator {
     private readonly providers: ProviderRegistry,
     private readonly logger: Logger,
     private readonly approvalDetails: ApprovalDetails,
+    private readonly finalizeTurn: (snapshot: CompletedTurnSnapshot) => PersistedTurn | Promise<PersistedTurn>,
   ) {
     this.codex.on('event', this.onCodexEvent)
     this.codex.on('status', this.onCodexStatus)
@@ -48,7 +59,7 @@ export class AiExecutionCoordinator {
   }
 
   async startCodex(input: CodexTurnInput) {
-    this.reserve(input.conversationId, 'codex')
+    this.reserve(input.conversationId, input.workspace, input.mode, 'codex')
     try {
       const threadId = await this.codex.createThread(
         input.workspace,
@@ -80,7 +91,7 @@ export class AiExecutionCoordinator {
     taskInput: NormalizedTaskInput,
     bindings: WorkspaceModelBindings,
   ) {
-    this.reserve(conversationId, 'provider')
+    this.reserve(conversationId, taskInput.workspace.id, taskInput.mode === 'review' ? 'review' : 'build', 'provider')
     this.pushStatus('planning', conversationId)
     try {
       const turn = await startAiTurn(
@@ -88,7 +99,7 @@ export class AiExecutionCoordinator {
         this.providers,
         taskInput,
         bindings,
-        (method, params) => this.pushEvent(method, params, conversationId),
+        (method, params) => this.forwardEvent(method, params, conversationId),
       )
       if (!this.active || this.active.conversationId !== conversationId) {
         turn.cancel('A execução perdeu seu contexto ativo.')
@@ -115,11 +126,6 @@ export class AiExecutionCoordinator {
             turn: { id: turn.executionId, error: { message } },
           }, conversationId)
           this.pushStatus('failed', conversationId, message)
-        })
-        .finally(() => {
-          if (this.active?.conversationId === conversationId) {
-            this.active = null
-          }
         })
     } catch (error) {
       this.active = null
@@ -159,13 +165,21 @@ export class AiExecutionCoordinator {
     this.approvalDetails.clear()
   }
 
-  private reserve(conversationId: string, kind: ActiveExecution['kind']) {
+  private reserve(conversationId: string, workspace: string, mode: AgentMode, kind: ActiveExecution['kind']) {
     if (this.active) {
       throw new Error('Já existe uma execução em andamento. Cancele-a antes de iniciar outra.')
     }
     this.active = {
       conversationId,
+      workspace,
+      mode,
       kind,
+      content: '',
+      diff: '',
+      files: [],
+      plan: [],
+      planExplanation: '',
+      finishing: false,
       cancel: async () => {
         throw new Error('A execução ainda está iniciando e não pode ser cancelada neste instante.')
       },
@@ -190,16 +204,13 @@ export class AiExecutionCoordinator {
         risk: assessment?.risk,
       })
     }
-    this.pushEvent(
+    this.forwardEvent(
       event.method,
       assessment
         ? { ...event.params, commandAssessment: assessment }
         : event.params,
       conversationId,
     )
-    if (event.method === 'turn/completed' && this.active?.conversationId === conversationId) {
-      this.active = null
-    }
   }
 
   private readonly onCodexStatus = (status: { status: string; error?: string }) => {
@@ -230,9 +241,61 @@ export class AiExecutionCoordinator {
     }
   }
 
+  private forwardEvent(method: string, params: Record<string, unknown>, conversationId: string) {
+    const active = this.active
+    if (!active || active.conversationId !== conversationId) return
+    if (method === 'item/agentMessage/delta') active.content = `${active.content}${String(params.delta ?? '')}`.slice(0, PERSISTENCE_LIMITS.assistantCharacters)
+    if (method === 'turn/diff/updated') active.diff = String(params.diff ?? '').slice(-500_000)
+    if (method === 'turn/plan/updated') {
+      active.plan = Array.isArray(params.plan) ? params.plan.slice(-100) : []
+      active.planExplanation = String(params.explanation ?? '').slice(-20_000)
+    }
+    active.files = [...new Set([...active.files, ...eventFiles(method, params)])].slice(-300)
+    if (method === 'turn/completed') {
+      void this.persistAndComplete(active, params)
+      return
+    }
+    this.pushEvent(method, params, conversationId)
+  }
+
+  private async persistAndComplete(active: ActiveExecution, params: Record<string, unknown>) {
+    if (active.finishing) return
+    active.finishing = true
+    try {
+      const persisted = await this.finalizeTurn({
+        conversationId: active.conversationId,
+        workspace: active.workspace,
+        mode: active.mode,
+        content: active.content,
+        diff: active.diff,
+        files: active.files,
+        plan: active.plan,
+        planExplanation: active.planExplanation,
+      })
+      this.pushEvent('turn/completed', { ...params, persistedMessage: persisted.message, persistenceWarning: persisted.warning }, active.conversationId)
+    } catch (error) {
+      const warning = `A resposta não pôde ser persistida no processo principal: ${error instanceof Error ? error.message : String(error)}`
+      this.logger.error('persistence', warning, error)
+      this.pushEvent('turn/completed', { ...params, persistenceWarning: warning }, active.conversationId)
+    } finally {
+      if (this.active === active) this.active = null
+    }
+  }
+
   private pushStatus(status: string, conversationId?: string, error?: string) {
     if (!this.win.isDestroyed()) {
       this.win.webContents.send('ai:status', { status, conversationId, error })
     }
   }
+}
+
+function eventFiles(method: string, params: Record<string, unknown>) {
+  if (method === 'fs/changed' && Array.isArray(params.changedPaths)) return params.changedPaths.map(String)
+  if (method !== 'item/completed') return []
+  const item = params.item as Record<string, unknown> | undefined
+  if (!item || !Array.isArray(item.changes)) return []
+  return item.changes.flatMap((change) => {
+    const filePath = change && typeof change === 'object' ? (change as Record<string, unknown>).path : undefined
+    return typeof filePath === 'string' ? [filePath] : []
+  })
 }

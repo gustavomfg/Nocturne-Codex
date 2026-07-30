@@ -29,6 +29,7 @@ import {
 import { ModelRegistry } from '../ai/ModelRegistry'
 import { ProviderRegistry } from '../ai/ProviderRegistry'
 import { AiExecutionCoordinator } from '../ai/AiExecutionCoordinator'
+import { persistCompletedTurn } from '../ai/TurnPersistence'
 import { buildAttachmentMessages, buildHistoryMessages } from '../ai/conversationContext'
 import type { NormalizedTaskInput } from '../../shared/ai/task'
 import { AI_TASK_LIMITS } from '../../shared/ai/task'
@@ -64,6 +65,7 @@ export function registerIpc(
     providerRegistry,
     logger,
     approvalDetails,
+    (snapshot) => persistCompletedTurn(database, snapshot),
   )
   ipcMain.handle('codex:accountStatus', () => codexAccount.status())
   ipcMain.handle('codex:login', () => codexAccount.login())
@@ -233,15 +235,14 @@ export function registerIpc(
   ipcMain.handle('ai:save-assistant', (_event, value: unknown) => {
     const data = saveAssistantSchema.parse(value)
     const conversation = getAuthorizedConversation(database, data.conversationId)
-    const message = database.addMessage(data.conversationId, 'assistant', data.content, data.metadata)
-    database.addArtifact(data.conversationId, conversation.workspace, 'markdown', `Resposta · ${new Date().toLocaleString()}`, null, data.content)
     const metadata = data.metadata as { files?: Array<{ path?: string; kind?: string }>; diff?: string } | undefined
+    const artifacts: Array<{ type: string; title: string; filePath?: string | null; content?: string | null }> = []
     for (const file of metadata?.files ?? []) {
       if (!file.path) continue
-      database.addArtifact(data.conversationId, conversation.workspace, artifactType(file.path), path.basename(file.path), file.path, null)
+      artifacts.push({ type: artifactType(file.path), title: path.basename(file.path), filePath: file.path })
     }
-    if (metadata?.diff) database.addArtifact(data.conversationId, conversation.workspace, 'report', 'Alterações do turno', null, metadata.diff)
-    return message
+    if (metadata?.diff) artifacts.push({ type: 'report', title: 'Alterações do turno', content: metadata.diff })
+    return database.saveAssistantTurn(data.conversationId, conversation.workspace, data.content, data.metadata, artifacts)
   })
 
   ipcMain.handle('ai:approve', async (_event, value: unknown) => {

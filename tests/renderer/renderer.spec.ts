@@ -107,6 +107,23 @@ test.describe('renderer do produto', () => {
     await expect(page.locator('.composer')).toBeVisible()
   })
 
+  test('recupera uma conclusão já persistida após reinicialização do renderer', async ({ page }) => {
+    await page.setViewportSize({ width: 1180, height: 850 })
+    await ready(page)
+    await page.evaluate(() => {
+      const bridge = (window as unknown as { __nocturneTest: { emitEvent(payload: unknown): void } }).__nocturneTest
+      bridge.emitEvent({
+        method: 'turn/completed',
+        params: {
+          conversationId: 'conversation-1',
+          turn: { id: 'turn-recovered', status: 'completed' },
+          persistedMessage: { id: 'message-recovered', conversationId: 'conversation-1', role: 'assistant', content: 'Resposta recuperada do processo principal.', metadata: null, createdAt: '2026-07-13T20:05:00.000Z' },
+        },
+      })
+    })
+    await expect(page.getByText('Resposta recuperada do processo principal.')).toBeVisible()
+  })
+
   test('mantém o acionador do inspector fora do painel quando a conversa passa a rolar', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 760 })
     await ready(page)

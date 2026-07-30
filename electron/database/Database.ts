@@ -280,6 +280,15 @@ export class LocalDatabase {
     return row
   }
 
+  saveAssistantTurn(conversationId: string, workspace: string, content: string, metadata: unknown, artifacts: Array<{ type: string; title: string; filePath?: string | null; content?: string | null; metadata?: unknown }> = []) {
+    return this.db.transaction(() => {
+      const message = this.addMessage(conversationId, 'assistant', content, metadata)
+      this.addArtifact(conversationId, workspace, 'markdown', `Resposta · ${new Date().toLocaleString()}`, null, content)
+      for (const artifact of artifacts) this.addArtifact(conversationId, workspace, artifact.type, artifact.title, artifact.filePath, artifact.content, artifact.metadata)
+      return message
+    })()
+  }
+
   deleteArtifact(id: string, conversationId: string) {
     return this.db.prepare('DELETE FROM artifacts WHERE id=? AND conversation_id=?').run(id, conversationId).changes > 0
   }
