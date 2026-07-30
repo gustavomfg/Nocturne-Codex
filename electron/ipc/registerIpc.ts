@@ -138,7 +138,7 @@ export function registerIpc(
       throw new Error('Nenhuma IA configurada. Abra Configurações > IA para conectar um provedor.')
     }
 
-    const history = database.listMessages(conversationId)
+    const history = database.listRecentMessages(conversationId, AI_TASK_LIMITS.messages)
     database.addMessage(conversationId, 'user', prompt, { attachments })
     if (conversation.title === 'Nova conversa') database.renameFromPrompt(conversationId, prompt)
 

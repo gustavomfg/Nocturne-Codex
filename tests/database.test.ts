@@ -167,6 +167,14 @@ describe('persistência SQLite', () => {
     expect(oldest.items.map((message) => message.content)).toEqual(Array.from({ length: 5 }, (_, index) => `Mensagem ${index}`))
     expect(oldest.hasMore).toBe(false); db.close()
   })
+  it('limita o histórico materializado para contexto da IA', () => {
+    const db = create(); const conversation = db.createConversation('/tmp/recent-context')
+    for (let index = 0; index < 250; index += 1) db.addMessage(conversation.id, 'user', `Mensagem ${index}`)
+    const recent = db.listRecentMessages(conversation.id, 40)
+    expect(recent).toHaveLength(40)
+    expect(recent.map((message) => message.content)).toEqual(Array.from({ length: 40 }, (_, index) => `Mensagem ${index + 210}`))
+    db.close()
+  })
   it('pagina conversas, artefatos e sugestões sem materializar a coleção completa', () => {
     const db = create(); const workspace = '/tmp/collections'
     const conversations = Array.from({ length: 4 }, () => db.createConversation(workspace))

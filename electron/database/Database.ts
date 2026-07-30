@@ -427,6 +427,14 @@ export class LocalDatabase {
       created_at createdAt FROM messages WHERE conversation_id=? ORDER BY created_at, rowid`).all(conversationId) as MessageRow[]
   }
 
+  listRecentMessages(conversationId: string, limit = 100): MessageRow[] {
+    const boundedLimit = Math.max(1, Math.min(200, Math.trunc(limit)))
+    const rows = this.db.prepare(`SELECT id, conversation_id conversationId, role, content, metadata, created_at createdAt
+      FROM messages WHERE conversation_id=? AND role IN ('user','assistant')
+      ORDER BY created_at DESC, rowid DESC LIMIT ?`).all(conversationId, boundedLimit) as MessageRow[]
+    return rows.reverse()
+  }
+
   listMessagePage(conversationId: string, offset = 0, limit = 100) {
     const rows = this.db.prepare(`SELECT id, conversation_id conversationId, role, content, metadata, created_at createdAt
       FROM messages WHERE conversation_id=? ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?`).all(conversationId, limit + 1, offset) as MessageRow[]
