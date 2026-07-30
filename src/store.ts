@@ -13,13 +13,18 @@ interface AppState {
   setArtifacts(value: Artifact[]): void; setSuggestions(value: Suggestion[]): void; setPlan(value: PlanStep[], explanation?: string): void
 }
 
-const { activities: MAX_ACTIVITIES, activityDetailCharacters: MAX_ACTIVITY_DETAIL, streamCharacters: MAX_STREAM_SIZE } = RENDERER_LIMITS
+const {
+  activities: MAX_ACTIVITIES,
+  activityDetailCharacters: MAX_ACTIVITY_DETAIL,
+  chatMessages: MAX_CHAT_MESSAGES,
+  streamCharacters: MAX_STREAM_SIZE,
+} = RENDERER_LIMITS
 const MAX_CHANGED_FILES = 300
 
 export const useAppStore = create<AppState>((set) => ({
   conversations: [], activeId: null, messages: [], status: 'disconnected', finalizing: false, streaming: '', diff: '', activities: [], approvals: [], files: [], artifacts: [], suggestions: [], plan: [], planExplanation: '', error: null,
   setConversations: (conversations) => set({ conversations }), setActive: (activeId) => set({ activeId }),
-  setMessages: (messages) => set({ messages }), addMessage: (message) => set((state) => ({ messages: [...state.messages, message] })),
+  setMessages: (messages) => set({ messages: messages.slice(-MAX_CHAT_MESSAGES) }), addMessage: (message) => set((state) => ({ messages: [...state.messages, message].slice(-MAX_CHAT_MESSAGES) })),
   setStatus: (status) => set({ status }), setFinalizing: (finalizing) => set({ finalizing }), appendStream: (value) => set((state) => ({ streaming: `${state.streaming}${value}`.slice(0, MAX_STREAM_SIZE) })),
   clearRun: () => set({ streaming: '', diff: '', activities: [], approvals: [], files: [], plan: [], planExplanation: '', error: null }), setDiff: (diff) => set({ diff }),
   upsertActivity: (activity) => set((state) => ({ activities: [...state.activities.filter((item) => item.id !== activity.id), { ...activity, detail: activity.detail?.slice(-MAX_ACTIVITY_DETAIL) }].slice(-MAX_ACTIVITIES) })),

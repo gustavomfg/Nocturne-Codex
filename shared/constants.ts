@@ -3,6 +3,7 @@ export const DATABASE_SCHEMA_VERSION = 11
 export const RENDERER_LIMITS = {
   activities: 300,
   activityDetailCharacters: 64_000,
+  chatMessages: 200,
   streamCharacters: 2_000_000,
 } as const
 

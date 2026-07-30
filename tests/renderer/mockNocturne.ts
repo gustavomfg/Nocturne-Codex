@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 
-export async function installNocturneMock(page: Page, options: { empty?: boolean; unauthorized?: boolean; signedOut?: boolean } = {}) {
-  await page.addInitScript(({ empty, unauthorized, signedOut }) => {
+export async function installNocturneMock(page: Page, options: { empty?: boolean; unauthorized?: boolean; signedOut?: boolean; messageCount?: number } = {}) {
+  await page.addInitScript(({ empty, unauthorized, signedOut, messageCount }) => {
     localStorage.setItem('nocturne.onboarding.completed', 'true')
     const now = '2026-07-13T20:00:00.000Z'
     const workspace = '/workspace/nocturne-codex'
@@ -17,6 +17,17 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
     type MockModelBindings = { workspaceId: string; defaultBinding?: MockModelReference }
     let brainMemories: MockBrainMemory[] = []
     let providerConfigurations: MockProviderConfiguration[] = []
+    const messages = empty ? [] : messageCount ? Array.from({ length: messageCount }, (_, index) => ({
+      id: `message-${index + 1}`,
+      conversationId: conversation.id,
+      role: index % 2 === 0 ? 'user' as const : 'assistant' as const,
+      content: `Mensagem histórica ${index + 1}`,
+      metadata: null,
+      createdAt: new Date(Date.parse(now) - (messageCount - index) * 60_000).toISOString(),
+    })) : [
+      { id: 'message-1', conversationId: conversation.id, role: 'user' as const, content: 'Deixe a experiência mais fluida e previsível.', metadata: null, createdAt: now },
+      { id: 'message-2', conversationId: conversation.id, role: 'assistant' as const, content: 'A interface foi analisada. Os fluxos prioritários estão organizados e prontos para validação.', metadata: null, createdAt: now },
+    ]
     const modelDescriptors = [
       { providerId: 'openrouter', modelId: 'anthropic/claude-sonnet', displayName: 'Claude Sonnet', family: 'Claude', source: 'remote' as const, capabilities: ['chat', 'streaming', 'reasoning'] as const, contextWindow: 200_000, availability: 'available' as const },
       { providerId: 'ollama', modelId: 'qwen3:14b', displayName: 'Qwen3 14B', family: 'Qwen', source: 'local' as const, capabilities: ['chat', 'tool-calling'] as const, contextWindow: 32_768, availability: 'available' as const },
@@ -31,14 +42,15 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
         list: async () => empty ? [] : [conversation],
         page: async () => ({ items: empty ? [] : [conversation], hasMore: false }),
         create: async () => conversation,
-        messages: async () => empty ? [] : [
-          { id: 'message-1', conversationId: conversation.id, role: 'user', content: 'Deixe a experiência mais fluida e previsível.', metadata: null, createdAt: now },
-          { id: 'message-2', conversationId: conversation.id, role: 'assistant', content: 'A interface foi analisada. Os fluxos prioritários estão organizados e prontos para validação.', metadata: null, createdAt: now },
-        ],
-        messagePage: async () => ({ items: empty ? [] : [
-          { id: 'message-1', conversationId: conversation.id, role: 'user', content: 'Deixe a experiência mais fluida e previsível.', metadata: null, createdAt: now },
-          { id: 'message-2', conversationId: conversation.id, role: 'assistant', content: 'A interface foi analisada. Os fluxos prioritários estão organizados e prontos para validação.', metadata: null, createdAt: now },
-        ], hasMore: false }),
+        messages: async () => messages.map((message) => ({ ...message })),
+        messagePage: async (_id: string, offset = 0, limit = 100) => {
+          const end = Math.max(0, messages.length - offset)
+          const start = Math.max(0, end - limit)
+          return {
+            items: messages.slice(start, end).map((message) => ({ ...message })),
+            hasMore: start > 0,
+          }
+        },
         delete: noop,
       },
       ai: {
@@ -143,5 +155,5 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       emitStatus: (payload: unknown) => statusListeners.forEach((listener) => listener(payload)),
       calls: () => ({ selectedExpected, memoryReads }),
     } })
-  }, { empty: Boolean(options.empty), unauthorized: Boolean(options.unauthorized), signedOut: Boolean(options.signedOut) })
+  }, { empty: Boolean(options.empty), unauthorized: Boolean(options.unauthorized), signedOut: Boolean(options.signedOut), messageCount: options.messageCount ?? 0 })
 }

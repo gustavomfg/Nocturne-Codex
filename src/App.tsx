@@ -8,7 +8,7 @@ import { WorkspaceTopbar } from './domains/workspaces/WorkspaceTopbar'
 import { Composer } from './domains/chat/Composer'
 import { ChatViewport } from './domains/chat/ChatViewport'
 import { errorMessage, isBusy } from './shared/format'
-import { UI_TIMING } from '../shared/constants'
+import { RENDERER_LIMITS, UI_TIMING } from '../shared/constants'
 import { persistedAssistantMessage, useTurnLifecycle, type ActiveTurnContext } from './domains/agent/useTurnLifecycle'
 import { routeAgentEvent } from './domains/agent/routeCodexEvent'
 import { useBufferedAgentEvents } from './domains/agent/useBufferedCodexEvents'
@@ -25,6 +25,15 @@ import './styles/product-constraints.css'
 
 const now = () => new Date().toISOString()
 const fakeId = () => crypto.randomUUID()
+const messageBubble = (entry: HTMLElement) => (
+  entry.querySelector<HTMLElement>('.user-row, .assistant-row') ?? entry
+)
+const visibleMessageAnchor = (scroller: HTMLElement) => {
+  const top = scroller.getBoundingClientRect().top
+  const entries = Array.from(scroller.querySelectorAll<HTMLElement>('[data-message-id]'))
+  const element = entries.find((entry) => messageBubble(entry).getBoundingClientRect().bottom >= top)
+  return element ? { id: element.dataset.messageId ?? '', top: messageBubble(element).getBoundingClientRect().top } : null
+}
 const AgentPanel = lazy(() => import('./domains/agent/AgentPanel').then((module) => ({ default: module.AgentPanel })))
 const BrainMemoryDialog = lazy(() => import('./domains/memory/BrainMemoryDialog').then((module) => ({ default: module.BrainMemoryDialog })))
 
@@ -53,6 +62,7 @@ function App() {
   const [agentMode, setAgentMode] = useState<AgentMode>('review')
   const [newContent, setNewContent] = useState(false)
   const [historyHasMore, setHistoryHasMore] = useState(false)
+  const [historyHasNewer, setHistoryHasNewer] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
@@ -141,7 +151,7 @@ function App() {
     if (!selected) selected = await window.nocturne.workspace.select() ?? ''
     if (!selected) return
     const conversation = await window.nocturne.conversations.create(selected)
-    await refresh(); store.setActive(conversation.id); store.setMessages([]); store.clearRun(); historyOffsetRef.current = 0; setHistoryHasMore(false); setWorkspace(selected)
+    await refresh(); store.setActive(conversation.id); store.setMessages([]); store.clearRun(); historyOffsetRef.current = 0; setHistoryHasMore(false); setHistoryHasNewer(false); setWorkspace(selected)
   }
 
   async function chooseSavedWorkspace(selected: string) {
@@ -149,7 +159,7 @@ function App() {
     setWorkspace(selected)
     const conversation = store.conversations.find((item) => item.workspace === selected)
     if (conversation) await openConversation(conversation.id)
-    else { store.setActive(null); store.setMessages([]); store.clearRun(); setGitInfo(null) }
+    else { store.setActive(null); store.setMessages([]); store.clearRun(); setHistoryHasNewer(false); setGitInfo(null) }
   }
 
   async function openConversation(id: string, conversations = store.conversations, availableWorkspaces = workspaces) {
@@ -160,7 +170,7 @@ function App() {
     const page = await window.nocturne.conversations.messagePage(id)
     const messages = page.items
     if (requestId !== conversationRequestRef.current || useAppStore.getState().activeId !== id) return
-    store.setMessages(messages); historyOffsetRef.current = messages.length; setHistoryHasMore(page.hasMore)
+    store.setMessages(messages); historyOffsetRef.current = messages.length; setHistoryHasMore(page.hasMore); setHistoryHasNewer(false)
     const lastMetadata = [...messages].reverse().find((message) => message.metadata)?.metadata
     if (lastMetadata) restoreMetadata(lastMetadata)
     const conversation = conversations.find((item) => item.id === id)
@@ -192,6 +202,8 @@ function App() {
     if (!conversationId || historyLoading || !historyHasMore) return
     const scroller = chatScrollRef.current
     const previousHeight = scroller?.scrollHeight ?? 0
+    const anchor = scroller ? visibleMessageAnchor(scroller) : null
+    stickToBottomRef.current = false
     setHistoryLoading(true)
     try {
       const page = await window.nocturne.conversations.messagePage(conversationId, historyOffsetRef.current)
@@ -199,10 +211,42 @@ function App() {
       const current = useAppStore.getState().messages
       const known = new Set(current.map((message) => message.id))
       const older = page.items.filter((message) => !known.has(message.id))
-      store.setMessages([...older, ...current])
+      const combined = [...older, ...current]
+      const bounded = combined.length > RENDERER_LIMITS.chatMessages
+        ? combined.slice(0, RENDERER_LIMITS.chatMessages)
+        : combined
+      store.setMessages(bounded)
       historyOffsetRef.current += page.items.length
       setHistoryHasMore(page.hasMore)
-      window.requestAnimationFrame(() => { if (scroller) scroller.scrollTop += scroller.scrollHeight - previousHeight })
+      setHistoryHasNewer((currentValue) => currentValue || bounded.length < combined.length)
+      window.requestAnimationFrame(() => {
+        if (!scroller) return
+        const anchored = anchor && Array.from(scroller.querySelectorAll<HTMLElement>('[data-message-id]'))
+          .find((entry) => entry.dataset.messageId === anchor.id)
+        scroller.scrollTop += anchored
+          ? messageBubble(anchored).getBoundingClientRect().top - anchor.top
+          : scroller.scrollHeight - previousHeight
+      })
+    } catch (error) { store.setError(errorMessage(error)) }
+    finally { if (useAppStore.getState().activeId === conversationId) setHistoryLoading(false) }
+  }
+
+  async function loadLatestMessages() {
+    const conversationId = useAppStore.getState().activeId
+    if (!conversationId || historyLoading) return
+    setHistoryLoading(true)
+    try {
+      const page = await window.nocturne.conversations.messagePage(conversationId)
+      if (useAppStore.getState().activeId !== conversationId) return
+      store.setMessages(page.items)
+      historyOffsetRef.current = page.items.length
+      setHistoryHasMore(page.hasMore)
+      setHistoryHasNewer(false)
+      stickToBottomRef.current = true
+      window.requestAnimationFrame(() => {
+        const scroller = chatScrollRef.current
+        if (scroller) scroller.scrollTop = scroller.scrollHeight
+      })
     } catch (error) { store.setError(errorMessage(error)) }
     finally { if (useAppStore.getState().activeId === conversationId) setHistoryLoading(false) }
   }
@@ -215,6 +259,7 @@ function App() {
   async function submitPrompt(rawPrompt: string, mode: AgentMode = agentMode) {
     const content = rawPrompt.trim()
     if (!content || interactionLocked()) return
+    if (historyHasNewer) await loadLatestMessages()
     let conversationId = store.activeId
     if (!conversationId) {
       await createConversation()
@@ -253,6 +298,7 @@ function App() {
   }
 
   function jumpToLatest() {
+    if (historyHasNewer) { void loadLatestMessages(); return }
     const scroller = chatScrollRef.current
     if (!scroller) return
     stickToBottomRef.current = true; setNewContent(false)
@@ -340,7 +386,7 @@ function App() {
     const conversation = store.conversations.find((item) => item.id === id)
     if (!await confirmation.confirm({ title: 'Excluir conversa?', description: `"${conversation?.title || 'Esta conversa'}" e seu histórico local serão removidos. Esta ação não pode ser desfeita.`, confirmLabel: 'Excluir conversa', danger: true })) return
     await window.nocturne.conversations.delete(id)
-    if (store.activeId === id) { store.setActive(null); store.setMessages([]); store.setArtifacts([]); historyOffsetRef.current = 0; setHistoryHasMore(false); setPreview(null) }
+    if (store.activeId === id) { store.setActive(null); store.setMessages([]); store.setArtifacts([]); historyOffsetRef.current = 0; setHistoryHasMore(false); setHistoryHasNewer(false); setPreview(null) }
     await refresh()
   }
 
@@ -433,7 +479,7 @@ function App() {
     <main className="main-panel">
       <WorkspaceTopbar title={title} pathLabel={pathLabel} gitInfo={gitInfo} status={store.status} sidebarOpen={sidebarOpen} inspectorOpen={rightOpen} compact={compactLayout} hasMemory={Boolean(memory.content)} sidebarTriggerRef={sidebarTriggerRef} inspectorTriggerRef={inspectorTriggerRef} onOpenSidebar={() => setSidebarVisibility(true)} onSelectWorkspace={() => void selectWorkspace()} onOpenTool={(tool) => void openWorkspaceTool(tool)} onMemory={() => store.activeId ? setMemoryOpen(true) : store.setError('Abra uma conversa para configurar a memória do workspace.')} onSettings={() => setSettingsOpen(true)} onToggleInspector={() => setInspectorVisibility(!rightOpen)}/>
 
-      <ChatViewport active={Boolean(store.activeId)} messages={store.messages} error={store.error} historyHasMore={historyHasMore} historyLoading={historyLoading} newContent={newContent} chatScrollRef={chatScrollRef} endRef={endRef} stickToBottomRef={stickToBottomRef} onNew={() => void createConversation()} onWorkspace={() => void selectWorkspace()} onPrompt={preparePrompt} onLoadOlder={() => void loadOlderMessages()} onScroll={handleChatScroll} onNewContent={setNewContent} onDismissError={() => store.setError(null)} onJumpLatest={jumpToLatest}/>
+      <ChatViewport active={Boolean(store.activeId)} messages={store.messages} error={store.error} historyHasMore={historyHasMore} historyHasNewer={historyHasNewer} historyLoading={historyLoading} newContent={newContent} chatScrollRef={chatScrollRef} endRef={endRef} stickToBottomRef={stickToBottomRef} onNew={() => void createConversation()} onWorkspace={() => void selectWorkspace()} onPrompt={preparePrompt} onLoadOlder={() => void loadOlderMessages()} onLoadLatest={() => void loadLatestMessages()} onScroll={handleChatScroll} onNewContent={setNewContent} onDismissError={() => store.setError(null)} onJumpLatest={jumpToLatest}/>
 
       <Composer agentMode={agentMode} attachments={attachments} prompt={prompt} status={store.status} finalizing={store.finalizing} active={Boolean(store.activeId)} pendingApprovals={store.approvals.filter((item) => item.status === 'pending').length} composerRef={composerRef} onMode={setAgentMode} onPrompt={setPrompt} onRemoveAttachment={(path) => setAttachments((current) => current.filter((file) => file.path !== path))} onAttach={attachFiles} onCancel={cancelRun} onSubmit={send} onQuick={preparePrompt}/>
     </main>

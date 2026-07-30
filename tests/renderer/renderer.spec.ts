@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { installNocturneMock } from './mockNocturne'
 import type { Suggestion } from '../../src/types'
+import { RENDERER_LIMITS } from '../../shared/constants'
 
 async function ready(page: import('@playwright/test').Page) {
   await page.goto('/')
@@ -169,6 +170,42 @@ test.describe('renderer do produto', () => {
     await expect(page.locator('.diff-panel pre')).toHaveCount(1)
     expect(await page.locator('.diff-panel pre').textContent()).toHaveLength(300_000)
     await expect(page.locator('.diff-panel pre span')).toHaveCount(0)
+  })
+
+  test('mantém o DOM do chat limitado em um histórico com milhares de mensagens', async ({ page }) => {
+    await installNocturneMock(page, { messageCount: 2_000 })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.setViewportSize({ width: 1180, height: 850 })
+    await ready(page)
+
+    const scroller = page.locator('.chat-scroll')
+    const entries = page.locator('.message-entry')
+    const loadOlder = page.getByRole('button', { name: 'Carregar mensagens anteriores' })
+    await expect(entries).toHaveCount(100)
+    await scroller.evaluate((element) => { element.scrollTop = 0 })
+    const anchor = page.locator('[data-message-id="message-1901"] .user-row')
+    const anchorBefore = await anchor.boundingBox()
+
+    await loadOlder.click()
+    await expect(page.getByText('Mensagem histórica 1801', { exact: true })).toBeVisible()
+    expect(anchorBefore).not.toBeNull()
+    await expect.poll(async () => {
+      const anchorAfter = await anchor.boundingBox()
+      return Math.abs((anchorAfter?.y ?? 0) - (anchorBefore?.y ?? 0))
+    }).toBeLessThan(3)
+
+    for (const firstMessage of [1701, 1601, 1501, 1401, 1301, 1201, 1101]) {
+      await scroller.evaluate((element) => { element.scrollTop = 0 })
+      await loadOlder.click()
+      await expect(page.getByText(`Mensagem histórica ${firstMessage}`, { exact: true })).toBeVisible()
+      expect(await entries.count()).toBeLessThanOrEqual(RENDERER_LIMITS.chatMessages)
+    }
+
+    const loadLatest = page.getByRole('button', { name: 'Voltar às mensagens mais recentes' })
+    await expect(loadLatest).toBeVisible()
+    await loadLatest.click()
+    await expect(page.getByText('Mensagem histórica 2000', { exact: true })).toBeVisible()
+    await expect(entries).toHaveCount(100)
   })
 
   test('protege configurações editadas e fecha o diálogo com Escape', async ({ page }) => {
