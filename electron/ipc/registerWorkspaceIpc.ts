@@ -6,7 +6,7 @@ import { z } from 'zod'
 import type { LocalDatabase } from '../database/Database'
 import { idSchema, pageSchema, workspaceFavoriteSchema, workspaceToolSchema } from '../../shared/ipc/schemas'
 import { safeIpcMain } from './safeIpc'
-import { assertSafeWorkspaceScope } from '../security/WorkspaceTrust'
+import { assertSafeWorkspaceScope, inspectWorkspaceScope } from '../security/WorkspaceTrust'
 
 const execFileAsync = promisify(execFile)
 
@@ -33,7 +33,15 @@ export function registerWorkspaceIpc(win: BrowserWindow, database: LocalDatabase
     database.touchWorkspace(storedWorkspace); await dependencies.ensureWorkspace(workspace); return storedWorkspace
   })
   ipcMain.handle('workspace:validate', (_event, value: unknown) => { try { return assertSafeWorkspaceScope(z.string().min(1).parse(value)) } catch { return null } })
-  ipcMain.handle('workspaces:list', () => database.listWorkspaces())
+  ipcMain.handle('workspaces:list', () => database.listWorkspaces().map((workspace) => {
+    const inspection = inspectWorkspaceScope(workspace.path)
+    return {
+      ...workspace,
+      authorized: workspace.authorized && inspection.availability === 'available',
+      availability: inspection.availability,
+      ...(inspection.message ? { availabilityMessage: inspection.message } : {}),
+    }
+  }))
   ipcMain.handle('workspaces:remove', (_event, value: unknown) => database.removeWorkspace(z.string().min(1).parse(value)))
   ipcMain.handle('workspaces:favorite', (_event, value: unknown) => { const data = workspaceFavoriteSchema.parse(value); dependencies.assertKnownWorkspace(data.workspace); database.setWorkspaceFavorite(data.workspace, data.favorite) })
   ipcMain.handle('workspace:openTool', async (_event, value: unknown) => {

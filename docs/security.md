@@ -14,6 +14,10 @@
 
 Todo caminho recebido é normalizado e precisa permanecer dentro da raiz
 explicitamente selecionada. Workspaces restaurados voltam sem autorização.
+Antes de apresentar um workspace salvo como autorizado, o processo principal
+verifica sua disponibilidade atual e o acesso de leitura. Projetos apagados,
+movidos ou sem permissão preservam o histórico local, mas perdem a autorização
+efetiva até uma nova seleção explícita.
 Review é somente leitura. Build pelo Codex usa `workspaceWrite` limitado à raiz,
 rede desabilitada e aprovações do usuário para operações solicitadas pelo App
 Server.

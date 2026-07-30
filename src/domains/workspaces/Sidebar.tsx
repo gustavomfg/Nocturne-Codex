@@ -1,5 +1,5 @@
 import { useEffect, type RefObject } from 'react'
-import { ChevronRight, Code2, Folder, FolderOpen, History, Laptop, Menu, MessageSquarePlus, Search, Settings, Star, Trash2, X } from 'lucide-react'
+import { AlertTriangle, ChevronRight, Code2, Folder, FolderOpen, History, Laptop, Menu, MessageSquarePlus, Search, Settings, Star, Trash2, X } from 'lucide-react'
 import type { AppSettings, Conversation, Workspace } from '../../types'
 import { relativeTime } from '../../shared/format'
 import { useOffCanvasPanel } from '../../shared/useOffCanvasPanel'
@@ -27,7 +27,16 @@ export function Sidebar({ open, compact, triggerRef, conversations, hasConversat
       {hasMore && <button className="collection-load-more" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? 'Carregando…' : 'Carregar conversas anteriores'}</button>}
     </nav>
     <div className="sidebar-footer">
-      {workspaces.slice(0, 4).map((item) => <div key={item.path} className={`workspace-mini ${workspace === item.path ? 'active' : ''}`}><button className="workspace-open" onClick={() => onSavedWorkspace(item.path)}><Folder size={13}/><span>{item.name}</span></button><button className="workspace-favorite" aria-label={item.favorite ? `Remover ${item.name} dos favoritos` : `Favoritar ${item.name}`} aria-pressed={item.favorite} title={item.favorite ? 'Remover dos favoritos' : 'Favoritar'} onClick={() => onFavorite(item)}><Star size={12} fill={item.favorite ? 'currentColor' : 'none'}/></button></div>)}
+      {workspaces.slice(0, 4).map((item) => {
+        const unavailable = item.availability !== 'available'
+        return <div key={item.path} className={`workspace-mini ${workspace === item.path ? 'active' : ''} ${unavailable ? 'unavailable' : ''}`}>
+          <button className="workspace-open" onClick={() => onSavedWorkspace(item.path)} title={item.availabilityMessage}>
+            {unavailable ? <AlertTriangle size={13}/> : <Folder size={13}/>}
+            <span className="workspace-mini-copy"><span>{item.name}</span>{unavailable && <small>{item.availabilityMessage}</small>}</span>
+          </button>
+          <button className="workspace-favorite" aria-label={item.favorite ? `Remover ${item.name} dos favoritos` : `Favoritar ${item.name}`} aria-pressed={item.favorite} title={item.favorite ? 'Remover dos favoritos' : 'Favoritar'} onClick={() => onFavorite(item)}><Star size={12} fill={item.favorite ? 'currentColor' : 'none'}/></button>
+        </div>
+      })}
       <button className="workspace-card" onClick={onWorkspace}><span className="workspace-icon"><FolderOpen size={17}/></span><span><small>Workspace</small><strong>{workspace ? workspace.split(/[/\\]/).pop() : 'Selecionar projeto'}</strong></span><ChevronRight size={15}/></button>
       <div className="profile"><div className="avatar"><Laptop size={15}/></div><span><strong>Ambiente local</strong></span><span className={`status-dot ${status}`} role="status" aria-label={status}/><button className="settings-button" aria-label="Abrir configurações" title="Abrir configurações" onClick={onSettings}><Settings size={14}/></button></div>
     </div>

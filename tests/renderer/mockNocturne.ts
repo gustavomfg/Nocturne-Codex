@@ -37,7 +37,7 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
     let appSettings = { model: '', sandbox: 'workspace-write' as const, approvalPolicy: 'on-request' as const, theme: 'dark' as const, defaultAgentMode: 'review' as const, authenticated: !signedOut, authStatus: signedOut ? 'Login necessário' : 'Autenticado', serverStatus: 'ready' }
     const noop = async () => undefined
     const api = {
-      workspace: { select: async (expected?: string) => { selectedExpected = expected; authorized = true; return workspace }, validate: async () => true, list: async () => [{ path: workspace, name: 'sample-project', favorite: true, authorized, createdAt: now, lastOpenedAt: now }], remove: noop, favorite: noop, openTool: noop },
+      workspace: { select: async (expected?: string) => { selectedExpected = expected; authorized = true; return workspace }, validate: async () => true, list: async () => [{ path: workspace, name: 'sample-project', favorite: true, authorized, availability: 'available', createdAt: now, lastOpenedAt: now }], remove: noop, favorite: noop, openTool: noop },
       conversations: {
         list: async () => empty ? [] : [conversation],
         page: async () => ({ items: empty ? [] : [conversation], hasMore: false }),

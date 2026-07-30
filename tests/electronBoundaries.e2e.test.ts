@@ -218,6 +218,27 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     expect(paginated.hasMore).toBe(true)
   })
 
+  it('revoga a autorização efetiva quando a pasta salva deixa de existir', async () => {
+    const movedWorkspace = path.join(root, 'moved-workspace')
+    fs.mkdirSync(movedWorkspace)
+    electron.dialogs.open.push({ canceled: false, filePaths: [movedWorkspace] })
+    await expect(api.workspace.select()).resolves.toBe(movedWorkspace)
+    expect(await api.workspace.list()).toContainEqual(expect.objectContaining({
+      path: movedWorkspace,
+      authorized: true,
+      availability: 'available',
+    }))
+
+    fs.rmSync(movedWorkspace, { recursive: true })
+
+    expect(await api.workspace.list()).toContainEqual(expect.objectContaining({
+      path: movedWorkspace,
+      authorized: false,
+      availability: 'missing',
+      availabilityMessage: 'Pasta do projeto não encontrada.',
+    }))
+  })
+
   it('rejeita caminhos de workspace fora do escopo durante a importação de backup', async () => {
     const backup = {
       schemaVersion: DATABASE_SCHEMA_VERSION, exportedAt: new Date().toISOString(),
