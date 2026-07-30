@@ -379,7 +379,7 @@ export function AIConnectionPage({
     </div>}
 
     {confirmRemove && <div className="modal-backdrop" onMouseDown={() => setConfirmRemove(null)}>
-      <div className="confirm-dialog" role="alertdialog" aria-modal="true" aria-label="Confirmar remoção">
+      <div className="confirm-dialog" role="alertdialog" aria-modal="true" aria-label="Confirmar remoção" onMouseDown={(event) => event.stopPropagation()}>
         <p>Remover esta conexão?</p>
         <div className="modal-actions">
           <button onClick={() => setConfirmRemove(null)}>Cancelar</button>

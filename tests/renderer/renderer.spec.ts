@@ -328,6 +328,8 @@ test.describe('renderer do produto', () => {
     await expect(dialog.getByText('Remover esta conexão?')).toBeVisible()
     await dialog.getByRole('button', { name: 'Remover', exact: true }).click()
     await expect(dialog.getByText('Conectar IA')).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Remover OpenRouter' })).toHaveCount(0)
+    await expect(page.locator('.product-toast')).toContainText('Conexão removida.')
   })
 
   test('protege alterações não salvas nas configurações', async ({ page }) => {
