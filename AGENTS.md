@@ -23,7 +23,7 @@ implicit step when the existing product flow keeps them separate.
 
 ## Current release line
 
-Current version: `0.8.0-beta`.
+Current version: `0.9.0-beta`.
 
 Current priorities:
 

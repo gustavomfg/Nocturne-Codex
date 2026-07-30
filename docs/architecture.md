@@ -1,6 +1,6 @@
 # Arquitetura
 
-O Nocturne Codex é um workspace desktop local. O renderer apresenta estado e
+O Nocturne Studio é um workspace desktop local. O renderer apresenta estado e
 solicita operações; ele não recebe acesso direto a Node.js, Electron,
 credenciais ou ao sistema de arquivos.
 

@@ -112,17 +112,19 @@ Approved changes can be prepared for version control with integrated Git support
 
 Nocturne Studio separates provider integrations from the workspace itself.
 
-Currently supported providers include:
+Currently available integrations include:
 
-- OpenAI
-- Anthropic
-- OpenRouter
-- DeepSeek
+- ChatGPT accounts through the Codex CLI
+- OpenAI API
+- OpenRouter API
+- DeepSeek API
 - Ollama
 - LM Studio
-- Codex CLI
+- Custom OpenAI-compatible endpoints
 
-Additional providers can be integrated without changing the workspace architecture.
+Anthropic and other provider-specific adapters are planned, but are not
+implemented in this release. Additional providers can be integrated without
+changing the workspace architecture.
 
 ---
 
@@ -186,13 +188,13 @@ Developers remain responsible for reviewing, approving and evolving their softwa
         ▼
   Provider Layer
         │
- ┌──────┼───────────────┬──────────────┐
- │      │               │              │
-OpenAI Anthropic   OpenRouter      Ollama
- │
-Codex CLI
- │
-LM Studio
+ ┌──────┴───────────────┐
+ │                      │
+Codex CLI       OpenAI-compatible
+ │                      │
+ChatGPT       ┌──────────┼──────────┐
+account     APIs      local       custom
+           services  runtimes     endpoints
 ```
 
 Every provider implements the same execution contract, allowing the workspace to remain independent from any specific AI platform.

@@ -25,7 +25,7 @@
 
 ### Quality
 
-- 200+ automated tests.
+- Automated unit, integration and renderer regression tests.
 - Playwright regression suite.
 - Packaging smoke tests.
 - Codex CLI smoke validation.
