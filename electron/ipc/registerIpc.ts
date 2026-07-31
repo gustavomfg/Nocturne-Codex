@@ -8,7 +8,7 @@ import { z } from 'zod'
 import { diagnosticFingerprint, redactLogText } from '../logging/Logger'
 import { LocalDatabase } from '../database/Database'
 import { Logger } from '../logging/Logger'
-import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
+import { readWorkspaceFile, resolveInsideWorkspace, statWorkspaceFile } from '../security/ExecutionPolicy'
 import { sanitizeSuggestionTitle } from '../../shared/suggestions'
 import { appendSuggestionDecision } from '../persistence/SuggestionDecisionLog'
 import { approvalSchema, aiCancelSchema, aiSendSchema, applyMarkdownSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, prepareMarkdownSchema, rendererStatsSchema, saveAssistantSchema } from '../../shared/ipc/schemas'
@@ -115,13 +115,13 @@ export function registerIpc(
       filters: [{ name: 'Arquivos do projeto', extensions: ['txt', 'md', 'json', 'js', 'jsx', 'ts', 'tsx', 'css', 'html', 'xml', 'yaml', 'yml', 'toml', 'py', 'rs', 'go', 'java', 'c', 'cpp', 'h', 'sh', 'sql', 'env', 'ini'] }, { name: 'Todos os arquivos', extensions: ['*'] }],
     })
     if (result.canceled) return []
-    return result.filePaths.map((filePath) => {
-      assertInsideWorkspace(filePath, conversation.workspace)
-      const stat = fs.statSync(filePath)
+    return (await Promise.all(result.filePaths.map(async (filePath) => {
+      const inspected = await statWorkspaceFile(filePath, conversation.workspace)
+      const stat = inspected.stat
       if (!stat.isFile()) throw new Error(`${path.basename(filePath)} não é um arquivo válido.`)
       if (stat.size > 1_000_000) throw new Error(`${path.basename(filePath)} excede o limite de 1 MB.`)
-      return { path: path.relative(conversation.workspace, filePath), name: path.basename(filePath), size: stat.size }
-    })
+      return { path: path.relative(conversation.workspace, inspected.path), name: path.basename(inspected.path), size: stat.size }
+    })))
   })
 
   const EXECUTABLE_EXTENSIONS = new Set(['.exe', '.bat', '.cmd', '.com', '.msi', '.sh', '.bin', '.app', '.dmg', '.deb', '.rpm', '.AppImage'])
@@ -141,15 +141,22 @@ export function registerIpc(
   ipcMain.handle('files:preview', async (_event, value: unknown) => {
     const data = filePreviewSchema.parse(value)
     const conversation = getAuthorizedConversation(database, data.conversationId)
-    const filePath = resolveWorkspaceFile(data.filePath, conversation.workspace)
-    const stat = await fs.promises.stat(filePath).catch(() => null)
-    if (!stat?.isFile()) throw new Error('Arquivo não encontrado.')
-    if (stat.size > 2_000_000) throw new Error('Preview limitado a arquivos de até 2 MB.')
+    let file
+    try {
+      file = await readWorkspaceFile(data.filePath, conversation.workspace, 2_000_000)
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ENOENT') throw new Error('Arquivo não encontrado.')
+      if (code === 'EFBIG') throw new Error('Preview limitado a arquivos de até 2 MB.')
+      throw error
+    }
+    const filePath = file.path
+    const stat = file.stat
     const extension = path.extname(filePath).toLowerCase()
     const imageMime = ({ '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml' } as Record<string, string>)[extension]
-    if (imageMime) return { kind: 'image', name: path.basename(filePath), filePath, mime: imageMime, content: `data:${imageMime};base64,${(await fs.promises.readFile(filePath)).toString('base64')}`, size: stat.size }
+    if (imageMime) return { kind: 'image', name: path.basename(filePath), filePath, mime: imageMime, content: `data:${imageMime};base64,${file.content.toString('base64')}`, size: stat.size }
     if (!isTextFile(extension)) throw new Error('Este formato não possui preview interno.')
-    return { kind: extension === '.md' ? 'markdown' : 'text', name: path.basename(filePath), filePath, mime: 'text/plain', content: await fs.promises.readFile(filePath, 'utf8'), size: stat.size }
+    return { kind: extension === '.md' ? 'markdown' : 'text', name: path.basename(filePath), filePath, mime: 'text/plain', content: file.content.toString('utf8'), size: stat.size }
   })
 
   const diagnosticReport = () => ({

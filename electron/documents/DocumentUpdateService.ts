@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
+import { readWorkspaceFile, resolveInsideWorkspace } from '../security/ExecutionPolicy'
 
 const MAX_DOCUMENT_BYTES = 2_000_000
 
@@ -18,19 +18,18 @@ export interface DocumentUpdatePreview {
 export class DocumentUpdateService {
   async preview(workspace: string, target: string, generated: string): Promise<DocumentUpdatePreview> {
     const resolved = resolveDocumentTarget(workspace, target)
-    const stat = await fs.promises.stat(resolved).catch((error: NodeJS.ErrnoException) => {
+    const existing = await readWorkspaceFile(resolved, workspace, MAX_DOCUMENT_BYTES).catch((error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') return null
+      if (error.code === 'EFBIG') throw new Error('Documentação existente excede o limite de 2 MB.')
       throw error
     })
-    if (stat && !stat.isFile()) throw new Error('O destino da documentação não é um arquivo.')
-    if (stat && stat.size > MAX_DOCUMENT_BYTES) throw new Error('Documentação existente excede o limite de 2 MB.')
-    const existing = stat ? await fs.promises.readFile(resolved, 'utf8') : ''
+    const existingContent = existing?.content.toString('utf8') ?? ''
     return {
-      target: resolved,
+      target: existing?.path ?? resolved,
       name: path.basename(resolved),
-      existing,
+      existing: existingContent,
       generated,
-      expectedHash: stat ? digest(existing) : null,
+      expectedHash: existing ? digest(existingContent) : null,
     }
   }
 

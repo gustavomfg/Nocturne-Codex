@@ -44,7 +44,37 @@ export function resolveInsideWorkspace(candidate: string, workspace: string) {
   }
   const realExisting = fs.realpathSync.native(existing)
   assertContained(realExisting, realRoot)
-  return resolved
+  const canonicalResolved = path.resolve(realExisting, path.relative(existing, resolved))
+  assertContained(canonicalResolved, realRoot)
+  return canonicalResolved
+}
+
+export async function statWorkspaceFile(candidate: string, workspace: string) {
+  const resolved = resolveInsideWorkspace(candidate, workspace)
+  const handle = await fs.promises.open(resolved, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0))
+  try {
+    const stat = await handle.stat()
+    return { path: resolved, stat }
+  } finally {
+    await handle.close()
+  }
+}
+
+export async function readWorkspaceFile(candidate: string, workspace: string, maxBytes?: number) {
+  const resolved = resolveInsideWorkspace(candidate, workspace)
+  const handle = await fs.promises.open(resolved, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0))
+  try {
+    const stat = await handle.stat()
+    if (!stat.isFile()) throw new Error('O caminho não é um arquivo regular.')
+    if (maxBytes !== undefined && stat.size > maxBytes) {
+      const error = new Error('O arquivo excede o limite permitido.') as NodeJS.ErrnoException
+      error.code = 'EFBIG'
+      throw error
+    }
+    return { path: resolved, stat, content: await handle.readFile() }
+  } finally {
+    await handle.close()
+  }
 }
 
 function assertContained(candidate: string, root: string) {

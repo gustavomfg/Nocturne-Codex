@@ -89,4 +89,22 @@ describe('políticas de execução', () => {
     expect(() => resolveInsideWorkspace('escape/secret.txt', workspace)).toThrow(/fora do workspace/)
     fs.rmSync(workspace, { recursive: true, force: true }); fs.rmSync(outside, { recursive: true, force: true })
   })
+  it('fixa o caminho real antes de uma troca concorrente de symlink', () => {
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-security-'))
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-outside-'))
+    const safe = path.join(workspace, 'safe')
+    const link = path.join(workspace, 'link')
+    fs.mkdirSync(safe)
+    fs.writeFileSync(path.join(safe, 'secret.txt'), 'interno')
+    fs.writeFileSync(path.join(outside, 'secret.txt'), 'externo')
+    fs.symlinkSync(safe, link, 'dir')
+
+    const resolved = resolveInsideWorkspace('link/secret.txt', workspace)
+    fs.unlinkSync(link)
+    fs.symlinkSync(outside, link, 'dir')
+
+    expect(resolved).toBe(path.join(safe, 'secret.txt'))
+    expect(fs.readFileSync(resolved, 'utf8')).toBe('interno')
+    fs.rmSync(workspace, { recursive: true, force: true }); fs.rmSync(outside, { recursive: true, force: true })
+  })
 })
