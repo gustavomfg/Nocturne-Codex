@@ -215,6 +215,14 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     electron.dialogs.open.push({ canceled: false, filePaths: [workspace] })
     await expect(api.workspace.select()).resolves.toBe(workspace)
     expect(fs.existsSync(path.join(workspace, '.nocturne', 'project.json'))).toBe(true)
+    const copiedDiagnostic = JSON.parse(await api.diagnostics.copy()) as { session: { sessionId: string }; providers: { configured: number } }
+    expect(copiedDiagnostic.session.sessionId).toMatch(/^[a-f0-9-]{36}$/)
+    expect(copiedDiagnostic.providers.configured).toBe(0)
+    const diagnosticPath = path.join(root, 'diagnostic.json')
+    electron.dialogs.save.push({ canceled: false, filePath: diagnosticPath })
+    await expect(api.diagnostics.export()).resolves.toBe(diagnosticPath)
+    expect(fs.statSync(diagnosticPath).mode & 0o777).toBe(0o600)
+    expect(fs.readFileSync(diagnosticPath, 'utf8')).not.toMatch(/prompt|content|credential/i)
     await expect(api.models.list()).resolves.toEqual([simulatedModel])
     await expect(api.models.refresh(simulatedModel.providerId)).resolves.toMatchObject({
       status: 'applied',

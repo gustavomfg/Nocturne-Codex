@@ -132,7 +132,7 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       artifacts: { list: async () => [], page: async () => ({ items: [], hasMore: false }), delete: noop },
       suggestions: { list: async () => [], page: async () => ({ items: [], hasMore: false }), create: async (_id: string, content: string) => ({ suggestions: [], content }), status: noop },
       data: { export: async () => '/tmp/backup.json', import: async () => true },
-      diagnostics: { openLogs: noop, copy: async () => 'diagnóstico', rendererError: noop, rendererStats: noop },
+      diagnostics: { openLogs: noop, copy: async () => 'diagnóstico', export: async () => '/tmp/nocturne-diagnostic.json', rendererError: noop, rendererStats: noop },
       settings: {
         get: async () => ({ ...appSettings }),
         check: async () => ({ ...appSettings }),

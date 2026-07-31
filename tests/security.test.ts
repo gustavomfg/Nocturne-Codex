@@ -46,7 +46,7 @@ describe('políticas de execução', () => {
       expect(redacted).toContain('[REDACTED]')
       expect(redacted).not.toMatch(/segredo-super-secreto|YWxhZGRpb|valor com espaços|chave-json/)
     }
-    expect(redactLogValue({ authorization: 'Bearer segredo', nested: { password: 'senha', safe: 'ok' } })).toEqual({ nested: { safe: 'ok' } })
+    expect(redactLogValue({ authorization: 'Bearer segredo', prompt: 'pedido privado', content: 'arquivo completo', error: 'falha com dados privados', nested: { password: 'senha', safe: 'ok' } })).toEqual({ nested: { safe: 'ok' } })
   })
   it('publica uma release estável somente após reunir e verificar as três plataformas', () => {
     const workflow = fs.readFileSync(path.join(process.cwd(), '.github/workflows/stable-release.yml'), 'utf8')

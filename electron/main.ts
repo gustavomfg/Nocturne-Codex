@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { LocalDatabase } from './database/Database'
 import { registerIpc } from './ipc/registerIpc'
-import { Logger } from './logging/Logger'
+import { diagnosticFingerprint, Logger } from './logging/Logger'
 import { startUpdateService } from './updates/UpdateService'
 import { ModelRegistry } from './ai/ModelRegistry'
 import { ProviderRegistry } from './ai/ProviderRegistry'
@@ -108,7 +108,7 @@ function createWindow() {
   currentWindow.webContents.on('preload-error', (_event, preloadPath, error) => logger?.error('app', `Falha no preload: ${preloadPath}`, error))
   currentWindow.webContents.on('did-fail-load', (_event, code, description, url) => logger?.error('app', 'Falha ao carregar renderer', { code, description, url }))
   currentWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-    if (level >= 2) logger?.warn('app', 'Console do renderer', { level, message: message.slice(0, 8_000), line, sourceId })
+    if (level >= 2) logger?.warn('app', 'Console do renderer', { level, fingerprint: diagnosticFingerprint(message), line, source: path.basename(sourceId) })
   })
   currentWindow.webContents.on('render-process-gone', (_event, details) => {
     logger?.error('app', 'Renderer encerrado inesperadamente', details)

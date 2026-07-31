@@ -5,7 +5,7 @@ import { execFile, spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { promisify } from 'node:util'
 import { z } from 'zod'
-import { redactLogText } from '../logging/Logger'
+import { diagnosticFingerprint, redactLogText } from '../logging/Logger'
 import { LocalDatabase } from '../database/Database'
 import { Logger } from '../logging/Logger'
 import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
@@ -38,6 +38,7 @@ import { CodexAccountService } from '../codex/CodexAccountService'
 import { BuildRollbackService } from '../ai/BuildRollbackService'
 import { DocumentUpdateService } from '../documents/DocumentUpdateService'
 import type { AwarenessSnapshot } from '../../shared/awareness'
+import packageMetadata from '../../package.json'
 
 const execFileAsync = promisify(execFile)
 
@@ -150,11 +151,31 @@ export function registerIpc(
     return { kind: extension === '.md' ? 'markdown' : 'text', name: path.basename(filePath), filePath, mime: 'text/plain', content: await fs.promises.readFile(filePath, 'utf8'), size: stat.size }
   })
 
+  const diagnosticReport = () => ({
+    app: 'Nocturne Studio',
+    version: packageMetadata.version,
+    platform: process.platform,
+    arch: process.arch,
+    runtime: { node: process.versions.node, electron: process.versions.electron ?? 'indisponível' },
+    session: logger.snapshot(),
+    providers: {
+      configured: providerConfigurations.list().length,
+      enabled: providerConfigurations.list().filter((provider) => provider.enabled).length,
+    },
+    models: modelRegistry.list().length,
+  })
   ipcMain.handle('diagnostics:openLogs', () => shell.openPath(logger.path))
-  ipcMain.handle('diagnostics:copy', async () => JSON.stringify({ app: 'Nocturne Studio', platform: process.platform, arch: process.arch }, null, 2))
+  ipcMain.handle('diagnostics:copy', async () => JSON.stringify(diagnosticReport(), null, 2))
+  ipcMain.handle('diagnostics:export', async () => {
+    const result = await dialog.showSaveDialog(win, { title: 'Exportar diagnóstico sanitizado', defaultPath: `nocturne-diagnostic-${logger.snapshot().sessionId.slice(0, 8)}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] })
+    if (result.canceled || !result.filePath) return null
+    await atomicWrite(result.filePath, `${JSON.stringify(diagnosticReport(), null, 2)}\n`)
+    return result.filePath
+  })
   ipcMain.handle('diagnostics:rendererError', (_event, value: unknown) => {
     const data = z.object({ type: z.enum(['error', 'unhandledRejection']), message: z.string().max(8_000), stack: z.string().max(20_000).optional() }).parse(value)
-    logger.error('app', `Renderer ${data.type}`, data)
+    const fingerprint = diagnosticFingerprint(`${data.message}\n${data.stack ?? ''}`)
+    logger.error('app', `Renderer ${data.type}`, { fingerprint })
   })
   ipcMain.handle('diagnostics:rendererStats', (_event, value: unknown) => {
     const data = z.object({ responseSize: z.number().int().nonnegative().max(10_000_000), activities: z.number().int().nonnegative().max(100_000), messages: z.number().int().nonnegative().max(100_000) }).parse(value)

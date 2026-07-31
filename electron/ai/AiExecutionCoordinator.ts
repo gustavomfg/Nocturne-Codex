@@ -255,7 +255,9 @@ export class AiExecutionCoordinator {
   }
 
   private readonly onCodexLog = (entry: unknown) => {
-    this.logger.debug('codex', 'Saída do App Server', entry)
+    const stream = entry && typeof entry === 'object' && (entry as { stream?: unknown }).stream === 'stderr' ? 'stderr' : 'stdout'
+    const line = entry && typeof entry === 'object' && typeof (entry as { line?: unknown }).line === 'string' ? (entry as { line: string }).line : ''
+    this.logger.debug('codex', 'Tráfego do App Server recebido', { stream, bytes: Buffer.byteLength(line, 'utf8') })
   }
 
   private readonly onCodexDiagnostic = (entry: unknown) => {

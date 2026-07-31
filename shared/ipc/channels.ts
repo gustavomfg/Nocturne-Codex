@@ -9,7 +9,7 @@ export const IPC_CHANNELS = {
   artifacts: { list: 'artifacts:list', page: 'artifacts:page', delete: 'artifacts:delete' },
   suggestions: { list: 'suggestions:list', page: 'suggestions:page', create: 'suggestions:create', status: 'suggestions:status' },
   data: { export: 'data:export', import: 'data:import' },
-  diagnostics: { openLogs: 'diagnostics:openLogs', copy: 'diagnostics:copy', rendererError: 'diagnostics:rendererError', rendererStats: 'diagnostics:rendererStats' },
+  diagnostics: { openLogs: 'diagnostics:openLogs', copy: 'diagnostics:copy', export: 'diagnostics:export', rendererError: 'diagnostics:rendererError', rendererStats: 'diagnostics:rendererStats' },
   settings: { get: 'settings:get', check: 'settings:check', set: 'settings:set' },
   providers: { list: 'providers:list', create: 'providers:create', update: 'providers:update', remove: 'providers:remove', testConnection: 'providers:testConnection', diagnose: 'providers:diagnose' },
   models: { list: 'models:list', refresh: 'models:refresh', bindings: 'models:bindings', setBindings: 'models:setBindings' },
