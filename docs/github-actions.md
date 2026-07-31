@@ -7,8 +7,8 @@ claramente qual parte do processo precisa de atenção.
 
 | Workflow | Gatilho | Responsabilidade |
 | --- | --- | --- |
-| `CI · source, renderer and packages` | pull request, `master`, tags e execução manual | valida workflows, código, testes de renderer e pacotes multiplataforma |
-| `Security · dependencies` | alterações de dependências em PR ou `master`, agenda semanal e execução manual | audita dependências de produção e gera um SBOM |
+| `CI · source, renderer and packages` | pull request, `main`, tags e execução manual | valida workflows, código, testes de renderer e pacotes multiplataforma |
+| `Security · dependencies` | alterações de dependências em PR ou `main`, agenda semanal e execução manual | audita dependências de produção e gera um SBOM |
 | `Compatibility · Codex CLI` | somente execução manual | exercita o contrato experimental do App Server em uma instalação autenticada |
 | `Release · stable` | somente execução manual | valida a origem, assina as três plataformas e publica uma GitHub Release estável |
 
