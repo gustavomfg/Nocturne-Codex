@@ -25,6 +25,9 @@ Existem dois caminhos intencionalmente distintos:
 2. Providers OpenAI-compatible usam uma chave de API ou runtime local. O
    contrato atual oferece chat em Review e não simula ferramentas de escrita.
 
+O contrato comum e os campos de diagnóstico estão documentados em
+[`provider-contract.md`](provider-contract.md).
+
 O renderer recebe eventos normalizados com o identificador da conversa. Uma
 única execução pode ficar ativa por vez, e aprovações nativas são resolvidas
 somente no processo principal.

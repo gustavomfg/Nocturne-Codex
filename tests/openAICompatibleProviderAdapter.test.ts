@@ -179,11 +179,25 @@ describe('OpenAICompatibleAdapterFactory', () => {
       timeoutMs: 30_000,
     })
     expect(normalized.baseUrl).toBe('https://provider.example/v1')
-    expect(() => factory.create(
+    const adapter = factory.create(
       '9ba7e635-8746-48bd-a8e9-4609ff1690cb',
       normalized,
       async () => undefined,
-    )).not.toThrow()
+    )
+    expect(adapter.definition).toMatchObject({
+      protocol: 'OpenAI-compatible',
+      version: 'v1',
+      capabilities: {
+        modelDiscovery: true,
+        streaming: true,
+        toolCalling: false,
+        cancellation: true,
+        authentication: 'required',
+      },
+      limitations: {
+        requestTimeoutMs: { minimum: 1_000, maximum: 120_000 },
+      },
+    })
   })
 })
 

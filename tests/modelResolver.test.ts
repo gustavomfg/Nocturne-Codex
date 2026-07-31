@@ -6,6 +6,7 @@ import { TaskBuilder } from '../electron/ai/TaskBuilder'
 import type { WorkspaceModelBindings } from '../shared/ai/bindings'
 import type { ModelDescriptor, ModelReference } from '../shared/ai/model'
 import type { NormalizedTaskInput, TaskModelSelection } from '../shared/ai/task'
+import { providerDefinition } from './helpers/providerDefinition'
 
 function model(reference: ModelReference, overrides: Partial<ModelDescriptor> = {}): ModelDescriptor {
   return {
@@ -20,7 +21,7 @@ function model(reference: ModelReference, overrides: Partial<ModelDescriptor> = 
 
 function adapter(id: string, status: 'available' | 'offline' = 'available'): ProviderAdapter {
   return {
-    definition: { id, displayName: id, source: 'remote' },
+    definition: providerDefinition(id),
     getAvailability: vi.fn().mockResolvedValue({ status }),
     listModels: () => [],
     execute: () => ({ finishReason: 'stop' }),

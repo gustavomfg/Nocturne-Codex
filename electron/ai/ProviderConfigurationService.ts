@@ -4,6 +4,8 @@ import type {
   ProviderConfigurationSummary,
 } from '../../shared/ai/providerConfiguration'
 import type { ProviderAvailability } from '../../shared/ai/provider'
+import type { ProviderDiagnostic, ProviderDiagnosticError } from '../../shared/ai/provider'
+import { performance } from 'node:perf_hooks'
 import type { ProviderAdapter } from './ProviderRegistry'
 import { ProviderRegistry } from './ProviderRegistry'
 
@@ -55,6 +57,7 @@ export class ProviderConfigurationServiceError extends Error {
 
 export class ProviderConfigurationService {
   private operation: Promise<void> = Promise.resolve()
+  private readonly diagnosticErrors = new Map<string, ProviderDiagnosticError[]>()
 
   constructor(
     private readonly configurations: ProviderConfigurationStore,
@@ -188,22 +191,65 @@ export class ProviderConfigurationService {
       if (removed.credentialReference) {
         await this.credentials.delete(removed.credentialReference).catch(() => undefined)
       }
+      this.diagnosticErrors.delete(id)
       this.onProviderRemoved?.(id)
       return true
     })
   }
 
   async testConnection(id: string): Promise<ProviderAvailability> {
+    return (await this.diagnose(id)).availability
+  }
+
+  async diagnose(id: string): Promise<ProviderDiagnostic> {
     const configuration = this.configurations.get(id)
     if (!configuration) throw notFoundError()
+    const startedAt = performance.now()
+    const checkedAt = new Date().toISOString()
     try {
-      return await this.providers.getAvailability(id)
+      const availability = { ...(await this.providers.getAvailability(id)), checkedAt }
+      if (availability.status !== 'available' && availability.status !== 'disabled') {
+        this.recordDiagnosticError(id, availability.message ?? `Provider em estado ${availability.status}.`, checkedAt)
+      }
+      const definition = this.providers.list().find((provider) => provider.id === id)
+      if (!definition) throw new Error('Adapter do Provider não registrado.')
+      return {
+        providerId: id,
+        definition,
+        availability,
+        connectivity: availability.status === 'available' || availability.status === 'degraded'
+          ? 'connected'
+          : availability.status === 'offline'
+            ? 'unreachable'
+            : 'unknown',
+        authentication: !configuration.requiresAuthentication
+          ? 'not-required'
+          : availability.status === 'authentication-required'
+            ? 'rejected'
+            : configuration.credentialConfigured
+              ? 'configured'
+              : 'missing',
+        compatibility: availability.status === 'incompatible'
+          ? 'incompatible'
+          : availability.status === 'offline' || availability.status === 'authentication-required'
+            ? 'unknown'
+            : 'compatible',
+        latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
+        checkedAt,
+        recentErrors: [...(this.diagnosticErrors.get(id) ?? [])],
+      }
     } catch {
       throw new ProviderConfigurationServiceError(
         'operation-failed',
         'Não foi possível testar a conexão do Provider.',
       )
     }
+  }
+
+  private recordDiagnosticError(id: string, message: string, occurredAt: string) {
+    const errors = this.diagnosticErrors.get(id) ?? []
+    errors.unshift({ message: message.slice(0, 2_000), occurredAt })
+    this.diagnosticErrors.set(id, errors.slice(0, 5))
   }
 
   private normalize(input: unknown) {

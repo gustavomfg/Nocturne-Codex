@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ProviderRegistry, ProviderRegistryError, type ProviderAdapter } from '../electron/ai/ProviderRegistry'
+import { providerDefinition } from './helpers/providerDefinition'
 
 function adapter(id: string, overrides: Partial<ProviderAdapter> = {}): ProviderAdapter {
   return {
-    definition: { id, displayName: id.toUpperCase(), source: 'remote' },
+    definition: { ...providerDefinition(id), displayName: id.toUpperCase() },
     getAvailability: () => ({ status: 'available' }),
     listModels: () => [],
     execute: () => ({ finishReason: 'stop' }),
@@ -19,10 +20,12 @@ describe('ProviderRegistry', () => {
 
     const listed = registry.list()
     listed[0].displayName = 'Alterado'
+    listed[0].capabilities.streaming = false
+    listed[0].limitations.notes.push('alterada')
 
     expect(registry.resolve('openai')).toBe(openAi)
     expect(registry.list()).toEqual([
-      { id: 'openai', displayName: 'OPENAI', source: 'remote' },
+      { ...providerDefinition('openai'), displayName: 'OPENAI' },
     ])
   })
 

@@ -15,6 +15,7 @@ import type {
   ProviderConfigurationSummary,
 } from '../shared/ai/providerConfiguration'
 import type { ProviderAvailability } from '../shared/ai/provider'
+import { providerDefinition } from './helpers/providerDefinition'
 
 const ids = [
   '9ba7e635-8746-48bd-a8e9-4609ff1690cb',
@@ -172,9 +173,12 @@ class FakeAdapter implements ProviderAdapter {
     private readonly recordCredential: (credential: string | undefined) => void,
   ) {
     this.definition = {
-      id,
+      ...providerDefinition(id, input.source),
       displayName: input.displayName,
-      source: input.source,
+      capabilities: {
+        ...providerDefinition(id, input.source).capabilities,
+        authentication: input.requiresAuthentication ? 'required' as const : 'none' as const,
+      },
     }
   }
 
@@ -340,6 +344,31 @@ describe('ProviderConfigurationService', () => {
     expect(credentials.entries.size).toBe(0)
     expect(() => providers.resolve(created.id)).toThrow()
     await expect(service.remove(created.id)).resolves.toBe(false)
+  })
+
+  it('normaliza diagnóstico, latência, compatibilidade e erros recentes', async () => {
+    const { factory, service } = setup()
+    const created = await service.create(remoteConfiguration, { credential: 'diagnostic-secret' })
+    factory.availability = { status: 'degraded', message: 'Catálogo parcialmente indisponível.' }
+
+    const first = await service.diagnose(created.id)
+    const second = await service.diagnose(created.id)
+
+    expect(first).toMatchObject({
+      providerId: created.id,
+      definition: {
+        protocol: 'test',
+        capabilities: { modelDiscovery: true, streaming: true, cancellation: true, authentication: 'required' },
+      },
+      availability: { status: 'degraded', message: 'Catálogo parcialmente indisponível.' },
+      connectivity: 'connected',
+      authentication: 'configured',
+      compatibility: 'compatible',
+      latencyMs: expect.any(Number),
+      recentErrors: [{ message: 'Catálogo parcialmente indisponível.' }],
+    })
+    expect(second.recentErrors).toHaveLength(2)
+    expect(second.checkedAt).toBeTruthy()
   })
 
   it('reconstrói adapters e remove credenciais órfãs na inicialização', async () => {

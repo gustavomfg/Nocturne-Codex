@@ -6,6 +6,7 @@ import {
 import { ModelRegistry } from '../electron/ai/ModelRegistry'
 import { ProviderRegistry, ProviderRegistryError, type ProviderAdapter } from '../electron/ai/ProviderRegistry'
 import type { ModelDescriptor } from '../shared/ai/model'
+import { providerDefinition } from './helpers/providerDefinition'
 
 function model(providerId: string, modelId: string): ModelDescriptor {
   return {
@@ -23,7 +24,7 @@ function adapter(
   listModels: ProviderAdapter['listModels'],
 ): ProviderAdapter {
   return {
-    definition: { id, displayName: id, source: 'remote' },
+    definition: providerDefinition(id),
     getAvailability: () => ({ status: 'available' }),
     listModels,
     execute: () => ({ finishReason: 'stop' }),

@@ -105,11 +105,6 @@ apontando para `http://localhost:11434` (Ollama) ou `http://localhost:1234`
 | Ollama            | - | - | Sim |
 | LM Studio         | - | - | Sim |
 
-<<<<<<< HEAD
 No Nocturne, acesso por plano mensal está implementado somente para conta
 ChatGPT através do Codex CLI. OpenAI Platform, DeepSeek e OpenRouter usam
 chaves de API separadas; Ollama e LM Studio permanecem locais.
-=======
-Se o Nocturne Studio quiser suportar conexao via plano/assinatura (sem API
-key), o unico provedor viavel hoje e a OpenAI, via OAuth.
->>>>>>> 98e7a83 (refactor(brand): rename product to Nocturne Studio)

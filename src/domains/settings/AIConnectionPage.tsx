@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
+  Activity,
   ArrowLeft,
   Bot,
   Brain,
@@ -13,6 +14,7 @@ import {
   Trash2,
   UserRound,
 } from 'lucide-react'
+import type { ProviderDiagnostic } from '../../../shared/ai/provider'
 import type {
   ProviderConfigurationInput,
   ProviderConfigurationSummary,
@@ -70,6 +72,8 @@ export function AIConnectionPage({
   const [saving, setSaving] = useState(false)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
+  const [diagnosingId, setDiagnosingId] = useState<string | null>(null)
+  const [providerDiagnostics, setProviderDiagnostics] = useState<Record<string, ProviderDiagnostic>>({})
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -253,6 +257,20 @@ export function AIConnectionPage({
     }
   }
 
+  const diagnose = async (id: string) => {
+    if (diagnosingId) return
+    setDiagnosingId(id)
+    setError(null)
+    try {
+      const diagnostic = await window.nocturne.providers.diagnose(id)
+      setProviderDiagnostics((current) => ({ ...current, [id]: diagnostic }))
+    } catch (failure) {
+      setError(errorMessage(failure))
+    } finally {
+      setDiagnosingId(null)
+    }
+  }
+
   return <div className="ai-page">
     {error && <div className="provider-feedback error" role="alert">{error}</div>}
 
@@ -283,22 +301,32 @@ export function AIConnectionPage({
             >{connecting ? <LoaderCircle className="spin" size={13}/> : <Trash2 size={13}/>}</button>
           </div>
         </div>}
-        {services.map((service) => (
-          <div key={service.id} className="ai-list-row">
-            <div className="ai-list-row-info">
-              <span className="ai-list-dot"/>
-              <strong>{service.displayName}</strong>
+        {services.map((service) => {
+          const diagnostic = providerDiagnostics[service.id]
+          return <div key={service.id} className="ai-list-provider">
+            <div className="ai-list-row">
+              <div className="ai-list-row-info">
+                <span className={`ai-list-dot ${diagnostic?.availability.status ?? ''}`}/>
+                <span><strong>{service.displayName}</strong><small>{service.baseUrl}</small></span>
+              </div>
+              <div className="ai-list-row-actions">
+                <button
+                  className="ai-list-config"
+                  aria-label={`Diagnosticar ${service.displayName}`}
+                  disabled={Boolean(diagnosingId)}
+                  onClick={() => void diagnose(service.id)}
+                >{diagnosingId === service.id ? <LoaderCircle className="spin" size={13}/> : <Activity size={13}/>}</button>
+                <button
+                  className="ai-list-remove"
+                  aria-label={`Remover ${service.displayName}`}
+                  disabled={removingId === service.id}
+                  onClick={() => void remove(service.id)}
+                >{removingId === service.id ? <LoaderCircle className="spin" size={13}/> : <Trash2 size={13}/>}</button>
+              </div>
             </div>
-            <div className="ai-list-row-actions">
-              <button
-                className="ai-list-remove"
-                aria-label={`Remover ${service.displayName}`}
-                disabled={removingId === service.id}
-                onClick={() => void remove(service.id)}
-              >{removingId === service.id ? <LoaderCircle className="spin" size={13}/> : <Trash2 size={13}/>}</button>
-            </div>
+            {diagnostic && <ProviderDiagnosticSummary value={diagnostic}/>}
           </div>
-        ))}
+        })}
       </div>}
 
       <button className="ai-add-btn" onClick={() => setStep('service')}>
@@ -478,5 +506,37 @@ export function AIConnectionPage({
         </div>
       </div>
     </div>}
+  </div>
+}
+
+function ProviderDiagnosticSummary({ value }: { value: ProviderDiagnostic }) {
+  const authentication = {
+    'not-required': 'Não exigida',
+    configured: 'Configurada',
+    missing: 'Ausente',
+    rejected: 'Recusada',
+  }[value.authentication]
+  const compatibility = {
+    compatible: 'Compatível',
+    incompatible: 'Incompatível',
+    unknown: 'Não verificada',
+  }[value.compatibility]
+  return <div className="provider-diagnostic" role="status">
+    <div className="provider-diagnostic-grid">
+      <span><small>Status</small><strong>{value.availability.status}</strong></span>
+      <span><small>Conectividade</small><strong>{value.connectivity === 'connected' ? 'Conectado' : value.connectivity === 'unreachable' ? 'Inacessível' : 'Não verificada'}</strong></span>
+      <span><small>Autenticação</small><strong>{authentication}</strong></span>
+      <span><small>Compatibilidade</small><strong>{compatibility}</strong></span>
+      <span><small>Protocolo</small><strong>{value.definition.protocol} {value.definition.version ?? ''}</strong></span>
+      <span><small>Resposta</small><strong>{value.latencyMs} ms</strong></span>
+    </div>
+    <div className="provider-capabilities" aria-label="Capacidades do Provider">
+      {value.definition.capabilities.modelDiscovery && <small>modelos</small>}
+      {value.definition.capabilities.streaming && <small>streaming</small>}
+      {value.definition.capabilities.toolCalling && <small>ferramentas</small>}
+      {value.definition.capabilities.cancellation && <small>cancelamento</small>}
+    </div>
+    {value.definition.limitations.notes.length > 0 && <p>{value.definition.limitations.notes.join(' ')}</p>}
+    {value.recentErrors.length > 0 && <details><summary>Erros recentes ({value.recentErrors.length})</summary><ul>{value.recentErrors.map((error) => <li key={`${error.occurredAt}-${error.message}`}>{error.message}</li>)}</ul></details>}
   </div>
 }

@@ -4,7 +4,7 @@ import type { LookupFunction } from 'node:net'
 import { Readable } from 'node:stream'
 import type { NormalizedErrorCode } from '../../../../shared/ai/execution'
 import type { ModelDescriptor } from '../../../../shared/ai/model'
-import type { ProviderAvailability } from '../../../../shared/ai/provider'
+import type { ProviderAvailability, ProviderDefinition } from '../../../../shared/ai/provider'
 import type {
   ProviderExecutionControl,
   ProviderExecutionRequest,
@@ -50,7 +50,7 @@ type PinnedProviderRequest = (
 ) => Promise<Response>
 
 export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
-  readonly definition
+  readonly definition: ProviderDefinition
   private readonly config: OpenAICompatibleConfig
   private readonly models: ModelDescriptor[]
   private readonly request: typeof fetch
@@ -61,6 +61,19 @@ export class OpenAICompatibleProviderAdapter implements ProviderAdapter {
       id: this.config.id,
       displayName: this.config.displayName,
       source: this.config.source,
+      protocol: 'OpenAI-compatible',
+      version: 'v1',
+      capabilities: {
+        modelDiscovery: true,
+        streaming: true,
+        toolCalling: false,
+        cancellation: true,
+        authentication: this.config.requiresAuthentication ? 'required' : 'none',
+      },
+      limitations: {
+        requestTimeoutMs: { minimum: 1_000, maximum: 120_000 },
+        notes: ['Tool calling ainda não é normalizado por este adapter.'],
+      },
     }
     this.models = dependencies.models.map((model) => {
       const parsed = modelDescriptorSchema.parse(model) as ModelDescriptor

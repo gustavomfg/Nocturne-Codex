@@ -54,7 +54,14 @@ export class ProviderRegistry {
   }
 
   list(): ProviderDefinition[] {
-    return [...this.adapters.values()].map(({ definition }) => ({ ...definition }))
+    return [...this.adapters.values()].map(({ definition }) => ({
+      ...definition,
+      capabilities: { ...definition.capabilities },
+      limitations: {
+        requestTimeoutMs: { ...definition.limitations.requestTimeoutMs },
+        notes: [...definition.limitations.notes],
+      },
+    }))
   }
 
   resolve(providerId: string): ProviderAdapter {

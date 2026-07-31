@@ -6,6 +6,7 @@ import type {
   ProviderExecutionRequest,
   ProviderStreamPayload,
 } from '../../shared/ai/providerExecution'
+import { providerDefinition } from './providerDefinition'
 
 interface FakeProviderScript {
   events?: ProviderStreamPayload[]
@@ -24,10 +25,9 @@ export class FakeProviderAdapter implements ProviderAdapter {
   ) {
     const first = models[0]
     this.definition = {
-      id: first?.providerId ?? 'fake',
+      ...providerDefinition(first?.providerId ?? 'fake', first?.source ?? 'local'),
       displayName: 'Fake Provider',
-      source: first?.source ?? 'local',
-    } as const
+    }
   }
 
   getAvailability() {

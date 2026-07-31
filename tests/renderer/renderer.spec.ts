@@ -347,7 +347,12 @@ test.describe('renderer do produto', () => {
     await dialog.getByRole('button', { name: 'Usar este modelo' }).click()
     await expect(page.locator('.product-toast')).toContainText('Usando anthropic/claude-sonnet.')
     await expect(dialog.getByText('Conectar IA')).toBeVisible()
-    await expect(dialog.getByText('OpenRouter')).toBeVisible()
+    await expect(dialog.getByText('OpenRouter', { exact: true })).toBeVisible()
+    await dialog.getByRole('button', { name: 'Diagnosticar OpenRouter' }).click()
+    const diagnostic = dialog.locator('.provider-diagnostic')
+    await expect(diagnostic.getByText('OpenAI-compatible v1')).toBeVisible()
+    await expect(diagnostic.getByText('42 ms')).toBeVisible()
+    await expect(diagnostic.getByText('Compatível', { exact: true })).toBeVisible()
   })
 
   test('lista e seleciona modelos disponíveis pela conta ChatGPT', async ({ page }) => {
@@ -385,7 +390,7 @@ test.describe('renderer do produto', () => {
 
     await dialog.getByRole('button', { name: 'Usar este modelo' }).click()
     await expect(dialog.getByText('Conectar IA')).toBeVisible()
-    await expect(dialog.getByText('OpenRouter')).toBeVisible()
+    await expect(dialog.getByText('OpenRouter', { exact: true })).toBeVisible()
 
     await dialog.getByRole('button', { name: 'Remover OpenRouter' }).click()
     await expect(dialog.getByText('Remover esta conexão?')).toBeVisible()

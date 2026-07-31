@@ -1,6 +1,6 @@
 import type { AgentMode, Artifact, Attachment, AgentEvent, AppSettings, CodexAccountStatus, CollectionPage, Conversation, FilePreview, GitInfo, Message, MessagePage, Suggestion, SuggestionStatus, Workspace, WorkspaceChangeEvent, WorkspaceMemory } from '../types'
 import type { BrainMemory, BrainMemoryKind, BrainMemoryScope, BrainMemoryStatus, UpdateBrainMemoryInput } from '../brainMemory'
-import type { ProviderAvailability } from '../ai/provider'
+import type { ProviderAvailability, ProviderDiagnostic } from '../ai/provider'
 import type {
   ProviderConfigurationErrorCode,
   ProviderConfigurationInput,
@@ -55,6 +55,7 @@ export interface NocturneApi {
     update(id: string, configuration: ProviderConfigurationInput, options?: { credential?: string; clearCredential?: boolean }): Promise<ProviderConfigurationSummary>
     remove(id: string): Promise<boolean>
     testConnection(id: string): Promise<ProviderAvailability>
+    diagnose(id: string): Promise<ProviderDiagnostic>
   }
   models: {
     list(): Promise<ModelDescriptor[]>

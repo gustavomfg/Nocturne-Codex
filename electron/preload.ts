@@ -116,6 +116,10 @@ export const nocturneApi: NocturneApi = {
       channels.providers.testConnection,
       { id },
     )),
+    diagnose: (id) => providerResult(ipcRenderer.invoke(
+      channels.providers.diagnose,
+      { id },
+    )),
   },
   models: {
     list: () => modelResult(ipcRenderer.invoke(channels.models.list)),

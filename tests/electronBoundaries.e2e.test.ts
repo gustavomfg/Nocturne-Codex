@@ -117,6 +117,31 @@ class SimulatedProviderConfigurations {
     void _id
     return { status: 'available' as const }
   }
+
+  async diagnose(id: string) {
+    const provider = this.configurations.get(id)
+    if (!provider) throw new Error('Provider não encontrado.')
+    const checkedAt = new Date().toISOString()
+    return {
+      providerId: id,
+      definition: {
+        id,
+        displayName: provider.displayName,
+        source: provider.source,
+        protocol: 'OpenAI-compatible',
+        version: 'v1',
+        capabilities: { modelDiscovery: true, streaming: true, toolCalling: false, cancellation: true, authentication: 'required' as const },
+        limitations: { requestTimeoutMs: { minimum: 1_000, maximum: 120_000 }, notes: [] },
+      },
+      availability: { status: 'available' as const, checkedAt },
+      connectivity: 'connected' as const,
+      authentication: 'configured' as const,
+      compatibility: 'compatible' as const,
+      latencyMs: 5,
+      checkedAt,
+      recentErrors: [],
+    }
+  }
 }
 
 class SimulatedModelCatalog {
@@ -314,6 +339,13 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
 
     const availability = await api.providers.testConnection(created.id)
     expect(availability.status).toBe('available')
+    await expect(api.providers.diagnose(created.id)).resolves.toMatchObject({
+      definition: { protocol: 'OpenAI-compatible', version: 'v1' },
+      connectivity: 'connected',
+      authentication: 'configured',
+      compatibility: 'compatible',
+      latencyMs: 5,
+    })
 
     const updated = await api.providers.update(created.id, {
       providerType: 'openai-compatible', displayName: 'Updated OpenAI',

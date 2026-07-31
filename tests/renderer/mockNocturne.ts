@@ -156,6 +156,29 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
           return providerConfigurations.length < previousLength
         },
         testConnection: async () => ({ status: 'available' as const, message: 'Conexão validada.' }),
+        diagnose: async (id: string) => {
+          const provider = providerConfigurations.find((item) => item.id === id)
+          if (!provider) throw new Error('Provider não encontrado.')
+          return {
+            providerId: id,
+            definition: {
+              id,
+              displayName: provider.displayName,
+              source: provider.source,
+              protocol: 'OpenAI-compatible',
+              version: 'v1',
+              capabilities: { modelDiscovery: true, streaming: true, toolCalling: false, cancellation: true, authentication: provider.requiresAuthentication ? 'required' as const : 'none' as const },
+              limitations: { requestTimeoutMs: { minimum: 1_000, maximum: 120_000 }, notes: ['Tool calling ainda não é normalizado por este adapter.'] },
+            },
+            availability: { status: 'available' as const, checkedAt: now },
+            connectivity: 'connected' as const,
+            authentication: provider.requiresAuthentication ? 'configured' as const : 'not-required' as const,
+            compatibility: 'compatible' as const,
+            latencyMs: 42,
+            checkedAt: now,
+            recentErrors: [],
+          }
+        },
       },
       models: {
         list: async () => modelDescriptors.map((item) => ({ ...item, capabilities: [...item.capabilities] })),

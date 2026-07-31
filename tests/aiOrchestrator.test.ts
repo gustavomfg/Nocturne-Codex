@@ -6,6 +6,7 @@ import { ProviderRegistry, type ProviderAdapter } from '../electron/ai/ProviderR
 import { TaskBuilder } from '../electron/ai/TaskBuilder'
 import type { WorkspaceModelBindings } from '../shared/ai/bindings'
 import type { NormalizedExecutionEvent } from '../shared/ai/execution'
+import { providerDefinition } from './helpers/providerDefinition'
 import type { ModelDescriptor } from '../shared/ai/model'
 import { FakeProviderAdapter } from './helpers/FakeProviderAdapter'
 
@@ -122,7 +123,7 @@ describe('AIOrchestrator', () => {
 
   it('converte payload ou resultado inválido em falha segura', async () => {
     const invalidAdapter: ProviderAdapter = {
-      definition: { id: 'fake', displayName: 'Invalid', source: 'local' },
+      definition: { ...providerDefinition('fake', 'local'), displayName: 'Invalid' },
       getAvailability: () => ({ status: 'available' }),
       listModels: () => [descriptor],
       execute: (_request, control) => {
