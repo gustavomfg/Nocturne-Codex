@@ -229,8 +229,8 @@ Implemented:
 
 Currently under development:
 
-- Build Mode
-- Docs Mode com geração somente leitura, comparação e aplicação incremental aprovada
+- recursos avançados de Build Mode além do fluxo protegido atual
+- recursos avançados de Docs Mode além da comparação e aplicação incremental
 - Workspace Automation
 - Expanded Provider Capabilities
 
@@ -262,6 +262,23 @@ Build Mode and Docs Mode currently require Codex CLI.
 **Minimum supported version:** `0.145.0`
 
 **Verified versions:** `0.145.0` and `0.146.0`
+
+---
+
+# 📚 Documentation
+
+- [Installation and compatibility](docs/installation.md)
+- [First use](docs/getting-started.md)
+- [Providers and ChatGPT account access](docs/providers.md)
+- [Review, Build and Docs modes](docs/modes.md)
+- [Backup and recovery](docs/backup-and-recovery.md)
+- [Updates](docs/updates.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Security](docs/security.md) and [privacy](docs/privacy.md)
+- [Development environment](docs/development.md)
+
+Nocturne Studio remains at `0.9.0-beta`. The 1.0 documents describe release
+gates and do not change the installed version by themselves.
 
 ---
 

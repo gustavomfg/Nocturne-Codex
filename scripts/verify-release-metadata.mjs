@@ -11,6 +11,9 @@ const checks = [
   ['README.md', compatibility.verified[0]],
   ['docs/development.md', compatibility.minimum],
   ['docs/codex-integration.md', compatibility.minimum],
+  ['docs/installation.md', compatibility.minimum],
+  ['docs/compatibility.md', compatibility.minimum],
+  ['docs/compatibility.md', compatibility.recommended],
   [`docs/releases/v${pkg.version}.md`, `v${pkg.version}`],
   [`docs/releases/v${pkg.version}.md`, compatibility.minimum],
 ]

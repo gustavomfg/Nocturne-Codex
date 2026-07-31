@@ -24,4 +24,4 @@ uso da versão atual.
 Releases estáveis são publicadas apenas pelo workflow protegido
 `.github/workflows/stable-release.yml`, depois de reunir os artefatos assinados
 de Linux, Windows e macOS, verificar checksums, assinaturas e o commit da tag.
-Os detalhes operacionais ficam em `docs/releases/stable-release.md`.
+Os detalhes operacionais ficam em `docs/github-actions.md`.
