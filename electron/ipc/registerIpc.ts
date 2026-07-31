@@ -66,6 +66,7 @@ export function registerIpc(
     logger,
     approvalDetails,
     (snapshot) => persistCompletedTurn(database, snapshot),
+    (conversationId, threadId) => database.setConversationCodexThread(conversationId, threadId),
   )
   const codexStatus = async () => {
     const account = await codexAccount.status()
@@ -231,10 +232,12 @@ export function registerIpc(
       await aiExecutions.startCodex({
         conversationId,
         workspace: conversation.workspace,
-        prompt: buildCodexPrompt(history, prompt),
+        prompt,
+        initialPrompt: buildCodexPrompt(history, prompt),
         attachments,
         memory: joinMemoryContext(workspaceMemory.content, brainMemory.text),
         mode,
+        threadId: conversation.codexThreadId,
         settings: {
           model: settings.model || '',
           sandbox: mode === 'review' ? 'read-only' : 'workspace-write',

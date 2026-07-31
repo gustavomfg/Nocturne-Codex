@@ -88,7 +88,7 @@ export class CodexClient extends EventEmitter {
     if (this.starting) return this.starting
     this.intentionalStop = false
     this.executable = executable
-    this.starting = this.initialize()
+    this.starting = this.reconnectAndInitialize()
     try {
       await this.starting
     } catch (error) {
@@ -115,7 +115,7 @@ export class CodexClient extends EventEmitter {
         sandbox: settings.sandbox || 'workspace-write',
         model: settings.model || undefined,
         developerInstructions: memory ? workspaceMemoryInstructions(memory) : undefined,
-        ephemeral: true,
+        ephemeral: false,
       }) as { thread?: { id?: unknown } }
       const threadId = typeof result.thread?.id === 'string' ? result.thread.id : ''
       if (!threadId) throw new Error('thread/start não retornou um identificador válido.')
@@ -125,6 +125,32 @@ export class CodexClient extends EventEmitter {
       this.setStatus('failed', `Falha ao criar thread: ${errorMessage(error)}`)
       throw error
     }
+  }
+
+  async resumeThread(
+    threadId: string,
+    workspace: string,
+    settings: Record<string, string> = {},
+    memory = '',
+  ) {
+    await this.start()
+    const result = await this.call('thread/resume', {
+      threadId,
+      cwd: workspace,
+      runtimeWorkspaceRoots: [workspace],
+      approvalPolicy: safeApprovalPolicy(settings.approvalPolicy),
+      approvalsReviewer: 'user',
+      sandbox: settings.sandbox || 'workspace-write',
+      model: settings.model || undefined,
+      developerInstructions: memory ? workspaceMemoryInstructions(memory) : undefined,
+      excludeTurns: true,
+    }) as { thread?: { id?: unknown } }
+    const resumedId = typeof result.thread?.id === 'string' ? result.thread.id : ''
+    if (!resumedId || resumedId !== threadId) {
+      throw new Error('thread/resume não confirmou o identificador solicitado.')
+    }
+    this.loadedThreads.add(threadId)
+    return threadId
   }
 
   async listModels(): Promise<CodexModel[]> {
@@ -251,6 +277,14 @@ export class CodexClient extends EventEmitter {
     this.process.stop()
   }
 
+  async restart() {
+    if (this.starting) {
+      await this.starting.catch(() => undefined)
+    }
+    await this.stopTransport()
+    await this.start()
+  }
+
   private async initialize() {
     this.setStatus('starting')
     this.process.start(this.executable)
@@ -268,6 +302,31 @@ export class CodexClient extends EventEmitter {
     this.serverVersion = initialized.userAgent
     this.notify('initialized')
     this.setStatus('ready')
+  }
+
+  private async reconnectAndInitialize() {
+    if (this.process.isRunning()) await this.stopTransport()
+    this.intentionalStop = false
+    await this.initialize()
+  }
+
+  private async stopTransport() {
+    if (!this.process.isRunning()) return
+    this.intentionalStop = true
+    await new Promise<void>((resolve) => {
+      let settled = false
+      const finish = () => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        this.process.off('exit', finish)
+        resolve()
+      }
+      const timer = setTimeout(finish, 5_000)
+      timer.unref()
+      this.process.once('exit', finish)
+      this.process.stop()
+    })
   }
 
   private call(method: string, params?: unknown) {

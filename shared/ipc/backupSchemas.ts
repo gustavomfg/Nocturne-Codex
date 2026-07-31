@@ -12,7 +12,7 @@ const pathValue = z.string().min(1).max(4_000)
 const jsonText = (limit: number) => z.string().max(limit).refine((value) => { try { JSON.parse(value); return true } catch { return false } }, 'JSON inválido')
 
 const workspace = z.object({ path: pathValue, name: z.string().min(1).max(500), favorite: z.union([z.literal(0), z.literal(1)]).default(0), authorized: z.union([z.literal(0), z.literal(1)]).optional(), created_at: timestamp, last_opened_at: timestamp }).strict()
-const conversation = z.object({ id: uuid, title: z.string().min(1).max(500), workspace: pathValue, created_at: timestamp, updated_at: timestamp }).strict()
+const conversation = z.object({ id: uuid, title: z.string().min(1).max(500), workspace: pathValue, codex_thread_id: z.string().min(1).max(512).nullable().default(null), created_at: timestamp, updated_at: timestamp }).strict()
 const message = z.object({ id: uuid, conversation_id: uuid, role: z.enum(['user', 'assistant', 'system']), content: z.string().max(2_000_000), metadata: jsonText(500_000).nullable().default(null), created_at: timestamp }).strict()
 const artifact = z.object({ id: uuid, conversation_id: uuid, workspace: pathValue, type: z.string().min(1).max(50), title: z.string().min(1).max(500), file_path: pathValue.nullable().default(null), content: z.string().max(2_000_000).nullable().default(null), metadata: jsonText(500_000).nullable().default(null), created_at: timestamp, updated_at: timestamp }).strict()
 const memory = z.object({ workspace: pathValue, content: z.string().max(50_000), updated_at: timestamp }).strict()

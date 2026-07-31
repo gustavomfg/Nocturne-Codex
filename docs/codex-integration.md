@@ -29,3 +29,16 @@ A escolha é persistida nas configurações locais e enviada explicitamente em
 
 Essa seleção pertence ao acesso por conta ChatGPT. Providers OpenAI-compatible
 continuam usando chave de API, catálogo e cobrança separados.
+
+## Recuperação de sessão
+
+As threads do Codex são persistentes e o identificador retornado pelo App Server
+é associado localmente à conversa. Ao reabrir uma conversa ou após reiniciar o
+App Server, o Nocturne usa `thread/resume` com o workspace, as raízes autorizadas
+e as políticas atuais reaplicadas. Se a thread externa não existir mais, uma
+nova thread é criada com o histórico local da conversa.
+
+O cancelamento usa `turn/interrupt` com os identificadores exatos de thread e
+turno. Se o processo cair durante uma execução, o turno é encerrado com erro
+visível e o coordenador libera a conversa; a tentativa seguinte reinicia o App
+Server e retoma a sessão persistida.

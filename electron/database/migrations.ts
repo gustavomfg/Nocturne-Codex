@@ -117,6 +117,11 @@ export const migrations: Migration[] = [
     if (hasColumn(db, 'conversations', 'codex_thread_id'))
       db.exec('ALTER TABLE conversations DROP COLUMN codex_thread_id;')
   } },
+  { version: 12, up: (db) => {
+    if (!hasColumn(db, 'conversations', 'codex_thread_id')) {
+      db.exec('ALTER TABLE conversations ADD COLUMN codex_thread_id TEXT CHECK(codex_thread_id IS NULL OR length(codex_thread_id) BETWEEN 1 AND 512)')
+    }
+  } },
 ]
 
 export function migrateDatabase(db: Database.Database, currentVersion: number, availableMigrations: Migration[] = migrations) {

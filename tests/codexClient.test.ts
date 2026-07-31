@@ -6,8 +6,10 @@ import type { RpcMessage, RpcRequest } from '../electron/codex/protocol'
 class FakeCodexProcess extends EventEmitter implements CodexProcessAdapter {
   sent: RpcMessage[] = []
   running = false
+  starts = 0
 
   start() {
+    this.starts += 1
     this.running = true
   }
 
@@ -62,6 +64,17 @@ async function waitForRequest(process: FakeCodexProcess, method: string) {
   throw new Error(`Request não enviado: ${method}`)
 }
 
+async function waitForRequestCount(process: FakeCodexProcess, method: string, count: number) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const requests = process.sent.filter(
+      (message) => 'method' in message && 'id' in message && message.method === method,
+    )
+    if (requests.length >= count) return
+    await Promise.resolve()
+  }
+  throw new Error(`Quantidade de requests não alcançada: ${method} (${count})`)
+}
+
 async function readyClient() {
   const process = new FakeCodexProcess()
   const client = new CodexClient(process)
@@ -85,6 +98,32 @@ describe('CodexClient', () => {
       compatible: true,
       serverVersion: 'codex-cli/0.146.0',
     })
+  })
+
+  it('reinicia o transporte antes de reconectar após uma falha interna', async () => {
+    const { client, process } = await readyClient()
+    process.emit('error', new Error('transporte inválido'))
+    expect(client.status).toBe('failed')
+
+    const restarted = client.start()
+    await waitForRequestCount(process, 'initialize', 2)
+    const initializeRequests = process.sent.filter(
+      (message): message is RpcRequest =>
+        'method' in message && 'id' in message && message.method === 'initialize',
+    )
+    expect(initializeRequests).toHaveLength(2)
+    process.emit('message', {
+      id: initializeRequests[1].id,
+      result: {
+        userAgent: 'codex-cli/0.146.0',
+        codexHome: '/tmp/codex',
+        platformFamily: 'unix',
+        platformOs: 'linux',
+      },
+    })
+    await restarted
+    expect(process.starts).toBe(2)
+    expect(client.status).toBe('ready')
   })
   it('lista e valida os modelos disponíveis para a conta', async () => {
     const { client, process } = await readyClient()
@@ -136,7 +175,7 @@ describe('CodexClient', () => {
     expect(process.request('thread/start')?.params).toMatchObject({
       cwd: '/workspace',
       runtimeWorkspaceRoots: ['/workspace'],
-      ephemeral: true,
+      ephemeral: false,
     })
     process.respond('thread/start', { thread: { id: 'thread-1' } })
     await created
@@ -163,6 +202,29 @@ describe('CodexClient', () => {
     })
     process.respond('turn/start', { turn: { id: 'turn-1' } })
     await expect(turn).resolves.toBe('turn-1')
+  })
+
+  it('retoma uma thread persistida reaplicando os limites atuais do workspace', async () => {
+    const { client, process } = await readyClient()
+    const resumed = client.resumeThread(
+      'thread-1',
+      '/workspace',
+      { model: 'gpt-5.6-luna', sandbox: 'read-only', approvalPolicy: 'untrusted' },
+      'contexto',
+    )
+    await waitForRequest(process, 'thread/resume')
+    expect(process.request('thread/resume')?.params).toMatchObject({
+      threadId: 'thread-1',
+      cwd: '/workspace',
+      runtimeWorkspaceRoots: ['/workspace'],
+      approvalPolicy: 'untrusted',
+      approvalsReviewer: 'user',
+      sandbox: 'read-only',
+      model: 'gpt-5.6-luna',
+      excludeTurns: true,
+    })
+    process.respond('thread/resume', { thread: { id: 'thread-1' } })
+    await expect(resumed).resolves.toBe('thread-1')
   })
 
   it('força Review para somente leitura independentemente da configuração', async () => {

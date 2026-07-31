@@ -33,10 +33,12 @@ interface CodexTurnInput {
   conversationId: string
   workspace: string
   prompt: string
+  initialPrompt: string
   attachments: string[]
   memory: string
   mode: AgentMode
   settings: AppSettings
+  threadId?: string | null
 }
 
 export class AiExecutionCoordinator {
@@ -51,6 +53,7 @@ export class AiExecutionCoordinator {
     private readonly logger: Logger,
     private readonly approvalDetails: ApprovalDetails,
     private readonly finalizeTurn: (snapshot: CompletedTurnSnapshot) => PersistedTurn | Promise<PersistedTurn>,
+    private readonly persistCodexThread: (conversationId: string, threadId: string) => void = () => undefined,
   ) {
     this.codex.on('event', this.onCodexEvent)
     this.codex.on('status', this.onCodexStatus)
@@ -61,11 +64,25 @@ export class AiExecutionCoordinator {
   async startCodex(input: CodexTurnInput) {
     this.reserve(input.conversationId, input.workspace, input.mode, 'codex')
     try {
-      const threadId = await this.codex.createThread(
-        input.workspace,
-        input.settings as unknown as Record<string, string>,
-        input.memory,
-      )
+      const settings = input.settings as unknown as Record<string, string>
+      let resumed = false
+      let threadId = input.threadId ?? ''
+      if (threadId) {
+        try {
+          await this.codex.resumeThread(threadId, input.workspace, settings, input.memory)
+          resumed = true
+        } catch (error) {
+          this.logger.warn('codex', 'A thread persistida não pôde ser retomada; uma nova sessão será criada com o histórico local.', {
+            conversationId: input.conversationId,
+            error: error instanceof Error ? error.message : String(error),
+          })
+          threadId = ''
+        }
+      }
+      if (!threadId) {
+        threadId = await this.codex.createThread(input.workspace, settings, input.memory)
+        this.persistCodexThread(input.conversationId, threadId)
+      }
       if (!this.active || this.active.conversationId !== input.conversationId) {
         throw new Error('A execução foi cancelada antes de iniciar.')
       }
@@ -74,8 +91,8 @@ export class AiExecutionCoordinator {
       await this.codex.sendTurn(
         threadId,
         input.workspace,
-        input.prompt,
-        input.settings as unknown as Record<string, string>,
+        resumed ? input.prompt : input.initialPrompt,
+        settings,
         input.attachments,
         input.memory,
         input.mode,
@@ -223,6 +240,18 @@ export class AiExecutionCoordinator {
 
   private readonly onCodexStatus = (status: { status: string; error?: string }) => {
     this.pushStatus(status.status, this.active?.conversationId, status.error)
+    const active = this.active
+    if (status.status === 'failed' && status.error && active?.kind === 'codex' && active.threadId && !active.finishing) {
+      this.pushEvent('error', { message: status.error }, active.conversationId)
+      void this.persistAndComplete(active, {
+        threadId: active.threadId,
+        turn: {
+          id: `failed-${Date.now()}`,
+          status: 'failed',
+          error: { message: `${status.error} A sessão foi preservada e será retomada na próxima tentativa.` },
+        },
+      })
+    }
   }
 
   private readonly onCodexLog = (entry: unknown) => {
