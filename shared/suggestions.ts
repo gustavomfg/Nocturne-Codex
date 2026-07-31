@@ -80,6 +80,7 @@ export const suggestionInputSchema = z.object({
 })
 
 const blockPattern = /```nocturne-suggestions\s*\n([\s\S]*?)```/gi
+const trailingJsonBlockPattern = /```json\s*\n([\s\S]*?)```\s*$/i
 export function extractSuggestions(content: string) {
   const suggestions: z.infer<typeof suggestionInputSchema>[] = []
   let structured = false
@@ -89,7 +90,34 @@ export function extractSuggestions(content: string) {
     try { const parsed: unknown = JSON.parse(match[1]); for (const value of Array.isArray(parsed) ? parsed : [parsed]) { const result = suggestionInputSchema.safeParse(value); if (result.success) suggestions.push(result.data) } } catch { /* bloco incompleto é ignorado */ }
   }
   blockPattern.lastIndex = 0
-  return { suggestions, content: content.replace(blockPattern, '').trim(), structured }
+  if (structured) return { suggestions, content: content.replace(blockPattern, '').trim(), structured }
+
+  const fallback = trailingJsonBlockPattern.exec(content)
+  const recovered = fallback ? parseStrictSuggestionArray(fallback[1]) : null
+  if (fallback && recovered) {
+    return {
+      suggestions: recovered,
+      content: content.slice(0, fallback.index).trim(),
+      structured: true,
+    }
+  }
+  return { suggestions, content: content.trim(), structured }
+}
+
+function parseStrictSuggestionArray(value: string): z.infer<typeof suggestionInputSchema>[] | null {
+  try {
+    const parsed: unknown = JSON.parse(value)
+    if (!Array.isArray(parsed)) return null
+    const suggestions: z.infer<typeof suggestionInputSchema>[] = []
+    for (const item of parsed) {
+      const result = suggestionInputSchema.safeParse(item)
+      if (!result.success) return null
+      suggestions.push(result.data)
+    }
+    return suggestions
+  } catch {
+    return null
+  }
 }
 
 export function reviewInstructions() {

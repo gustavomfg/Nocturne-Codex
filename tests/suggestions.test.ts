@@ -136,6 +136,35 @@ describe('sugestões', () => {
     })
   })
 
+  it('recupera uma lista de sugestões em um bloco json final estritamente válido', () => {
+    const response = `Análise concluída.\n\n\`\`\`json\n${JSON.stringify([input])}\n\`\`\``
+    expect(extractSuggestions(response)).toEqual({
+      structured: true,
+      suggestions: [input],
+      content: 'Análise concluída.',
+    })
+    expect(extractSuggestions('```json\n[]\n```')).toEqual({
+      structured: true,
+      suggestions: [],
+      content: '',
+    })
+  })
+
+  it('não interpreta json comum ou inválido como snapshot de Review', () => {
+    const invalidSuggestion = { ...input, severity: 'urgente' }
+    for (const response of [
+      `\`\`\`json\n${JSON.stringify([invalidSuggestion])}\n\`\`\``,
+      `\`\`\`json\n${JSON.stringify([input])}\n\`\`\`\n\nConclusão posterior.`,
+      '```json\n{"configuracao":true}\n```',
+    ]) {
+      expect(extractSuggestions(response)).toMatchObject({
+        structured: false,
+        suggestions: [],
+        content: response,
+      })
+    }
+  })
+
   it('compara sugestões equivalentes sem depender de caixa, acentos ou pontuação', () => {
     expect(suggestionIdentity({ category: 'security', title: ' Restringir o IPC! ' })).toBe(suggestionIdentity({ category: 'security', title: 'restringir o ípc' }))
     expect(suggestionIdentity({ category: 'bug', title: 'Restringir o IPC' })).not.toBe(suggestionIdentity({ category: 'security', title: 'Restringir o IPC' }))

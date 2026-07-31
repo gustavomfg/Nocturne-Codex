@@ -32,4 +32,26 @@ describe('persistCompletedTurn', () => {
     expect(artifactTitles).toEqual(expect.arrayContaining(['main.ts', 'Alterações do turno']))
     database.close()
   })
+
+  it('reconcilia o fallback json final sem marcar a Review como incompleta', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-turn-json-')); directories.push(directory)
+    const database = new LocalDatabase(directory)
+    const conversation = database.createConversation('/tmp/turn-json-workspace')
+    const suggestion = [{
+      title: 'Validar fallback final', description: 'Evitar falso erro.', reasoning: 'O modelo pode usar a linguagem json.',
+      category: 'bug', severity: 'medium', affectedFiles: ['shared/suggestions.ts'], proposedChanges: 'Validar o bloco final.',
+      expectedBenefits: ['Review concluída'], complexity: 'low', risk: 'low',
+    }]
+    const persisted = persistCompletedTurn(database, {
+      conversationId: conversation.id, workspace: conversation.workspace, mode: 'review',
+      content: `Análise concluída.\n\n\`\`\`json\n${JSON.stringify(suggestion)}\n\`\`\``,
+      diff: '', files: [], plan: [], planExplanation: '',
+    })
+    expect(persisted.warning).toBeUndefined()
+    expect(persisted.message?.content).not.toContain('```json')
+    expect(database.listSuggestions(conversation.id)).toEqual([
+      expect.objectContaining({ title: 'Validar fallback final' }),
+    ])
+    database.close()
+  })
 })
