@@ -1,4 +1,4 @@
-> **Documentation for Nocturne Studio v0.9.0-beta**
+> **Documentation for Nocturne Studio v0.9.5-beta**
 
 # 🌙 Nocturne Studio
 
