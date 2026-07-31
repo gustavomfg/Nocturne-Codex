@@ -40,6 +40,18 @@ export function SettingsDialog({ value, workspace, workspaces, onClose, onSave, 
     catch (error) { setDiagnostic(errorMessage(error)) }
     finally { setOperation(null) }
   }
+  const restoreBackup = async () => {
+    if (operation) return
+    setOperation('import')
+    try {
+      const restored = await window.nocturne.data.import()
+      if (restored) window.location.reload()
+    } catch (error) {
+      setDiagnostic(errorMessage(error))
+    } finally {
+      setOperation(null)
+    }
+  }
   const currentPage = settingsPages.find((item) => item.id === page) ?? settingsPages[0]
 
   return <div className="modal-backdrop settings-backdrop" onMouseDown={() => requestExit()}>
@@ -54,7 +66,7 @@ export function SettingsDialog({ value, workspace, workspaces, onClose, onSave, 
           {page === 'ai' && <AISettingsPage workspaceId={workspace} onNotify={onNotify} onCodexModelChange={selectCodexModel}/>}
           {page === 'workspace' && <SettingsSection title="Projetos recentes"><div className="settings-workspaces">{workspaces.slice(0, 6).map((workspace) => <div key={workspace.path}><span className="workspace-setting-icon"><Folder size={15}/></span><span><strong title={workspace.name}>{workspace.name}</strong><small title={workspace.path}>{workspace.path}</small></span>{workspace.favorite && <Star className="workspace-setting-star" size={13} fill="currentColor"/>}</div>)}{!workspaces.length && <p className="settings-empty">Nenhum workspace recente.</p>}</div></SettingsSection>}
           {page === 'application' && <SettingsSection title="Preferências"><div className="settings-columns"><label>Tema<select value="dark" disabled><option value="dark">Nocturne escuro</option></select></label></div><label className="check-label"><input type="checkbox" checked={Boolean(form.diagnosticMode)} onChange={(event) => setForm({ ...form, diagnosticMode: event.target.checked })}/><span><strong>Logs detalhados</strong><small>Registra mais informações para diagnóstico</small></span></label><button className="secondary-setting" onClick={() => requestExit('onboarding')}>Reabrir primeira execução</button></SettingsSection>}
-          {page === 'diagnostics' && <SettingsSection title="Informações do sistema"><pre className="diagnostic-summary" aria-live="polite">{diagnostic}</pre><div className="diagnostic-actions"><button disabled={Boolean(operation)} onClick={() => void runOperation('logs', () => window.nocturne.diagnostics.openLogs(), 'Pasta de logs aberta.')}>Abrir logs</button><button disabled={Boolean(operation)} onClick={() => void runOperation('copy', async () => { const content = await window.nocturne.diagnostics.copy(); await window.nocturne.clipboard.writeText(content); setCopied(true) }, 'Informações de diagnóstico copiadas.')}>{operation === 'copy' ? 'Copiando…' : copied ? 'Informações copiadas' : 'Copiar informações'}</button><button disabled={Boolean(operation)} onClick={() => void runOperation('export', () => window.nocturne.data.export(), 'Backup exportado com sucesso.')}>{operation === 'export' ? 'Exportando…' : 'Exportar dados'}</button></div></SettingsSection>}
+          {page === 'diagnostics' && <SettingsSection title="Informações do sistema"><pre className="diagnostic-summary" aria-live="polite">{diagnostic}</pre><div className="diagnostic-actions"><button disabled={Boolean(operation)} onClick={() => void runOperation('logs', () => window.nocturne.diagnostics.openLogs(), 'Pasta de logs aberta.')}>Abrir logs</button><button disabled={Boolean(operation)} onClick={() => void runOperation('copy', async () => { const content = await window.nocturne.diagnostics.copy(); await window.nocturne.clipboard.writeText(content); setCopied(true) }, 'Informações de diagnóstico copiadas.')}>{operation === 'copy' ? 'Copiando…' : copied ? 'Informações copiadas' : 'Copiar informações'}</button><button disabled={Boolean(operation)} onClick={() => void runOperation('export', () => window.nocturne.data.export(), 'Backup exportado com sucesso.')}>{operation === 'export' ? 'Exportando…' : 'Exportar dados'}</button><button disabled={Boolean(operation)} onClick={() => void restoreBackup()}>{operation === 'import' ? 'Restaurando…' : 'Restaurar backup'}</button></div></SettingsSection>}
         </main>
       </div>
       <footer className={`settings-footer ${discardAction ? 'confirm-discard' : ''} ${saveError ? 'has-error' : ''}`}>{discardAction ? <><span role="alert"><strong>Descartar alterações?</strong> Os campos editados ainda não foram salvos.</span><div className="modal-actions"><button onClick={() => setDiscardAction(null)}>Continuar editando</button><button className="danger" onClick={confirmDiscard}>Descartar</button></div></> : <><span role={saveError ? 'alert' : undefined}>{saveError || (settingsDirty ? 'Existem alterações não salvas.' : 'Nenhuma alteração pendente.')}</span><div className="modal-actions"><button disabled={saving} onClick={() => requestExit()}>Cancelar</button><button className="primary" disabled={saving || !settingsDirty} onClick={() => void save()}>{saving ? 'Salvando…' : 'Salvar alterações'}</button></div></>}</footer>

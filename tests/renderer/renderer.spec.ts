@@ -318,6 +318,16 @@ test.describe('renderer do produto', () => {
     await expect(dialog).toBeVisible()
   })
 
+  test('expõe exportação e restauração na área de diagnóstico', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await ready(page)
+    await page.getByRole('button', { name: 'Abrir configurações' }).last().click()
+    const dialog = page.getByRole('dialog', { name: 'Configurações' })
+    await dialog.getByRole('button', { name: 'Diagnóstico' }).click()
+    await expect(dialog.getByRole('button', { name: 'Exportar dados' })).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Restaurar backup' })).toBeVisible()
+  })
+
   test('ativa uma conexão por API explicitamente no workspace', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await ready(page)

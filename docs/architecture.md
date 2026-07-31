@@ -50,6 +50,10 @@ Backups exportados usam um envelope versionado com SHA-256 sobre os dados e são
 gravados por arquivo temporário seguido de substituição atômica. A importação
 continua aceitando o JSON legado, mas exige checksum válido no formato novo
 antes da validação relacional e de qualquer alteração no banco.
+A restauração sempre cria primeiro um snapshot local. O modo completo substitui
+todo o estado exportável; o modo parcial substitui somente projetos, conversas,
+artefatos, sugestões e memórias, preservando Providers, catálogo de modelos e
+preferências desta instalação.
 
 O Segundo Cérebro injeta somente memórias aprovadas e relevantes, sempre
 marcadas como potencialmente desatualizadas e serializadas como dados não

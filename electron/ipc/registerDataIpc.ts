@@ -37,12 +37,21 @@ export function registerDataIpc(win: BrowserWindow, database: LocalDatabase, log
     const parsed = await parseBackupInWorker(importPath)
     const validated = backupSchema.parse(parsed)
     for (const workspace of validated.workspaces) assertSafeWorkspaceScope(workspace.path, false)
-    const confirmation = await dialog.showMessageBox(win, { type: 'warning', buttons: ['Cancelar', 'Substituir dados'], defaultId: 0, cancelId: 0, title: 'Restaurar backup', message: 'Substituir todos os dados locais por este backup?', detail: 'Conversas, configurações, memórias e artefatos atuais serão substituídos. Exporte seus dados antes se quiser preservar uma cópia.' })
-    if (confirmation.response !== 1) return false
+    const confirmation = await dialog.showMessageBox(win, {
+      type: 'warning',
+      buttons: ['Cancelar', 'Restaurar tudo', 'Somente projetos e histórico'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Restaurar backup',
+      message: 'Como deseja restaurar este backup?',
+      detail: '“Restaurar tudo” substitui também Providers, modelos e preferências. A opção parcial substitui workspaces, conversas, artefatos, sugestões e memórias, preservando a configuração de IA e do aplicativo. Um ponto de recuperação local será criado antes.',
+    })
+    if (confirmation.response !== 1 && confirmation.response !== 2) return false
+    const scope = confirmation.response === 2 ? 'project-data' : 'full'
     const startedAt = performance.now()
     const recoveryPath = await database.createRecoverySnapshot()
-    database.importData({ ...validated, settings: validated.settings })
-    logger.info('persistence', 'Dados importados', { recoveryPath, records: countBackupRecords(validated), durationMs: Math.round(performance.now() - startedAt) })
+    database.importData({ ...validated, settings: validated.settings }, scope)
+    logger.info('persistence', 'Dados importados', { recoveryPath, scope, records: countBackupRecords(validated), durationMs: Math.round(performance.now() - startedAt) })
     return true
   })
   return () => ipcMain.dispose()

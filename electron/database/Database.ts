@@ -424,7 +424,7 @@ export class LocalDatabase {
     return { records, estimatedBytes: contentBytes + records * 64 + 1_024 }
   }
 
-  importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[]; brainMemories?: unknown[]; suggestions?: unknown[]; suggestionDecisions?: unknown[]; providerConfigs?: unknown[]; modelCatalog?: unknown[]; workspaceModelBindings?: unknown[]; settings?: Record<string, string> }) {
+  importData(data: { conversations: unknown[]; workspaces: unknown[]; messages: unknown[]; artifacts: unknown[]; memories: unknown[]; brainMemories?: unknown[]; suggestions?: unknown[]; suggestionDecisions?: unknown[]; providerConfigs?: unknown[]; modelCatalog?: unknown[]; workspaceModelBindings?: unknown[]; settings?: Record<string, string> }, scope: 'full' | 'project-data' = 'full') {
     const statements = new Map<string, Database.Statement>()
     const MAX_STRING_LENGTH = 10_000_000
     const insert = (table: string, rows: unknown[]) => {
@@ -455,9 +455,13 @@ export class LocalDatabase {
       }
     }
     this.db.transaction(() => {
-      this.db.exec('DELETE FROM workspace_model_bindings; DELETE FROM model_catalog; DELETE FROM provider_configs; DELETE FROM brain_memories; DELETE FROM suggestion_decisions; DELETE FROM suggestions; DELETE FROM artifacts; DELETE FROM messages; DELETE FROM conversations; DELETE FROM workspaces; DELETE FROM workspace_memory; DELETE FROM settings;')
-      insert('workspaces', data.workspaces.map((row) => ({ ...(row as Record<string, unknown>), authorized: 0 }))); insert('conversations', data.conversations); insert('messages', data.messages); insert('artifacts', data.artifacts); insert('workspace_memory', data.memories); insert('brain_memories', data.brainMemories ?? []); insert('suggestions', data.suggestions ?? []); insert('suggestion_decisions', data.suggestionDecisions ?? []); insert('provider_configs', data.providerConfigs ?? []); insert('model_catalog', data.modelCatalog ?? []); insert('workspace_model_bindings', data.workspaceModelBindings ?? [])
-      if (data.settings) this.setSettings(data.settings)
+      this.db.exec('DELETE FROM workspace_model_bindings; DELETE FROM brain_memories; DELETE FROM suggestion_decisions; DELETE FROM suggestions; DELETE FROM artifacts; DELETE FROM messages; DELETE FROM conversations; DELETE FROM workspaces; DELETE FROM workspace_memory;')
+      if (scope === 'full') this.db.exec('DELETE FROM model_catalog; DELETE FROM provider_configs; DELETE FROM settings;')
+      insert('workspaces', data.workspaces.map((row) => ({ ...(row as Record<string, unknown>), authorized: 0 }))); insert('conversations', data.conversations); insert('messages', data.messages); insert('artifacts', data.artifacts); insert('workspace_memory', data.memories); insert('brain_memories', data.brainMemories ?? []); insert('suggestions', data.suggestions ?? []); insert('suggestion_decisions', data.suggestionDecisions ?? [])
+      if (scope === 'full') {
+        insert('provider_configs', data.providerConfigs ?? []); insert('model_catalog', data.modelCatalog ?? []); insert('workspace_model_bindings', data.workspaceModelBindings ?? [])
+        if (data.settings) this.setSettings(data.settings)
+      }
       this.cleanupOrphans()
     })()
   }

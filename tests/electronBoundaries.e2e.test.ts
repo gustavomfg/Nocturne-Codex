@@ -369,6 +369,35 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     const validated = backupSchema.parse(backup)
     expect(validated.settings).not.toHaveProperty('codexPath')
   })
+
+  it('permite restaurar dados de projeto preservando configurações locais', async () => {
+    const importPath = path.join(root, 'partial-backup.json')
+    const now = new Date().toISOString()
+    fs.writeFileSync(importPath, JSON.stringify({
+      schemaVersion: DATABASE_SCHEMA_VERSION,
+      exportedAt: now,
+      workspaces: [{ path: root, name: 'restored', favorite: 0, created_at: now, last_opened_at: now }],
+      conversations: [],
+      messages: [],
+      artifacts: [],
+      memories: [],
+      brainMemories: [],
+      suggestions: [],
+      suggestionDecisions: [],
+      providerConfigs: [],
+      modelCatalog: [],
+      workspaceModelBindings: [],
+      settings: { model: 'modelo-do-backup' },
+    }))
+    electron.dialogs.open.push({ canceled: false, filePaths: [importPath] })
+    electron.dialogs.message.push({ response: 2 })
+
+    await expect(api.data.import()).resolves.toBe(true)
+
+    expect((await api.settings.get()).model).toBe('gpt-5')
+    expect((await api.workspace.list())[0]).toMatchObject({ path: root, authorized: false })
+    expect(fs.readdirSync(path.join(root, 'backups')).some((name) => name.startsWith('nocturne-before-restore-'))).toBe(true)
+  })
 })
 
 const workspace = '/tmp/test-workspace-nocturne'
