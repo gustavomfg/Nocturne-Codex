@@ -13,7 +13,11 @@ Antes de migrar, o Studio:
 5. mantém os três backups pré-migração mais recentes.
 
 Um banco com versão futura é recusado sem manutenção ou escrita. Um banco que
-falha na verificação de integridade não é migrado automaticamente.
+falha na verificação de integridade não é migrado automaticamente. Antes de
+inicializar os serviços, o Studio procura um snapshot saudável e compatível.
+Quando encontra, apresenta a data e a origem e exige confirmação. O banco
+corrompido e seus arquivos WAL/SHM são movidos para uma pasta de quarentena; se
+a restauração falhar, eles voltam aos caminhos originais.
 
 ## Histórico do schema
 

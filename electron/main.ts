@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, dialog, shell } from 'electron'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -15,6 +15,7 @@ import { ElectronCredentialEncryption } from './security/ElectronCredentialEncry
 import { ModelCatalogService } from './ai/ModelCatalogService'
 import { migrateProductUserData } from './persistence/ProductUserData'
 import productIdentity from '../shared/product-identity.json'
+import { inspectDatabaseFile, isRecoverableDatabaseCorruption, listDatabaseRecoveryCandidates, restoreDatabaseFile } from './database/recovery'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const softwareRendering = process.env.NOCTURNE_DISABLE_GPU === '1' || process.argv.includes('--disable-gpu')
@@ -128,6 +129,7 @@ function createWindow() {
 async function initializeServices() {
   if (database || logger || providerConfigurations) return
   const userDataPath = app.getPath('userData')
+  await recoverDatabaseIfNeeded(userDataPath)
   database = new LocalDatabase(userDataPath)
   logger = new Logger(app.getPath('logs'), database.getSettings().diagnosticMode === 'true')
   modelRegistry = new ModelRegistry()
@@ -172,6 +174,36 @@ async function initializeServices() {
       'O subsistema de Providers iniciou em estado degradado',
       error,
     )
+  }
+}
+
+async function recoverDatabaseIfNeeded(userDataPath: string) {
+  const databasePath = path.join(userDataPath, 'nocturne.db')
+  if (!fs.existsSync(databasePath)) return
+  try {
+    inspectDatabaseFile(databasePath)
+    return
+  } catch (error) {
+    if (!isRecoverableDatabaseCorruption(error)) {
+      throw new Error(`Não foi possível validar o banco local. Verifique as permissões e o acesso ao arquivo ${databasePath}. Detalhe: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    const candidates = await listDatabaseRecoveryCandidates(userDataPath)
+    const latest = candidates[0]
+    if (!latest) {
+      throw new Error(`O banco local está corrompido e nenhum ponto de recuperação válido foi encontrado. O arquivo foi preservado em ${databasePath}. Detalhe: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    const response = await dialog.showMessageBox({
+      type: 'error',
+      title: 'Recuperar banco de dados?',
+      message: 'O banco local falhou na verificação de integridade.',
+      detail: `Há um ponto de recuperação compatível de ${new Date(latest.modifiedAt).toLocaleString('pt-BR')}. O banco atual será preservado em quarentena antes da restauração.\n\nOrigem: ${latest.path}`,
+      buttons: ['Encerrar sem alterar', 'Restaurar ponto de recuperação'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    })
+    if (response.response !== 1) throw new Error('A recuperação do banco foi cancelada; nenhum arquivo foi alterado.')
+    await restoreDatabaseFile(userDataPath, latest.path)
   }
 }
 
@@ -235,4 +267,7 @@ else void app.whenReady().then(() => {
 }).then(() => {
   createWindow()
   if (logger) disposeUpdates = startUpdateService(logger, () => win)
+}).catch((error) => {
+  dialog.showErrorBox('Nocturne Studio não pôde iniciar', error instanceof Error ? error.message : String(error))
+  app.exit(1)
 })
