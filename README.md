@@ -211,7 +211,7 @@ Every provider implements the same execution contract, allowing the workspace to
 
 Current version
 
-> **v0.9.0-beta**
+> **v0.9.5-beta**
 
 Implemented:
 
@@ -278,7 +278,7 @@ Build Mode and Docs Mode currently require Codex CLI.
 - [1.0 release readiness](docs/release-readiness-1.0.md)
 - [Development environment](docs/development.md)
 
-Nocturne Studio remains at `0.9.0-beta`. The 1.0 documents describe release
+Nocturne Studio remains at `0.9.5-beta`. The 1.0 documents describe release
 gates and do not change the installed version by themselves.
 
 ---

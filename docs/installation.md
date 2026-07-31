@@ -12,7 +12,7 @@ Compare o arquivo com o manifesto `SHA256SUMS-<plataforma>` da mesma release.
 Windows e macOS exigem assinatura do aplicativo; macOS também exige
 notarização. O manifesto Linux possui assinatura GPG.
 
-A linha `0.9.0-beta` continua sendo pré-release. Os gates descritos nos planos
+A linha `0.9.5-beta` continua sendo pré-release. Os gates descritos nos planos
 1.0 não transformam uma build beta em versão estável.
 
 ## Dependência de IA

@@ -2,7 +2,7 @@
 
 Esta matriz acompanha a implementação dos planos 1.0 sem confundir código
 concluído com uma publicação efetivamente assinada. A versão atual continua
-`0.9.0-beta`.
+`0.9.5-beta`.
 
 ## Jornadas automatizadas
 
@@ -48,7 +48,7 @@ estável.
 
 A publicação 1.0 permanece bloqueada enquanto:
 
-- `package.json` estiver em `0.9.0-beta`;
+- `package.json` estiver em `0.9.5-beta`;
 - não existir uma tag estável correspondente;
 - os gates externos acima não tiverem sido executados com sucesso.
 
