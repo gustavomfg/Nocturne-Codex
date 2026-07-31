@@ -88,18 +88,52 @@ describe('sugestões', () => {
     const db = new LocalDatabase(tempDirectory()); const conversation = db.createConversation('/tmp/project')
     const pending = db.addSuggestion(conversation.id, conversation.workspace, input)
     const repeated = db.reconcileSuggestions(conversation.id, conversation.workspace, [{ ...input, description: 'Descrição atualizada pela análise mais recente.', severity: 'critical' }])
-    expect(repeated).toHaveLength(1)
-    expect(repeated[0]).toMatchObject({ id: pending.id, status: 'new', description: 'Descrição atualizada pela análise mais recente.', severity: 'critical' })
+    expect(repeated.suggestions).toHaveLength(1)
+    expect(repeated.suggestions[0]).toMatchObject({ id: pending.id, status: 'new', description: 'Descrição atualizada pela análise mais recente.', severity: 'critical' })
+    expect(repeated.comparison).toMatchObject({
+      newSuggestions: [],
+      persistentSuggestions: [expect.objectContaining({ id: pending.id })],
+      severityChanges: [{ id: pending.id, from: 'high', to: 'critical', title: input.title }],
+    })
     const accepted = db.setSuggestionStatus(pending.id, 'accepted')
     const acceptedRepeat = db.reconcileSuggestions(conversation.id, conversation.workspace, [{ ...input, description: 'Não deve alterar o escopo já aprovado.' }])
-    expect(acceptedRepeat[0]).toMatchObject({ id: accepted.id, status: 'accepted', description: 'Descrição atualizada pela análise mais recente.' })
+    expect(acceptedRepeat.suggestions[0]).toMatchObject({ id: accepted.id, status: 'accepted', description: 'Descrição atualizada pela análise mais recente.' })
     db.setSuggestionStatus(pending.id, 'resolved')
     expect(db.listSuggestions(conversation.id)).toEqual([])
     expect(db.listSuggestionPage(conversation.id)).toEqual({ items: [], hasMore: false })
     const completedRepeat = db.reconcileSuggestions(conversation.id, conversation.workspace, [{ ...input, description: 'A IA repetiu a sugestão já concluída.' }])
-    expect(completedRepeat[0]).toMatchObject({ id: pending.id, status: 'resolved' })
+    expect(completedRepeat.suggestions[0]).toMatchObject({ id: pending.id, status: 'resolved' })
     expect(db.listSuggestions(conversation.id)).toEqual([])
     db.close()
+  })
+
+  it('resolve em tempo real sugestões abertas ausentes do snapshot atual', () => {
+    const db = new LocalDatabase(tempDirectory())
+    const conversation = db.createConversation('/tmp/project')
+    const stale = db.addSuggestion(conversation.id, conversation.workspace, input)
+    const current = { ...input, title: 'Nova sugestão atual', category: 'performance' as const }
+    const reconciliation = db.reconcileSuggestions(conversation.id, conversation.workspace, [current])
+    expect(reconciliation.comparison.newSuggestions).toEqual([
+      expect.objectContaining({ title: current.title }),
+    ])
+    expect(reconciliation.comparison.resolvedSuggestions).toEqual([
+      expect.objectContaining({ id: stale.id }),
+    ])
+    expect(db.getSuggestion(stale.id)?.status).toBe('resolved')
+    expect(db.listSuggestions(conversation.id).map((suggestion) => suggestion.title)).toEqual([current.title])
+    db.close()
+  })
+
+  it('distingue bloco estruturado vazio de resposta sem snapshot', () => {
+    expect(extractSuggestions('```nocturne-suggestions\n[]\n```')).toMatchObject({
+      structured: true,
+      suggestions: [],
+    })
+    expect(extractSuggestions('Análise parcial sem bloco.')).toMatchObject({
+      structured: false,
+      suggestions: [],
+      content: 'Análise parcial sem bloco.',
+    })
   })
 
   it('compara sugestões equivalentes sem depender de caixa, acentos ou pontuação', () => {

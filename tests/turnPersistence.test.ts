@@ -21,7 +21,9 @@ describe('persistCompletedTurn', () => {
       files: ['electron/main.ts'], plan: [{ step: 'Persistir', status: 'completed' }], planExplanation: 'Durabilidade',
     })
     expect(persisted.warning).toBeUndefined()
-    expect(persisted.message?.content).toBe('Análise concluída.')
+    expect(persisted.message?.content).toContain('Análise concluída.')
+    expect(persisted.message?.content).toContain('Comparação com a revisão anterior')
+    expect(persisted.message?.content).toContain('Novas: 1')
     expect(database.listMessages(conversation.id)).toEqual([expect.objectContaining({ id: persisted.message?.id, role: 'assistant' })])
     expect(database.listBrainMemoryPage(conversation.workspace).items).toHaveLength(1)
     expect(database.listSuggestions(conversation.id)).toEqual([expect.objectContaining({ title: 'Persistir no main' })])

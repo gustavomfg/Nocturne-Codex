@@ -45,6 +45,7 @@ export function useTurnLifecycle({ flushStream, activeTurnRef, refreshGit }: { f
       if (context.mode === 'review') {
         const extracted = await window.nocturne.suggestions.create(context.conversationId, assistantContent)
         assistantContent = extracted.content || assistantContent
+        if (extracted.warning) store.setError(extracted.warning)
         if (useAppStore.getState().activeId === context.conversationId) store.setSuggestions((await window.nocturne.suggestions.page(context.conversationId)).items)
       }
       const activitySnapshot = current.activities.slice(-100).map((activity) => ({ ...activity, detail: activity.detail?.slice(-4_000) }))

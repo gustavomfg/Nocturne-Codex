@@ -2,7 +2,7 @@ import Database from 'better-sqlite3'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
-import { suggestionIdentity, type Suggestion, type SuggestionInput, type SuggestionStatus } from '../../shared/suggestions'
+import { suggestionIdentity, type ReviewComparisonItem, type Suggestion, type SuggestionInput, type SuggestionReconciliation, type SuggestionStatus } from '../../shared/suggestions'
 import type { BrainMemory, BrainMemoryCandidate, CreateBrainMemoryInput, UpdateBrainMemoryInput } from '../../shared/brainMemory'
 import { DATABASE_SCHEMA_VERSION } from '../../shared/constants'
 import { migrateDatabase } from './migrations'
@@ -376,24 +376,42 @@ export class LocalDatabase {
     return row
   }
 
-  reconcileSuggestions(conversationId: string, workspaceId: string, values: SuggestionInput[]): Suggestion[] {
+  reconcileSuggestions(conversationId: string, workspaceId: string, values: SuggestionInput[]): SuggestionReconciliation {
     return this.db.transaction(() => {
       const history = this.listSuggestionHistory(conversationId)
       const byIdentity = new Map<string, Suggestion>()
+      const activeBefore = new Map<string, Suggestion>()
       for (const suggestion of history) {
         const identity = suggestionIdentity(suggestion)
         const existing = byIdentity.get(identity)
         const suggestionIsActive = isActiveSuggestionStatus(suggestion.status)
         const existingIsActive = existing ? isActiveSuggestionStatus(existing.status) : false
         if (!existing || (!existingIsActive && suggestionIsActive) || (existing.status === 'new' && suggestion.status === 'accepted')) byIdentity.set(identity, suggestion)
+        if (suggestionIsActive && !activeBefore.has(identity)) activeBefore.set(identity, suggestion)
       }
-      return values.map((value) => {
+      const seen = new Set<string>()
+      const newSuggestions: ReviewComparisonItem[] = []
+      const persistentSuggestions: ReviewComparisonItem[] = []
+      const severityChanges: SuggestionReconciliation['comparison']['severityChanges'] = []
+      const suggestions = values.map((value) => {
         const identity = suggestionIdentity(value)
+        seen.add(identity)
         const existing = byIdentity.get(identity)
         if (!existing) {
           const created = this.addSuggestion(conversationId, workspaceId, value)
           byIdentity.set(identity, created)
+          newSuggestions.push(comparisonItem(created))
           return created
+        }
+        if (!isActiveSuggestionStatus(existing.status)) return existing
+        persistentSuggestions.push(comparisonItem(existing))
+        if (existing.severity !== value.severity) {
+          severityChanges.push({
+            id: existing.id,
+            title: existing.title,
+            from: existing.severity,
+            to: value.severity,
+          })
         }
         if (!['new', 'in-analysis', 'deferred'].includes(existing.status)) return existing
         const updatedAt = new Date().toISOString()
@@ -410,6 +428,26 @@ export class LocalDatabase {
         byIdentity.set(identity, updated)
         return updated
       })
+      const resolvedSuggestions: ReviewComparisonItem[] = []
+      for (const [identity, suggestion] of activeBefore) {
+        if (seen.has(identity) || !['new', 'in-analysis'].includes(suggestion.status)) continue
+        const resolved = this.setSuggestionStatus(
+          suggestion.id,
+          'resolved',
+          'A sugestão não reapareceu na revisão estruturada atual.',
+        )
+        resolvedSuggestions.push(comparisonItem(resolved))
+      }
+      return {
+        suggestions,
+        comparison: {
+          reviewedAt: new Date().toISOString(),
+          newSuggestions,
+          persistentSuggestions,
+          resolvedSuggestions,
+          severityChanges,
+        },
+      }
     })()
   }
 
@@ -424,7 +462,7 @@ export class LocalDatabase {
       const current = this.db.prepare('SELECT status FROM suggestions WHERE id=?').get(id) as { status: SuggestionStatus } | undefined
       if (!current) throw new Error('Sugestão não encontrada.')
       const allowed: Record<SuggestionStatus, SuggestionStatus[]> = {
-        new: ['in-analysis', 'accepted', 'rejected', 'deferred', 'invalid'],
+        new: ['in-analysis', 'accepted', 'rejected', 'resolved', 'deferred', 'invalid'],
         'in-analysis': ['accepted', 'rejected', 'resolved', 'deferred', 'invalid'],
         accepted: ['resolved', 'rejected', 'deferred', 'invalid'],
         deferred: ['in-analysis', 'accepted', 'rejected', 'resolved', 'invalid'],
@@ -656,6 +694,14 @@ function decodeSuggestions(rows: EncodedSuggestion[]) {
 
 function isActiveSuggestionStatus(status: SuggestionStatus) {
   return status === 'new' || status === 'in-analysis' || status === 'accepted' || status === 'deferred'
+}
+
+function comparisonItem(suggestion: Suggestion): ReviewComparisonItem {
+  return {
+    id: suggestion.id,
+    title: suggestion.title,
+    severity: suggestion.severity,
+  }
 }
 
 const brainMemoryColumns = (prefix = '') => `${prefix}id,${prefix}workspace_id workspaceId,${prefix}conversation_id conversationId,${prefix}kind,${prefix}scope,${prefix}status,${prefix}content,${prefix}confidence,${prefix}source_type sourceType,${prefix}source_id sourceId,${prefix}created_at createdAt,${prefix}updated_at updatedAt,${prefix}last_confirmed_at lastConfirmedAt,${prefix}last_used_at lastUsedAt,${prefix}use_count useCount`

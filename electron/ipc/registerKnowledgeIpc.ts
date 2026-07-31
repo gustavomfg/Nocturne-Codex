@@ -2,7 +2,7 @@ import type { BrowserWindow } from 'electron'
 import { z } from 'zod'
 import type { LocalDatabase } from '../database/Database'
 import type { Logger } from '../logging/Logger'
-import { extractBrainMemoryCandidates, extractSuggestions } from '../../shared/suggestions'
+import { extractBrainMemoryCandidates, extractSuggestions, reviewComparisonMarkdown } from '../../shared/suggestions'
 import { isSafeBrainMemoryContent } from '../../shared/brainMemory'
 import { brainMemoryCreateSchema, brainMemoryDeleteSchema, brainMemoryExtractSchema, brainMemoryPageSchema, brainMemoryUpdateSchema, conversationPageSchema, idSchema, suggestionExtractSchema, suggestionStatusSchema } from '../../shared/ipc/schemas'
 import { safeIpcMain } from './safeIpc'
@@ -72,7 +72,10 @@ export function registerKnowledgeIpc(win: BrowserWindow, database: LocalDatabase
   ipcMain.handle('suggestions:page', (_event, value: unknown) => { const data = conversationPageSchema.parse(value); return database.listSuggestionPage(data.conversationId, data.offset, data.limit) })
   ipcMain.handle('suggestions:create', (_event, value: unknown) => {
     const data = suggestionExtractSchema.parse(value); const workspace = dependencies.workspace(data.conversationId); const extracted = extractSuggestions(data.content)
-    const suggestions = database.reconcileSuggestions(data.conversationId, workspace, extracted.suggestions); if (suggestions.length) logger.info('artifacts', 'Sugestões de review reconciliadas', { conversationId: data.conversationId, count: suggestions.length }); return { suggestions, content: extracted.content }
+    if (!extracted.structured) return { suggestions: [], content: extracted.content, warning: 'A resposta não trouxe um snapshot estruturado; sugestões anteriores foram preservadas.' }
+    const reconciliation = database.reconcileSuggestions(data.conversationId, workspace, extracted.suggestions)
+    if (reconciliation.suggestions.length || reconciliation.comparison.resolvedSuggestions.length) logger.info('artifacts', 'Sugestões de review reconciliadas', { conversationId: data.conversationId, count: reconciliation.suggestions.length, resolved: reconciliation.comparison.resolvedSuggestions.length })
+    return { ...reconciliation, content: [extracted.content, reviewComparisonMarkdown(reconciliation.comparison)].filter(Boolean).join('\n\n') }
   })
   ipcMain.handle('suggestions:status', async (_event, value: unknown) => {
     const data = suggestionStatusSchema.parse(value); const workspace = dependencies.authorizedWorkspace(data.conversationId); const suggestion = database.getSuggestion(data.suggestionId, data.conversationId)

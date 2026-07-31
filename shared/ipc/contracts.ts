@@ -1,4 +1,5 @@
 import type { AgentMode, Artifact, Attachment, AgentEvent, AppSettings, CodexAccountStatus, CollectionPage, Conversation, FilePreview, GitInfo, Message, MessagePage, Suggestion, SuggestionStatus, Workspace, WorkspaceChangeEvent, WorkspaceMemory } from '../types'
+import type { ReviewComparison } from '../suggestions'
 import type { BrainMemory, BrainMemoryKind, BrainMemoryScope, BrainMemoryStatus, UpdateBrainMemoryInput } from '../brainMemory'
 import type { ProviderAvailability, ProviderDiagnostic } from '../ai/provider'
 import type {
@@ -45,7 +46,7 @@ export interface NocturneApi {
     extract(conversationId: string, content: string): Promise<{ memories: BrainMemory[]; content: string; warning?: string }>
   }
   artifacts: { list(conversationId: string): Promise<Artifact[]>; page(conversationId: string, offset?: number, limit?: number): Promise<CollectionPage<Artifact>>; delete(conversationId: string, artifactId: string): Promise<{ deleted: true }> }
-  suggestions: { list(conversationId: string): Promise<Suggestion[]>; page(conversationId: string, offset?: number, limit?: number): Promise<CollectionPage<Suggestion>>; create(conversationId: string, content: string): Promise<{ suggestions: Suggestion[]; content: string }>; status(conversationId: string, suggestionId: string, status: SuggestionStatus, result?: string): Promise<Suggestion> }
+  suggestions: { list(conversationId: string): Promise<Suggestion[]>; page(conversationId: string, offset?: number, limit?: number): Promise<CollectionPage<Suggestion>>; create(conversationId: string, content: string): Promise<{ suggestions: Suggestion[]; content: string; comparison?: ReviewComparison; warning?: string }>; status(conversationId: string, suggestionId: string, status: SuggestionStatus, result?: string): Promise<Suggestion> }
   data: { export(): Promise<string | null>; import(): Promise<boolean> }
   diagnostics: { openLogs(): Promise<string>; copy(): Promise<string>; rendererError(value: { type: 'error' | 'unhandledRejection'; message: string; stack?: string }): Promise<void>; rendererStats(value: { responseSize: number; activities: number; messages: number }): Promise<void> }
   settings: { get(): Promise<AppSettings>; set(settings: Partial<AppSettings>): Promise<AppSettings> }

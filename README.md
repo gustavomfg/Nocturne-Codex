@@ -59,7 +59,11 @@ Current analysis includes:
 - Documentation
 - Maintainability
 
-Suggestions remain reviewable before any modification is applied.
+Suggestions remain reviewable before any modification is applied. Each
+structured review reconciles the current findings with the previous snapshot:
+new and persistent items stay visible, severity changes are reported, and open
+items no longer supported by the current evidence are resolved. Accepted or
+deferred decisions remain under user control.
 
 ---
 
@@ -71,7 +75,9 @@ Suggestions remain reviewable before any modification is applied.
 
 Suggestions are grouped by severity and category, making technical debt easier to prioritize and review.
 
-Each recommendation is designed to explain not only **what** should change, but also **why**.
+Each recommendation records evidence, confidence, source, responsible party,
+severity, rationale and decision history—not only **what** should change, but
+also **why**.
 
 ---
 

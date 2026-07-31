@@ -1,7 +1,6 @@
 import path from 'node:path'
 import type { AgentMode } from '../../shared/suggestions'
-import { extractBrainMemoryCandidates } from '../../shared/suggestions'
-import { extractSuggestions } from '../../shared/suggestions'
+import { extractBrainMemoryCandidates, extractSuggestions, reviewComparisonMarkdown } from '../../shared/suggestions'
 import { PERSISTENCE_LIMITS } from '../../shared/constants'
 import type { LocalDatabase, MessageRow } from '../database/Database'
 
@@ -37,8 +36,13 @@ export function persistCompletedTurn(database: LocalDatabase, snapshot: Complete
   if (snapshot.mode === 'review') {
     const suggestionExtraction = extractSuggestions(assistantContent)
     try {
-      database.reconcileSuggestions(snapshot.conversationId, snapshot.workspace, suggestionExtraction.suggestions)
-      assistantContent = suggestionExtraction.content || assistantContent
+      if (suggestionExtraction.structured) {
+        const reconciliation = database.reconcileSuggestions(snapshot.conversationId, snapshot.workspace, suggestionExtraction.suggestions)
+        assistantContent = [suggestionExtraction.content, reviewComparisonMarkdown(reconciliation.comparison)].filter(Boolean).join('\n\n')
+      } else {
+        assistantContent = suggestionExtraction.content || assistantContent
+        warnings.push('A resposta não trouxe um snapshot estruturado; sugestões anteriores foram preservadas.')
+      }
     } catch {
       warnings.push('As sugestões da análise não puderam ser salvas.')
     }

@@ -20,6 +20,28 @@ export interface SuggestionHistoryEntry {
   result: string | null
   createdAt: string
 }
+export interface ReviewComparisonItem {
+  id: string
+  title: string
+  severity: SuggestionSeverity
+}
+export interface ReviewSeverityChange {
+  id: string
+  title: string
+  from: SuggestionSeverity
+  to: SuggestionSeverity
+}
+export interface ReviewComparison {
+  reviewedAt: string
+  newSuggestions: ReviewComparisonItem[]
+  persistentSuggestions: ReviewComparisonItem[]
+  resolvedSuggestions: ReviewComparisonItem[]
+  severityChanges: ReviewSeverityChange[]
+}
+export interface SuggestionReconciliation {
+  suggestions: Suggestion[]
+  comparison: ReviewComparison
+}
 
 export interface Suggestion {
   id: string; workspaceId: string; conversationId: string; title: string; description: string; reasoning: string
@@ -60,15 +82,30 @@ export const suggestionInputSchema = z.object({
 const blockPattern = /```nocturne-suggestions\s*\n([\s\S]*?)```/gi
 export function extractSuggestions(content: string) {
   const suggestions: z.infer<typeof suggestionInputSchema>[] = []
+  let structured = false
   let match: RegExpExecArray | null
   while ((match = blockPattern.exec(content)) !== null) {
+    structured = true
     try { const parsed: unknown = JSON.parse(match[1]); for (const value of Array.isArray(parsed) ? parsed : [parsed]) { const result = suggestionInputSchema.safeParse(value); if (result.success) suggestions.push(result.data) } } catch { /* bloco incompleto é ignorado */ }
   }
-  return { suggestions, content: content.replace(blockPattern, '').trim() }
+  blockPattern.lastIndex = 0
+  return { suggestions, content: content.replace(blockPattern, '').trim(), structured }
 }
 
 export function reviewInstructions() {
-  return `Você está no Review Mode do Nocturne Studio. Analise e proponha; não altere arquivos, não instale dependências e não execute comandos que modifiquem o workspace. Use somente leitura. Toda melhoria concreta deve ser publicada ao final em um único bloco JSON válido. Separe evidência observável de justificativa e calibre a confiança de 0 a 100:\n\n\`\`\`nocturne-suggestions\n[{"title":"...","description":"problema e impacto","reasoning":"justificativa da conclusão","evidence":[{"source":"arquivo|git|teste|comando somente leitura|documentação","detail":"o que foi observado","location":"caminho:linha opcional"}],"confidence":85,"source":"origem da análise","responsible":"agente ou pessoa responsável pela análise","category":"architecture|security|performance|bug|cleanup|testing|documentation|dependency|accessibility","severity":"info|low|medium|high|critical","affectedFiles":["caminho/relativo"],"proposedChanges":"diff ou descrição precisa da solução","expectedBenefits":["benefício verificável"],"complexity":"low|medium|high","risk":"low|medium|high"}]\n\`\`\`\n\nNão aplique as propostas. O usuário decidirá separadamente.`
+  return `Você está no Review Mode do Nocturne Studio. Analise o estado atual e proponha; não altere arquivos, não instale dependências e não execute comandos que modifiquem o workspace. Use somente leitura. Toda melhoria concreta ainda presente deve ser publicada ao final em um único bloco JSON válido. Mesmo quando não houver sugestões, publique o bloco com [] para confirmar que a revisão estruturada terminou. Separe evidência observável de justificativa e calibre a confiança de 0 a 100:\n\n\`\`\`nocturne-suggestions\n[{"title":"...","description":"problema e impacto","reasoning":"justificativa da conclusão","evidence":[{"source":"arquivo|git|teste|comando somente leitura|documentação","detail":"o que foi observado","location":"caminho:linha opcional"}],"confidence":85,"source":"origem da análise","responsible":"agente ou pessoa responsável pela análise","category":"architecture|security|performance|bug|cleanup|testing|documentation|dependency|accessibility","severity":"info|low|medium|high|critical","affectedFiles":["caminho/relativo"],"proposedChanges":"diff ou descrição precisa da solução","expectedBenefits":["benefício verificável"],"complexity":"low|medium|high","risk":"low|medium|high"}]\n\`\`\`\n\nNão aplique as propostas. O usuário decidirá separadamente.`
+}
+
+export function reviewComparisonMarkdown(comparison: ReviewComparison) {
+  const severityChanges = comparison.severityChanges.length
+    ? comparison.severityChanges.map((item) => `${item.title}: ${item.from} → ${item.to}`).join('; ')
+    : 'nenhuma'
+  return `### Comparação com a revisão anterior
+
+- Novas: ${comparison.newSuggestions.length}
+- Persistentes: ${comparison.persistentSuggestions.length}
+- Resolvidas nesta revisão: ${comparison.resolvedSuggestions.length}
+- Mudanças de severidade: ${severityChanges}`
 }
 const memoryBlockPattern = /```nocturne-memories\s*\n([\s\S]*?)```/gi
 const memoryCandidateSchema = z.object({ kind: z.enum(brainMemoryKinds), scope: z.enum(brainMemoryScopes), content: z.string().trim().min(1).max(8_000).refine(isSafeBrainMemoryContent, 'A memória parece conter uma credencial.'), confidence: z.number().int().min(0).max(100).default(60) }).strict()
