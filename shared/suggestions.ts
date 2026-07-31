@@ -9,13 +9,24 @@ export type SuggestionCategory = typeof suggestionCategories[number]
 export type SuggestionSeverity = typeof suggestionSeverities[number]
 export type SuggestionStatus = typeof suggestionStatuses[number]
 export type AgentMode = typeof agentModes[number]
+export interface SuggestionEvidence {
+  source: string
+  detail: string
+  location?: string
+}
 
 export interface Suggestion {
   id: string; workspaceId: string; conversationId: string; title: string; description: string; reasoning: string
   category: SuggestionCategory; severity: SuggestionSeverity; affectedFiles: string[]; proposedChanges: string; expectedBenefits: string[]; complexity: 'low' | 'medium' | 'high'; risk: 'low' | 'medium' | 'high'
+  evidence: SuggestionEvidence[]; confidence: number; source: string; responsible: string
   createdAt: string; updatedAt: string; status: SuggestionStatus
 }
-export type SuggestionInput = Omit<Suggestion, 'id' | 'workspaceId' | 'conversationId' | 'createdAt' | 'updatedAt' | 'status'>
+export type SuggestionInput = Omit<Suggestion, 'id' | 'workspaceId' | 'conversationId' | 'createdAt' | 'updatedAt' | 'status' | 'evidence' | 'confidence' | 'source' | 'responsible'> & {
+  evidence?: SuggestionEvidence[]
+  confidence?: number
+  source?: string
+  responsible?: string
+}
 
 export function sanitizeSuggestionTitle(value: string) {
   return value.replace(/\p{Cc}+/gu, ' ').replace(/\s+/g, ' ').trim()
@@ -30,6 +41,14 @@ export function suggestionIdentity(value: Pick<SuggestionInput, 'category' | 'ti
 export const suggestionInputSchema = z.object({
   title: z.string().max(200).transform(sanitizeSuggestionTitle).pipe(z.string().min(1).max(200)), description: z.string().trim().min(1).max(10_000), reasoning: z.string().trim().min(1).max(10_000),
   category: z.enum(suggestionCategories), severity: z.enum(suggestionSeverities), affectedFiles: z.array(z.string().trim().min(1).max(1_000)).max(100).default([]), proposedChanges: z.string().max(100_000).default(''), expectedBenefits: z.array(z.string().trim().min(1).max(1_000)).max(20).default([]), complexity: z.enum(['low', 'medium', 'high']).default('medium'), risk: z.enum(['low', 'medium', 'high']).default('medium'),
+  evidence: z.array(z.object({
+    source: z.string().trim().min(1).max(500),
+    detail: z.string().trim().min(1).max(4_000),
+    location: z.string().trim().min(1).max(1_000).optional(),
+  }).strict()).max(50).default([]),
+  confidence: z.number().int().min(0).max(100).default(60),
+  source: z.string().trim().min(1).max(500).default('Análise do agente'),
+  responsible: z.string().trim().min(1).max(500).default('Agente de revisão'),
 })
 
 const blockPattern = /```nocturne-suggestions\s*\n([\s\S]*?)```/gi
@@ -43,7 +62,7 @@ export function extractSuggestions(content: string) {
 }
 
 export function reviewInstructions() {
-  return `Você está no Review Mode do Nocturne Studio. Analise e proponha; não altere arquivos, não instale dependências e não execute comandos que modifiquem o workspace. Use somente leitura. Toda melhoria concreta deve ser publicada ao final em um único bloco JSON válido:\n\n\`\`\`nocturne-suggestions\n[{"title":"...","description":"problema e impacto","reasoning":"evidências e justificativa","category":"architecture|security|performance|bug|cleanup|testing|documentation|dependency|accessibility","severity":"info|low|medium|high|critical","affectedFiles":["caminho/relativo"],"proposedChanges":"diff ou descrição precisa da solução","expectedBenefits":["benefício verificável"],"complexity":"low|medium|high","risk":"low|medium|high"}]\n\`\`\`\n\nNão aplique as propostas. O usuário decidirá separadamente.`
+  return `Você está no Review Mode do Nocturne Studio. Analise e proponha; não altere arquivos, não instale dependências e não execute comandos que modifiquem o workspace. Use somente leitura. Toda melhoria concreta deve ser publicada ao final em um único bloco JSON válido. Separe evidência observável de justificativa e calibre a confiança de 0 a 100:\n\n\`\`\`nocturne-suggestions\n[{"title":"...","description":"problema e impacto","reasoning":"justificativa da conclusão","evidence":[{"source":"arquivo|git|teste|comando somente leitura|documentação","detail":"o que foi observado","location":"caminho:linha opcional"}],"confidence":85,"source":"origem da análise","responsible":"agente ou pessoa responsável pela análise","category":"architecture|security|performance|bug|cleanup|testing|documentation|dependency|accessibility","severity":"info|low|medium|high|critical","affectedFiles":["caminho/relativo"],"proposedChanges":"diff ou descrição precisa da solução","expectedBenefits":["benefício verificável"],"complexity":"low|medium|high","risk":"low|medium|high"}]\n\`\`\`\n\nNão aplique as propostas. O usuário decidirá separadamente.`
 }
 const memoryBlockPattern = /```nocturne-memories\s*\n([\s\S]*?)```/gi
 const memoryCandidateSchema = z.object({ kind: z.enum(brainMemoryKinds), scope: z.enum(brainMemoryScopes), content: z.string().trim().min(1).max(8_000).refine(isSafeBrainMemoryContent, 'A memória parece conter uma credencial.'), confidence: z.number().int().min(0).max(100).default(60) }).strict()

@@ -12,7 +12,7 @@ const directories: string[] = []
 const tempDirectory = () => { const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-suggestions-')); directories.push(directory); return directory }
 afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }) })
 
-const input = { title: 'Restringir IPC', description: 'O renderer possui acesso amplo.', reasoning: 'Reduzir a superfície evita acesso indevido.', category: 'security' as const, severity: 'high' as const, affectedFiles: ['electron/preload.ts'], proposedChanges: '- broadApi\n+ narrowApi', expectedBenefits: ['Menor superfície de ataque'], complexity: 'medium' as const, risk: 'low' as const }
+const input = { title: 'Restringir IPC', description: 'O renderer possui acesso amplo.', reasoning: 'Reduzir a superfície evita acesso indevido.', evidence: [{ source: 'arquivo', detail: 'API ampla exposta.', location: 'electron/preload.ts:1' }], confidence: 90, source: 'Review Mode', responsible: 'Agente de revisão', category: 'security' as const, severity: 'high' as const, affectedFiles: ['electron/preload.ts'], proposedChanges: '- broadApi\n+ narrowApi', expectedBenefits: ['Menor superfície de ataque'], complexity: 'medium' as const, risk: 'low' as const }
 
 describe('sugestões', () => {
   it('extrai apenas sugestões estruturadas e remove o bloco da resposta', () => {
@@ -36,7 +36,15 @@ describe('sugestões', () => {
     expect(db.setSuggestionStatus(suggestion.id, 'accepted').status).toBe('accepted')
     expect(db.setSuggestionStatus(suggestion.id, 'applied', 'typecheck ok').status).toBe('applied')
     db.close(); db = new LocalDatabase(directory)
-    expect(db.getSuggestion(suggestion.id, conversation.id)).toMatchObject({ id: suggestion.id, status: 'applied', affectedFiles: input.affectedFiles })
+    expect(db.getSuggestion(suggestion.id, conversation.id)).toMatchObject({
+      id: suggestion.id,
+      status: 'applied',
+      affectedFiles: input.affectedFiles,
+      evidence: input.evidence,
+      confidence: 90,
+      source: 'Review Mode',
+      responsible: 'Agente de revisão',
+    })
     expect(db.listSuggestions(conversation.id)).toEqual([])
     db.close()
   })
@@ -88,7 +96,7 @@ describe('sugestões', () => {
   })
 
   it('recalcula todas as dimensões quando sugestões deixam de estar abertas', () => {
-    const base: Omit<Suggestion, 'id' | 'category' | 'severity'> = { workspaceId: '/workspace', conversationId: 'conversation-1', title: 'Melhoria', description: 'Problema confirmado.', reasoning: 'Evidência.', affectedFiles: ['src/App.tsx'], proposedChanges: '+ melhoria', expectedBenefits: ['Mais qualidade'], complexity: 'low', risk: 'low', status: 'pending', createdAt: '2026-07-19T10:00:00.000Z', updatedAt: '2026-07-19T10:00:00.000Z' }
+    const base: Omit<Suggestion, 'id' | 'category' | 'severity'> = { workspaceId: '/workspace', conversationId: 'conversation-1', title: 'Melhoria', description: 'Problema confirmado.', reasoning: 'Evidência.', evidence: [], confidence: 80, source: 'Teste', responsible: 'Vitest', affectedFiles: ['src/App.tsx'], proposedChanges: '+ melhoria', expectedBenefits: ['Mais qualidade'], complexity: 'low', risk: 'low', status: 'pending', createdAt: '2026-07-19T10:00:00.000Z', updatedAt: '2026-07-19T10:00:00.000Z' }
     const suggestions: Suggestion[] = [
       ['architecture', 'medium'], ['security', 'high'], ['testing', 'medium'], ['performance', 'critical'], ['cleanup', 'medium'], ['documentation', 'high'],
     ].map(([category, severity], index) => ({ ...base, id: `suggestion-${index}`, category: category as Suggestion['category'], severity: severity as Suggestion['severity'] }))

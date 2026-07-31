@@ -122,6 +122,12 @@ export const migrations: Migration[] = [
       db.exec('ALTER TABLE conversations ADD COLUMN codex_thread_id TEXT CHECK(codex_thread_id IS NULL OR length(codex_thread_id) BETWEEN 1 AND 512)')
     }
   } },
+  { version: 13, up: (db) => {
+    if (!hasColumn(db, 'suggestions', 'evidence')) db.exec("ALTER TABLE suggestions ADD COLUMN evidence TEXT NOT NULL DEFAULT '[]'")
+    if (!hasColumn(db, 'suggestions', 'confidence')) db.exec('ALTER TABLE suggestions ADD COLUMN confidence INTEGER NOT NULL DEFAULT 60 CHECK(confidence BETWEEN 0 AND 100)')
+    if (!hasColumn(db, 'suggestions', 'source')) db.exec("ALTER TABLE suggestions ADD COLUMN source TEXT NOT NULL DEFAULT 'Análise do agente'")
+    if (!hasColumn(db, 'suggestions', 'responsible')) db.exec("ALTER TABLE suggestions ADD COLUMN responsible TEXT NOT NULL DEFAULT 'Agente de revisão'")
+  } },
 ]
 
 export function migrateDatabase(db: Database.Database, currentVersion: number, availableMigrations: Migration[] = migrations) {

@@ -35,6 +35,7 @@ a restauração falhar, eles voltam aos caminhos originais.
 | 10 | Catálogo de modelos e bindings por workspace |
 | 11 | Remoção do identificador experimental de thread do Codex |
 | 12 | Associação persistente e limitada entre conversa e thread retomável do Codex |
+| 13 | Evidências, confiança, origem e responsável das sugestões de Review |
 
 As migrações são progressivas. Reversão para uma versão antiga do aplicativo
 deve usar um backup criado por essa versão; não se remove schema novo

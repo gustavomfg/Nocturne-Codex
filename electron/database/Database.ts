@@ -37,7 +37,7 @@ const importColumns: Record<string, ReadonlySet<string>> = {
   messages: new Set(['id', 'conversation_id', 'role', 'content', 'metadata', 'created_at']),
   artifacts: new Set(['id', 'conversation_id', 'workspace', 'type', 'title', 'file_path', 'content', 'metadata', 'created_at', 'updated_at']),
   workspace_memory: new Set(['workspace', 'content', 'updated_at']),
-  suggestions: new Set(['id', 'workspace_id', 'conversation_id', 'title', 'description', 'reasoning', 'category', 'severity', 'affected_files', 'proposed_changes', 'expected_benefits', 'complexity', 'risk', 'status', 'result', 'created_at', 'updated_at']),
+  suggestions: new Set(['id', 'workspace_id', 'conversation_id', 'title', 'description', 'reasoning', 'category', 'severity', 'affected_files', 'proposed_changes', 'expected_benefits', 'complexity', 'risk', 'evidence', 'confidence', 'source', 'responsible', 'status', 'result', 'created_at', 'updated_at']),
   suggestion_decisions: new Set(['id', 'suggestion_id', 'status', 'result', 'created_at']),
   brain_memories: new Set(['id', 'workspace_id', 'conversation_id', 'kind', 'scope', 'status', 'content', 'confidence', 'source_type', 'source_id', 'created_at', 'updated_at', 'last_confirmed_at', 'last_used_at', 'use_count']),
   provider_configs: new Set(['id', 'provider_type', 'display_name', 'source', 'base_url', 'enabled', 'requires_authentication', 'timeout_ms', 'created_at', 'updated_at']),
@@ -343,24 +343,31 @@ export class LocalDatabase {
   recordApproval(key: string, accepted: boolean, command?: string, risk?: string) { this.db.prepare('INSERT INTO approval_audit(id,approval_key,decision,command,risk,created_at) VALUES(?,?,?,?,?,?)').run(randomUUID(), key, accepted ? 'accepted' : 'declined', command?.slice(0, 4_000) ?? null, risk ?? null, new Date().toISOString()) }
 
   listSuggestions(conversationId: string): Suggestion[] {
-    const rows = this.db.prepare(`SELECT id,workspace_id workspaceId,conversation_id conversationId,title,description,reasoning,category,severity,affected_files affectedFiles,proposed_changes proposedChanges,expected_benefits expectedBenefits,complexity,risk,status,created_at createdAt,updated_at updatedAt FROM suggestions WHERE conversation_id=? AND status IN ('pending','accepted') ORDER BY updated_at DESC`).all(conversationId) as Array<Omit<Suggestion, 'affectedFiles' | 'expectedBenefits'> & { affectedFiles: string; expectedBenefits: string }>
-    return rows.map((row) => ({ ...row, affectedFiles: JSON.parse(row.affectedFiles) as string[], expectedBenefits: JSON.parse(row.expectedBenefits) as string[] }))
+    const rows = this.db.prepare(`${suggestionSelect} WHERE conversation_id=? AND status IN ('pending','accepted') ORDER BY updated_at DESC`).all(conversationId) as EncodedSuggestion[]
+    return decodeSuggestions(rows)
   }
 
   listSuggestionPage(conversationId: string, offset = 0, limit = 50) {
-    const rows = this.db.prepare(`SELECT id,workspace_id workspaceId,conversation_id conversationId,title,description,reasoning,category,severity,affected_files affectedFiles,proposed_changes proposedChanges,expected_benefits expectedBenefits,complexity,risk,status,created_at createdAt,updated_at updatedAt FROM suggestions WHERE conversation_id=? AND status IN ('pending','accepted') ORDER BY updated_at DESC LIMIT ? OFFSET ?`).all(conversationId, limit + 1, offset) as Array<Omit<Suggestion, 'affectedFiles' | 'expectedBenefits'> & { affectedFiles: string; expectedBenefits: string }>
+    const rows = this.db.prepare(`${suggestionSelect} WHERE conversation_id=? AND status IN ('pending','accepted') ORDER BY updated_at DESC LIMIT ? OFFSET ?`).all(conversationId, limit + 1, offset) as EncodedSuggestion[]
     return { items: decodeSuggestions(rows.slice(0, limit)), hasMore: rows.length > limit }
   }
 
   getSuggestion(id: string, conversationId?: string): Suggestion | null {
-    const row = this.db.prepare(`SELECT id,workspace_id workspaceId,conversation_id conversationId,title,description,reasoning,category,severity,affected_files affectedFiles,proposed_changes proposedChanges,expected_benefits expectedBenefits,complexity,risk,status,created_at createdAt,updated_at updatedAt FROM suggestions WHERE id=?${conversationId ? ' AND conversation_id=?' : ''}`).get(...(conversationId ? [id, conversationId] : [id])) as Omit<Suggestion, 'affectedFiles' | 'expectedBenefits'> & { affectedFiles: string; expectedBenefits: string } | undefined
+    const row = this.db.prepare(`${suggestionSelect} WHERE id=?${conversationId ? ' AND conversation_id=?' : ''}`).get(...(conversationId ? [id, conversationId] : [id])) as EncodedSuggestion | undefined
     return row ? decodeSuggestions([row])[0] : null
   }
 
   addSuggestion(conversationId: string, workspaceId: string, value: SuggestionInput): Suggestion {
     const now = new Date().toISOString()
-    const row: Suggestion = { id: randomUUID(), workspaceId, conversationId, ...value, status: 'pending', createdAt: now, updatedAt: now }
-    this.db.prepare(`INSERT INTO suggestions(id,workspace_id,conversation_id,title,description,reasoning,category,severity,affected_files,proposed_changes,expected_benefits,complexity,risk,status,created_at,updated_at) VALUES(@id,@workspaceId,@conversationId,@title,@description,@reasoning,@category,@severity,@affectedFiles,@proposedChanges,@expectedBenefits,@complexity,@risk,@status,@createdAt,@updatedAt)`).run({ ...row, affectedFiles: JSON.stringify(row.affectedFiles), expectedBenefits: JSON.stringify(row.expectedBenefits) })
+    const row: Suggestion = {
+      id: randomUUID(), workspaceId, conversationId, ...value,
+      evidence: value.evidence ?? [],
+      confidence: value.confidence ?? 60,
+      source: value.source ?? 'Análise do agente',
+      responsible: value.responsible ?? 'Agente de revisão',
+      status: 'pending', createdAt: now, updatedAt: now,
+    }
+    this.db.prepare(`INSERT INTO suggestions(id,workspace_id,conversation_id,title,description,reasoning,category,severity,affected_files,proposed_changes,expected_benefits,complexity,risk,evidence,confidence,source,responsible,status,created_at,updated_at) VALUES(@id,@workspaceId,@conversationId,@title,@description,@reasoning,@category,@severity,@affectedFiles,@proposedChanges,@expectedBenefits,@complexity,@risk,@evidence,@confidence,@source,@responsible,@status,@createdAt,@updatedAt)`).run({ ...row, affectedFiles: JSON.stringify(row.affectedFiles), expectedBenefits: JSON.stringify(row.expectedBenefits), evidence: JSON.stringify(row.evidence) })
     return row
   }
 
@@ -386,10 +393,13 @@ export class LocalDatabase {
         if (existing.status !== 'pending') return existing
         const updatedAt = new Date().toISOString()
         this.db.prepare(`UPDATE suggestions SET title=@title,description=@description,reasoning=@reasoning,category=@category,severity=@severity,
-          affected_files=@affectedFiles,proposed_changes=@proposedChanges,expected_benefits=@expectedBenefits,complexity=@complexity,risk=@risk,updated_at=@updatedAt
+          affected_files=@affectedFiles,proposed_changes=@proposedChanges,expected_benefits=@expectedBenefits,complexity=@complexity,risk=@risk,
+          evidence=@evidence,confidence=@confidence,source=@source,responsible=@responsible,updated_at=@updatedAt
           WHERE id=@id AND conversation_id=@conversationId AND status='pending'`).run({
           ...value, id: existing.id, conversationId, affectedFiles: JSON.stringify(value.affectedFiles),
-          expectedBenefits: JSON.stringify(value.expectedBenefits), updatedAt,
+          expectedBenefits: JSON.stringify(value.expectedBenefits), evidence: JSON.stringify(value.evidence ?? []),
+          confidence: value.confidence ?? 60, source: value.source ?? 'Análise do agente',
+          responsible: value.responsible ?? 'Agente de revisão', updatedAt,
         })
         const updated = this.getSuggestion(existing.id, conversationId) as Suggestion
         byIdentity.set(identity, updated)
@@ -399,7 +409,7 @@ export class LocalDatabase {
   }
 
   private listSuggestionHistory(conversationId: string): Suggestion[] {
-    const rows = this.db.prepare(`SELECT id,workspace_id workspaceId,conversation_id conversationId,title,description,reasoning,category,severity,affected_files affectedFiles,proposed_changes proposedChanges,expected_benefits expectedBenefits,complexity,risk,status,created_at createdAt,updated_at updatedAt FROM suggestions WHERE conversation_id=? ORDER BY updated_at DESC`).all(conversationId) as Array<Omit<Suggestion, 'affectedFiles' | 'expectedBenefits'> & { affectedFiles: string; expectedBenefits: string }>
+    const rows = this.db.prepare(`${suggestionSelect} WHERE conversation_id=? ORDER BY updated_at DESC`).all(conversationId) as EncodedSuggestion[]
     return decodeSuggestions(rows)
   }
 
@@ -581,8 +591,21 @@ function restrictFileIfPresent(filePath: string) {
   }
 }
 
-function decodeSuggestions(rows: Array<Omit<Suggestion, 'affectedFiles' | 'expectedBenefits'> & { affectedFiles: string; expectedBenefits: string }>) {
-  return rows.map((row) => ({ ...row, affectedFiles: JSON.parse(row.affectedFiles) as string[], expectedBenefits: JSON.parse(row.expectedBenefits) as string[] }))
+type EncodedSuggestion = Omit<Suggestion, 'affectedFiles' | 'expectedBenefits' | 'evidence'> & {
+  affectedFiles: string
+  expectedBenefits: string
+  evidence: string
+}
+const suggestionSelect = `SELECT id,workspace_id workspaceId,conversation_id conversationId,title,description,reasoning,category,severity,
+  affected_files affectedFiles,proposed_changes proposedChanges,expected_benefits expectedBenefits,complexity,risk,
+  evidence,confidence,source,responsible,status,created_at createdAt,updated_at updatedAt FROM suggestions`
+function decodeSuggestions(rows: EncodedSuggestion[]) {
+  return rows.map((row) => ({
+    ...row,
+    affectedFiles: JSON.parse(row.affectedFiles) as string[],
+    expectedBenefits: JSON.parse(row.expectedBenefits) as string[],
+    evidence: JSON.parse(row.evidence) as Suggestion['evidence'],
+  }))
 }
 
 const brainMemoryColumns = (prefix = '') => `${prefix}id,${prefix}workspace_id workspaceId,${prefix}conversation_id conversationId,${prefix}kind,${prefix}scope,${prefix}status,${prefix}content,${prefix}confidence,${prefix}source_type sourceType,${prefix}source_id sourceId,${prefix}created_at createdAt,${prefix}updated_at updatedAt,${prefix}last_confirmed_at lastConfirmedAt,${prefix}last_used_at lastUsedAt,${prefix}use_count useCount`
