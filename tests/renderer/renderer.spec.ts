@@ -104,8 +104,32 @@ test.describe('renderer do produto', () => {
     await expect(page.getByText('Decisões pendentes')).toBeVisible()
     await page.getByRole('button', { name: 'Ver detalhes técnicos' }).click()
     await expect(page.getByText('Validação visual pendente.')).toBeVisible()
-    await expect(page.getByRole('alert')).toContainText('Falha simulada do renderer.')
+    const alert = page.getByRole('alert')
+    await expect(alert).toContainText('Falha simulada do renderer.')
+    await expect(alert).toContainText('Preservado:')
+    await expect(alert).toContainText('Como resolver:')
     await expect(page.locator('.composer')).toBeVisible()
+  })
+
+  test('permite repetir uma execução após erro recuperável', async ({ page }) => {
+    await page.setViewportSize({ width: 1180, height: 850 })
+    await ready(page)
+    await page.evaluate(() => {
+      let calls = 0
+      window.nocturne.ai.send = async () => {
+        calls += 1
+        ;(window as unknown as { __retryCalls: number }).__retryCalls = calls
+        if (calls === 1) throw new Error('O Provider excedeu o tempo permitido.')
+      }
+    })
+    await page.locator('.conversation-open').click()
+    await page.getByLabel('Mensagem para o agente').fill('Tente uma operação recuperável.')
+    await page.getByRole('button', { name: 'Enviar mensagem' }).click()
+    const alert = page.getByRole('alert')
+    await expect(alert).toContainText('A operação excedeu o tempo limite')
+    await alert.getByRole('button', { name: 'Tentar novamente' }).click()
+    await expect(alert).toBeHidden()
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __retryCalls: number }).__retryCalls)).toBe(2)
   })
 
   test('recupera uma conclusão já persistida após reinicialização do renderer', async ({ page }) => {

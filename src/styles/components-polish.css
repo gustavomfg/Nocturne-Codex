@@ -546,6 +546,50 @@
   box-shadow: var(--shadow-sm);
 }
 
+.error-card > svg {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: var(--spacing-2xs);
+}
+
+.error-card > div {
+  min-width: 0;
+  display: grid;
+  gap: var(--spacing-xs);
+}
+
+.error-card > div strong {
+  color: var(--color-text);
+  font-size: var(--font-body);
+}
+
+.error-card > div p,
+.error-card > div small {
+  margin: 0;
+  color: var(--color-text-secondary);
+  line-height: var(--leading-ui);
+  overflow-wrap: anywhere;
+}
+
+.error-card > div small {
+  display: block;
+}
+
+.error-card > span {
+  margin-left: auto;
+  align-self: flex-start;
+  flex: 0 0 auto;
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.error-card > span button {
+  margin-left: 0;
+  align-items: center;
+  gap: var(--spacing-xs);
+  display: flex;
+}
+
 .onboarding-check, .timeline-dot, .status-dot, .connection > span {
   transition: color var(--motion-base) var(--ease-standard), background-color var(--motion-base) var(--ease-standard), border-color var(--motion-base) var(--ease-standard), box-shadow var(--motion-base) var(--ease-standard);
 }

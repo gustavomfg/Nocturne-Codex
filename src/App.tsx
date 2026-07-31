@@ -64,6 +64,7 @@ function App() {
   const [historyHasMore, setHistoryHasMore] = useState(false)
   const [historyHasNewer, setHistoryHasNewer] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [runRetryAvailable, setRunRetryAvailable] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const chatScrollRef = useRef<HTMLElement>(null)
@@ -76,6 +77,7 @@ function App() {
   const { queueStreamDelta, flushStream, appendActivityDetail, addItemActivity, completeItem } = useBufferedAgentEvents()
   const activeTurnRef = useRef<ActiveTurnContext | null>(null)
   const applyingSuggestionRef = useRef<{ id: string; affectedFiles: string[] } | null>(null)
+  const lastAttemptRef = useRef<{ conversationId: string; content: string; mode: AgentMode; attachments: Attachment[] } | null>(null)
   const conversationRequestRef = useRef(0)
   const historyOffsetRef = useRef(0)
   const active = store.conversations.find((item) => item.id === store.activeId)
@@ -301,7 +303,7 @@ function App() {
     await submitPrompt(prompt)
   }
 
-  async function submitPrompt(rawPrompt: string, mode: AgentMode = agentMode) {
+  async function submitPrompt(rawPrompt: string, mode: AgentMode = agentMode, attachmentsOverride?: Attachment[]) {
     const content = rawPrompt.trim()
     if (!content || interactionLocked()) return
     if (historyHasNewer) await loadLatestMessages()
@@ -312,14 +314,23 @@ function App() {
     }
     if (!conversationId) return
     store.clearRun(); setPrompt('')
-    const selectedAttachments = attachments
+    const selectedAttachments = attachmentsOverride ?? attachments
+    lastAttemptRef.current = { conversationId, content, mode, attachments: selectedAttachments }
+    setRunRetryAvailable(false)
     activeTurnRef.current = { conversationId, mode, suggestionId: applyingSuggestionRef.current?.id ?? null, suggestionFiles: applyingSuggestionRef.current?.affectedFiles ?? [] }
     applyingSuggestionRef.current = null
     setAttachments([])
     store.setStatus('planning')
     store.addMessage({ id: fakeId(), conversationId, role: 'user', content, metadata: JSON.stringify({ attachments: selectedAttachments.map((item) => item.path) }), createdAt: now() })
     try { await window.nocturne.ai.send(conversationId, content, selectedAttachments.map((item) => item.path), mode); await refresh() }
-    catch (error) { activeTurnRef.current = null; applyingSuggestionRef.current = null; store.setFinalizing(false); store.setStatus('failed'); store.setError(error instanceof Error ? error.message : String(error)) }
+    catch (error) { activeTurnRef.current = null; applyingSuggestionRef.current = null; setRunRetryAvailable(true); store.setFinalizing(false); store.setStatus('failed'); store.setError(error instanceof Error ? error.message : String(error)) }
+  }
+
+  function retryLastAttempt() {
+    const attempt = lastAttemptRef.current
+    if (!attempt || attempt.conversationId !== store.activeId || interactionLocked()) return
+    store.setError(null)
+    void submitPrompt(attempt.content, attempt.mode, attempt.attachments)
   }
 
   function preparePrompt(value: string, mode: AgentMode = agentMode) {
@@ -390,7 +401,7 @@ function App() {
       }
       return
     }
-    routeAgentEvent(event, { stream: queueStreamDelta, activityDetail: appendActivityDetail, diff: store.setDiff, plan: store.setPlan, hasPlan: () => Boolean(useAppStore.getState().plan.length), itemStarted: addItemActivity, itemCompleted: completeItem, fsChanged: (paths) => { if (paths.length) store.upsertActivity({ id: 'fs-summary', type: 'file', label: `${paths.length} arquivo(s) observado(s)`, detail: paths.slice(-50).join('\n'), status: 'completed' }) }, approval: (value) => store.addApproval({ ...value, status: 'pending' }), turnCompleted: (params) => { void finishTurn(params).catch((error) => { store.setStatus('failed'); store.setError(`Falha ao finalizar a resposta: ${errorMessage(error)}`) }) }, error: (message) => { store.setError(message); store.upsertActivity({ id: `error-${Date.now()}`, type: 'error', label: 'Erro na execução', detail: message, status: 'failed' }) }, warning: (message) => store.upsertActivity({ id: `warning-${Date.now()}`, type: 'error', label: 'Aviso', detail: message, status: 'failed' }) })
+    routeAgentEvent(event, { stream: queueStreamDelta, activityDetail: appendActivityDetail, diff: store.setDiff, plan: store.setPlan, hasPlan: () => Boolean(useAppStore.getState().plan.length), itemStarted: addItemActivity, itemCompleted: completeItem, fsChanged: (paths) => { if (paths.length) store.upsertActivity({ id: 'fs-summary', type: 'file', label: `${paths.length} arquivo(s) observado(s)`, detail: paths.slice(-50).join('\n'), status: 'completed' }) }, approval: (value) => store.addApproval({ ...value, status: 'pending' }), turnCompleted: (params) => { void finishTurn(params).catch((error) => { store.setStatus('failed'); store.setError(`Falha ao finalizar a resposta: ${errorMessage(error)}`) }) }, error: (message) => { setRunRetryAvailable(true); store.setError(message); store.upsertActivity({ id: `error-${Date.now()}`, type: 'error', label: 'Erro na execução', detail: message, status: 'failed' }) }, warning: (message) => store.upsertActivity({ id: `warning-${Date.now()}`, type: 'error', label: 'Aviso', detail: message, status: 'failed' }) })
   }
 
   async function decide(key: string, accepted: boolean) {
@@ -524,7 +535,7 @@ function App() {
     <main className="main-panel">
       <WorkspaceTopbar title={title} pathLabel={pathLabel} gitInfo={gitInfo} status={store.status} sidebarOpen={sidebarOpen} inspectorOpen={rightOpen} compact={compactLayout} hasMemory={Boolean(memory.content)} sidebarTriggerRef={sidebarTriggerRef} inspectorTriggerRef={inspectorTriggerRef} onOpenSidebar={() => setSidebarVisibility(true)} onSelectWorkspace={() => void selectWorkspace()} onOpenTool={(tool) => void openWorkspaceTool(tool)} onMemory={() => store.activeId ? setMemoryOpen(true) : store.setError('Abra uma conversa para configurar a memória do workspace.')} onSettings={() => setSettingsOpen(true)} onToggleInspector={() => setInspectorVisibility(!rightOpen)}/>
 
-      <ChatViewport active={Boolean(store.activeId)} messages={store.messages} error={store.error} historyHasMore={historyHasMore} historyHasNewer={historyHasNewer} historyLoading={historyLoading} newContent={newContent} chatScrollRef={chatScrollRef} endRef={endRef} stickToBottomRef={stickToBottomRef} onNew={() => void createConversation()} onWorkspace={() => void selectWorkspace()} onPrompt={preparePrompt} onLoadOlder={() => void loadOlderMessages()} onLoadLatest={() => void loadLatestMessages()} onScroll={handleChatScroll} onNewContent={setNewContent} onDismissError={() => store.setError(null)} onJumpLatest={jumpToLatest}/>
+      <ChatViewport active={Boolean(store.activeId)} messages={store.messages} error={store.error} historyHasMore={historyHasMore} historyHasNewer={historyHasNewer} historyLoading={historyLoading} newContent={newContent} chatScrollRef={chatScrollRef} endRef={endRef} stickToBottomRef={stickToBottomRef} onNew={() => void createConversation()} onWorkspace={() => void selectWorkspace()} onPrompt={preparePrompt} onLoadOlder={() => void loadOlderMessages()} onLoadLatest={() => void loadLatestMessages()} onScroll={handleChatScroll} onNewContent={setNewContent} onDismissError={() => store.setError(null)} onRetryError={runRetryAvailable && lastAttemptRef.current?.conversationId === store.activeId ? retryLastAttempt : undefined} onJumpLatest={jumpToLatest}/>
 
       <Composer agentMode={agentMode} attachments={attachments} prompt={prompt} status={store.status} finalizing={store.finalizing} active={Boolean(store.activeId)} pendingApprovals={store.approvals.filter((item) => item.status === 'pending').length} composerRef={composerRef} onMode={setAgentMode} onPrompt={setPrompt} onRemoveAttachment={(path) => setAttachments((current) => current.filter((file) => file.path !== path))} onAttach={attachFiles} onCancel={cancelRun} onSubmit={send} onQuick={preparePrompt}/>
     </main>
