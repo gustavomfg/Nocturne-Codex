@@ -22,6 +22,45 @@ export function startUpdateService(logger: Logger, getWindow: () => BrowserWindo
   let promptingDownload = false
   let downloadRequested = false
   let promptingInstall = false
+  let promptingRetry = false
+  let availableUpdate: UpdateInfo | null = null
+  const setProgress = (value: number) => {
+    const window = getWindow()
+    if (window && !window.isDestroyed()) window.setProgressBar(value)
+  }
+  const startDownload = async () => {
+    if (disposed || downloadRequested) return
+    downloadRequested = true
+    try {
+      await updater.downloadUpdate()
+    } catch (error) {
+      await handleDownloadFailure(error)
+    }
+  }
+  const handleDownloadFailure = async (error: unknown) => {
+    downloadRequested = false
+    setProgress(-1)
+    logger.warn('update', 'Download da atualização interrompido.', error)
+    if (disposed || promptingRetry || !availableUpdate) return
+    promptingRetry = true
+    try {
+      const { response } = await showMessage(getWindow(), {
+        type: 'warning',
+        title: 'Download interrompido',
+        message: `Não foi possível concluir o download do Nocturne Studio ${availableUpdate.version}.`,
+        detail: 'A conexão pode ter sido perdida. Tente retomar; o pacote será validado novamente antes da instalação.',
+        buttons: ['Retomar download', 'Mais tarde'],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      })
+      if (!disposed && response === 0) await startDownload()
+    } catch (dialogError) {
+      logger.warn('update', 'Não foi possível oferecer a retomada da atualização.', dialogError)
+    } finally {
+      promptingRetry = false
+    }
+  }
   const check = () => {
     if (disposed || checking) return
     checking = true
@@ -31,29 +70,33 @@ export function startUpdateService(logger: Logger, getWindow: () => BrowserWindo
   }
   const onAvailable = (info: UpdateInfo) => {
     if (disposed || promptingDownload || downloadRequested) return
+    availableUpdate = info
     promptingDownload = true
+    const releaseNotes = formatReleaseNotes(info.releaseNotes)
     void showMessage(getWindow(), {
       type: 'info',
       title: 'Atualização disponível',
       message: `Nocturne Studio ${info.version} está disponível.`,
-      detail: 'Deseja baixar a atualização agora? Você poderá continuar usando o aplicativo durante o download.',
+      detail: `${releaseNotes ? `Notas da versão:\n${releaseNotes}\n\n` : ''}Deseja baixar a atualização agora? Você poderá continuar usando o aplicativo durante o download.`,
       buttons: ['Baixar', 'Agora não'],
       defaultId: 0,
       cancelId: 1,
       noLink: true,
     }).then(({ response }) => {
       if (disposed || response !== 0) return undefined
-      downloadRequested = true
-      return updater.downloadUpdate().catch((error) => {
-        downloadRequested = false
-        logger.warn('update', 'Não foi possível baixar a atualização.', error)
-      })
+      return startDownload()
     }).catch((error) => logger.warn('update', 'Não foi possível iniciar o download da atualização.', error))
       .finally(() => { promptingDownload = false })
   }
-  const onProgress = (progress: ProgressInfo) => logger.debug('update', 'Download da atualização em andamento.', { percent: Math.round(progress.percent) })
+  const onProgress = (progress: ProgressInfo) => {
+    const percent = Math.max(0, Math.min(100, progress.percent))
+    setProgress(percent / 100)
+    logger.debug('update', 'Download da atualização em andamento.', { percent: Math.round(percent) })
+  }
   const onDownloaded = (info: UpdateInfo) => {
     if (disposed || promptingInstall) return
+    downloadRequested = false
+    setProgress(-1)
     promptingInstall = true
     void showMessage(getWindow(), {
       type: 'info',
@@ -68,7 +111,13 @@ export function startUpdateService(logger: Logger, getWindow: () => BrowserWindo
       .catch((error) => logger.warn('update', 'Não foi possível exibir a confirmação da atualização.', error))
       .finally(() => { promptingInstall = false })
   }
-  const onError = (error: Error) => logger.warn('update', 'Falha no serviço de atualização.', error)
+  const onError = (error: Error) => {
+    if (downloadRequested) {
+      void handleDownloadFailure(error)
+      return
+    }
+    logger.warn('update', 'Falha no serviço de atualização.', error)
+  }
 
   updater.on('update-available', onAvailable)
   updater.on('download-progress', onProgress)
@@ -79,6 +128,7 @@ export function startUpdateService(logger: Logger, getWindow: () => BrowserWindo
 
   return () => {
     disposed = true
+    setProgress(-1)
     clearTimeout(initialCheck)
     clearInterval(recurringCheck)
     updater.removeListener('update-available', onAvailable)
@@ -86,6 +136,18 @@ export function startUpdateService(logger: Logger, getWindow: () => BrowserWindo
     updater.removeListener('update-downloaded', onDownloaded)
     updater.removeListener('error', onError)
   }
+}
+
+function formatReleaseNotes(notes: UpdateInfo['releaseNotes']) {
+  const content = Array.isArray(notes)
+    ? notes.map((entry) => entry.note ?? '').join('\n')
+    : notes ?? ''
+  return String(content)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/[#*_`~[\]]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 2_000)
 }
 
 function getAutoUpdater(): AppUpdater {
