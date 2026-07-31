@@ -230,7 +230,7 @@ Implemented:
 Currently under development:
 
 - Build Mode
-- Docs Mode
+- Docs Mode com geração somente leitura, comparação e aplicação incremental aprovada
 - Workspace Automation
 - Expanded Provider Capabilities
 

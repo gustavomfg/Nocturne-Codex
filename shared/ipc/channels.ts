@@ -14,6 +14,6 @@ export const IPC_CHANNELS = {
   providers: { list: 'providers:list', create: 'providers:create', update: 'providers:update', remove: 'providers:remove', testConnection: 'providers:testConnection', diagnose: 'providers:diagnose' },
   models: { list: 'models:list', refresh: 'models:refresh', bindings: 'models:bindings', setBindings: 'models:setBindings' },
   git: { status: 'git:status', commit: 'git:commit' },
-  documents: { saveMarkdown: 'documents:saveMarkdown', export: 'documents:export' },
+  documents: { prepareMarkdown: 'documents:prepareMarkdown', applyMarkdown: 'documents:applyMarkdown', export: 'documents:export' },
   clipboard: { readText: 'clipboard:readText', writeText: 'clipboard:writeText' },
 } as const

@@ -1,4 +1,4 @@
-import type { AgentMode, Artifact, Attachment, AgentEvent, AppSettings, BuildRollbackStatus, CodexAccountStatus, CollectionPage, Conversation, FilePreview, GitInfo, Message, MessagePage, Suggestion, SuggestionStatus, Workspace, WorkspaceChangeEvent, WorkspaceMemory } from '../types'
+import type { AgentMode, Artifact, Attachment, AgentEvent, AppSettings, BuildRollbackStatus, CodexAccountStatus, CollectionPage, Conversation, DocumentUpdatePreview, FilePreview, GitInfo, Message, MessagePage, Suggestion, SuggestionStatus, Workspace, WorkspaceChangeEvent, WorkspaceMemory } from '../types'
 import type { ReviewComparison } from '../suggestions'
 import type { BrainMemory, BrainMemoryKind, BrainMemoryScope, BrainMemoryStatus, UpdateBrainMemoryInput } from '../brainMemory'
 import type { ProviderAvailability, ProviderDiagnostic } from '../ai/provider'
@@ -65,7 +65,7 @@ export interface NocturneApi {
     setBindings(bindings: WorkspaceModelBindings): Promise<WorkspaceModelBindings>
   }
   git: { status(conversationId: string): Promise<GitInfo>; commit(conversationId: string, message: string, files: string[]): Promise<{ output: string }> }
-  documents: { saveMarkdown(conversationId: string, content: string, name?: string): Promise<string | null>; export(conversationId: string, content: string, format: 'docx' | 'pdf' | 'html'): Promise<string | null> }
+  documents: { prepareMarkdown(conversationId: string, content: string, name?: string): Promise<DocumentUpdatePreview | null>; applyMarkdown(conversationId: string, preview: DocumentUpdatePreview, strategy: 'append' | 'replace'): Promise<{ target: string; strategy: 'append' | 'replace' } | null>; export(conversationId: string, content: string, format: 'docx' | 'pdf' | 'html'): Promise<string | null> }
   clipboard: { readText(): Promise<string>; writeText(value: string): Promise<void> }
 }
 

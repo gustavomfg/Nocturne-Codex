@@ -143,6 +143,7 @@ describe('sugestões', () => {
 
   it('Review Mode sempre usa somente leitura', () => {
     expect(sandboxModeForAgent('review', 'workspace-write')).toBe('read-only')
+    expect(sandboxModeForAgent('docs', 'workspace-write')).toBe('read-only')
     expect(sandboxModeForAgent('build', 'workspace-write')).toBe('workspace-write')
     expect(suggestedCommit({ category: 'security', title: 'Restringir IPC' })).toBe('fix(security): restringir ipc')
   })

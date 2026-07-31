@@ -584,6 +584,33 @@ test.describe('renderer do produto', () => {
     await expect(page.getByRole('button', { name: 'Reverter alterações' })).toHaveCount(0)
   })
 
+  test('compara e aprova uma atualização incremental no Docs Mode', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await ready(page)
+    await page.evaluate(() => {
+      window.nocturne.documents.prepareMarkdown = async (_conversationId, content) => ({
+        target: '/workspace/sample-project/README.md',
+        name: 'README.md',
+        existing: '# Documento atual\n',
+        generated: content,
+        expectedHash: 'a'.repeat(64),
+      })
+      window.nocturne.documents.applyMarkdown = async (_conversationId, preview, strategy) => ({
+        target: preview.target,
+        strategy,
+      })
+    })
+    await page.locator('.conversation-open').click()
+    await page.getByText('Exportar resposta').click()
+    await page.getByRole('button', { name: 'Exportar resposta em Markdown' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Revisar atualização' })
+    await expect(dialog.getByText('# Documento atual')).toBeVisible()
+    await expect(dialog.getByText('A interface foi analisada.')).toBeVisible()
+    await dialog.getByRole('button', { name: 'Anexar conteúdo' }).click()
+    await expect(dialog).toBeHidden()
+    await expect(page.locator('.product-toast')).toContainText('Conteúdo anexado ao documento.')
+  })
+
   test('mantém falhas de clipboard dentro da solução aberta', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await ready(page)

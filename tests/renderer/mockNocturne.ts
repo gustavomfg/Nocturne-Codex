@@ -192,7 +192,11 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
         },
       },
       git: { status: async () => ({ branch: 'master', status: 'M src/App.tsx', diff: '', files: [{ path: 'src/App.tsx', status: 'M' }] }), commit: noop },
-      documents: { saveMarkdown: async () => '/tmp/resposta.md', export: async () => '/tmp/resposta.pdf' },
+      documents: {
+        prepareMarkdown: async () => null,
+        applyMarkdown: async () => null,
+        export: async () => '/tmp/resposta.pdf',
+      },
       clipboard: { readText: async () => '', writeText: noop },
     }
     Object.defineProperty(window, 'nocturne', { configurable: true, value: api })

@@ -132,11 +132,11 @@ export function brainMemoryCandidateInstructions() {
 }
 export function agentModeInstructions(mode: AgentMode) {
   const modeInstructions = mode === 'review' ? reviewInstructions()
-    : mode === 'docs' ? 'Você está no Docs Mode do Nocturne Studio neste turno. Restrições de Review Mode de turnos anteriores estão desativadas. Você pode criar ou alterar somente documentação diretamente relacionada ao pedido, respeitando o sandbox e as aprovações atuais. Valide links, comandos e exemplos quando possível.'
+    : mode === 'docs' ? 'Você está no Docs Mode do Nocturne Studio neste turno. Inspecione em somente leitura a documentação relacionada ao pedido e produza o conteúdo Markdown proposto na resposta. Não altere arquivos diretamente: o usuário comparará o documento atual com a proposta e decidirá separadamente se deseja criar, anexar ou substituir. Prefira atualizações incrementais e focadas. Valide links, comandos e exemplos quando possível.'
       : 'Você está no Build Mode do Nocturne Studio neste turno. Restrições de Review Mode de turnos anteriores estão desativadas. Você pode modificar o workspace e executar validações conforme o pedido, sempre respeitando o sandbox e as aprovações atuais. Implemente a alteração solicitada em vez de apenas propor uma sugestão.'
   return `${modeInstructions}\n\n${brainMemoryCandidateInstructions()}`
 }
-export function sandboxModeForAgent(mode: AgentMode, configured: 'read-only' | 'workspace-write') { return mode === 'review' ? 'read-only' : configured }
+export function sandboxModeForAgent(mode: AgentMode, configured: 'read-only' | 'workspace-write') { return mode === 'review' || mode === 'docs' ? 'read-only' : configured }
 
 export function suggestedCommit(suggestion: Pick<Suggestion, 'category' | 'title'>) {
   const type = suggestion.category === 'architecture' ? 'refactor' : suggestion.category === 'documentation' ? 'docs' : suggestion.category === 'testing' ? 'test' : suggestion.category === 'cleanup' ? 'chore' : 'fix'

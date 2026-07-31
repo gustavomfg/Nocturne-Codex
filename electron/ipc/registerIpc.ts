@@ -11,7 +11,7 @@ import { Logger } from '../logging/Logger'
 import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
 import { sanitizeSuggestionTitle } from '../../shared/suggestions'
 import { appendSuggestionDecision } from '../persistence/SuggestionDecisionLog'
-import { approvalSchema, aiCancelSchema, aiSendSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, saveAssistantSchema, saveMarkdownSchema } from '../../shared/ipc/schemas'
+import { approvalSchema, aiCancelSchema, aiSendSchema, applyMarkdownSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, prepareMarkdownSchema, saveAssistantSchema } from '../../shared/ipc/schemas'
 import { registerDataIpc } from './registerDataIpc'
 import { registerGitIpc } from './registerGitIpc'
 import { registerWorkspaceIpc } from './registerWorkspaceIpc'
@@ -36,6 +36,7 @@ import { AI_TASK_LIMITS } from '../../shared/ai/task'
 import { buildBrainMemoryContext } from '../memory/BrainMemoryContext'
 import { CodexAccountService } from '../codex/CodexAccountService'
 import { BuildRollbackService } from '../ai/BuildRollbackService'
+import { DocumentUpdateService } from '../documents/DocumentUpdateService'
 
 const execFileAsync = promisify(execFile)
 
@@ -60,6 +61,7 @@ export function registerIpc(
 
   const approvalDetails = new Map<string, { command?: string; risk?: string }>()
   const buildRollback = new BuildRollbackService()
+  const documentUpdates = new DocumentUpdateService()
   const codexAccount = new CodexAccountService()
   const aiExecutions = new AiExecutionCoordinator(
     win,
@@ -332,15 +334,31 @@ export function registerIpc(
     return readSettings()
   })
 
-  ipcMain.handle('documents:saveMarkdown', async (_event, value: unknown) => {
-    const data = saveMarkdownSchema.parse(value)
+  ipcMain.handle('documents:prepareMarkdown', async (_event, value: unknown) => {
+    const data = prepareMarkdownSchema.parse(value)
     const conversation = getAuthorizedConversation(database, data.conversationId)
     const result = await dialog.showSaveDialog(win, { title: 'Salvar documento Markdown', defaultPath: path.join(conversation.workspace, safeName(data.name, '.md')), filters: [{ name: 'Markdown', extensions: ['md'] }] })
     if (result.canceled || !result.filePath) return null
     assertInsideWorkspace(result.filePath, conversation.workspace)
-    await fs.promises.writeFile(result.filePath, data.content, { encoding: 'utf8', mode: 0o600 })
-    database.addArtifact(data.conversationId, conversation.workspace, 'document', path.basename(result.filePath), result.filePath, data.content, { format: 'md' })
-    return result.filePath
+    return documentUpdates.preview(conversation.workspace, result.filePath, data.content)
+  })
+  ipcMain.handle('documents:applyMarkdown', async (_event, value: unknown) => {
+    const data = applyMarkdownSchema.parse(value)
+    const conversation = getAuthorizedConversation(database, data.conversationId)
+    const action = data.strategy === 'append' ? 'Anexar conteúdo' : 'Substituir documento'
+    const confirmation = await dialog.showMessageBox(win, {
+      type: data.strategy === 'replace' ? 'warning' : 'info',
+      buttons: ['Cancelar', action],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Aplicar atualização de documentação',
+      message: `${action} em ${path.basename(data.target)}?`,
+      detail: 'O arquivo só será gravado se permanecer igual ao conteúdo exibido no preview.',
+    })
+    if (confirmation.response !== 1) return null
+    const applied = await documentUpdates.apply(conversation.workspace, data.target, data.generated, data.strategy, data.expectedHash)
+    database.addArtifact(data.conversationId, conversation.workspace, 'document', path.basename(applied.target), applied.target, applied.content, { format: 'md', strategy: data.strategy })
+    return { target: applied.target, strategy: applied.strategy }
   })
 
   ipcMain.handle('documents:export', async (_event, value: unknown) => {

@@ -1,12 +1,13 @@
 import { useEffect, useState, type KeyboardEvent, type RefObject } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { Activity as ActivityIcon, Check, Command, ExternalLink, Eye, FileCode2, FileDown, FolderOpen, GitBranch, ListChecks, LoaderCircle, PackageOpen, RotateCcw, ShieldCheck, Sparkles, Trash2, X } from 'lucide-react'
-import type { Activity, Approval, Artifact, BuildRollbackStatus, GitInfo, PlanStep, Suggestion, SuggestionStatus } from '../../types'
+import type { Activity, Approval, Artifact, BuildRollbackStatus, DocumentUpdatePreview, GitInfo, PlanStep, Suggestion, SuggestionStatus } from '../../types'
 import { useAppStore } from '../../store'
 import { errorMessage, relativeTime } from '../../shared/format'
 import { SuggestionsPanel } from '../suggestions/SuggestionsPanel'
 import { GitPanel } from '../git/GitPanel'
 import { useOffCanvasPanel } from '../../shared/useOffCanvasPanel'
+import { DocumentUpdateDialog } from './DocumentUpdateDialog'
 
 interface AgentPanelProps {
   open: boolean; compact: boolean; triggerRef: RefObject<HTMLElement | null>; gitInfo: GitInfo | null;
@@ -26,13 +27,23 @@ export function AgentPanel({ open: isOpen, compact, triggerRef, gitInfo, artifac
   const [exporting, setExporting] = useState<string | null>(null)
   const [rollback, setRollback] = useState<BuildRollbackStatus | null>(null)
   const [rollingBack, setRollingBack] = useState(false)
+  const [documentDraft, setDocumentDraft] = useState<DocumentUpdatePreview | null>(null)
+  const [applyingDocument, setApplyingDocument] = useState(false)
   const inspectorRef = useOffCanvasPanel<HTMLElement>({ open: isOpen, modal: compact, onClose, triggerRef })
   useEffect(() => { if (inspectorRef.current) inspectorRef.current.inert = !isOpen }, [inspectorRef, isOpen])
   const open = async (filePath: string, action: 'file' | 'folder' | 'editor') => { if (!activeId) return; try { await window.nocturne.files.open(activeId, filePath, action); onNotify(action === 'folder' ? 'Pasta do arquivo aberta.' : 'Arquivo aberto com sucesso.') } catch (error) { onError(errorMessage(error)) } }
   const exportDocument = async (format: 'md' | 'docx' | 'pdf' | 'html') => {
     if (!activeId || !documentContent || exporting) { if (!documentContent) onError('Não há uma resposta Markdown para exportar.'); return }
     setExporting(format)
-    try { const result = format === 'md' ? await window.nocturne.documents.saveMarkdown(activeId, documentContent) : await window.nocturne.documents.export(activeId, documentContent, format); if (result) { onArtifactsRefresh(); onNotify(`Documento ${format.toUpperCase()} exportado.`) } }
+    try {
+      if (format === 'md') {
+        const preview = await window.nocturne.documents.prepareMarkdown(activeId, documentContent)
+        if (preview) setDocumentDraft(preview)
+      } else {
+        const result = await window.nocturne.documents.export(activeId, documentContent, format)
+        if (result) { onArtifactsRefresh(); onNotify(`Documento ${format.toUpperCase()} exportado.`) }
+      }
+    }
     catch (error) { onError(errorMessage(error)) }
     finally { setExporting(null) }
   }
@@ -73,7 +84,23 @@ export function AgentPanel({ open: isOpen, compact, triggerRef, gitInfo, artifac
       setRollingBack(false)
     }
   }
-  return <aside id="agent-inspector" ref={inspectorRef} className={`inspector ${isOpen ? 'open' : 'closed'}`} aria-hidden={!isOpen} role={compact && isOpen ? 'dialog' : undefined} aria-modal={compact && isOpen ? true : undefined} aria-label={compact && isOpen ? 'Painel do agente' : undefined} tabIndex={-1}><div className="inspector-header"><div><ActivityIcon size={16}/><strong>Agente</strong></div><span>{activities.some((activity) => activity.status === 'running') ? 'Em execução' : 'Em espera'}</span>{compact && <button className="inspector-close" aria-label="Fechar painel do agente" title="Fechar painel" onClick={onClose}><X size={16}/></button>}</div>
+  const applyDocument = async (strategy: 'append' | 'replace') => {
+    if (!activeId || !documentDraft || applyingDocument) return
+    setApplyingDocument(true)
+    try {
+      const result = await window.nocturne.documents.applyMarkdown(activeId, documentDraft, strategy)
+      if (result) {
+        setDocumentDraft(null)
+        onArtifactsRefresh()
+        onNotify(strategy === 'append' ? 'Conteúdo anexado ao documento.' : 'Documento gravado.')
+      }
+    } catch (error) {
+      onError(errorMessage(error))
+    } finally {
+      setApplyingDocument(false)
+    }
+  }
+  return <><aside id="agent-inspector" ref={inspectorRef} className={`inspector ${isOpen ? 'open' : 'closed'}`} aria-hidden={!isOpen} role={compact && isOpen ? 'dialog' : undefined} aria-modal={compact && isOpen ? true : undefined} aria-label={compact && isOpen ? 'Painel do agente' : undefined} tabIndex={-1}><div className="inspector-header"><div><ActivityIcon size={16}/><strong>Agente</strong></div><span>{activities.some((activity) => activity.status === 'running') ? 'Em execução' : 'Em espera'}</span>{compact && <button className="inspector-close" aria-label="Fechar painel do agente" title="Fechar painel" onClick={onClose}><X size={16}/></button>}</div>
     <div className="inspector-tabs" role="tablist" aria-label="Painel do agente"><button id="agent-tab-activity" role="tab" aria-controls="agent-panel-activity" aria-selected={tab === 'activity'} tabIndex={tab === 'activity' ? 0 : -1} className={tab === 'activity' ? 'active' : ''} onKeyDown={(event) => moveTab(event, 0)} onClick={() => setTab('activity')}><ActivityIcon size={12}/>Atividade</button><button id="agent-tab-plan" role="tab" aria-controls="agent-panel-plan" aria-selected={tab === 'plan'} tabIndex={tab === 'plan' ? 0 : -1} className={tab === 'plan' ? 'active' : ''} onKeyDown={(event) => moveTab(event, 1)} onClick={() => setTab('plan')}><ListChecks size={12}/>Plano{plan.length > 0 && <span className="tab-count">{plan.length}</span>}</button><button id="agent-tab-suggestions" role="tab" aria-controls="agent-panel-suggestions" aria-selected={tab === 'suggestions'} tabIndex={tab === 'suggestions' ? 0 : -1} className={tab === 'suggestions' ? 'active' : ''} onKeyDown={(event) => moveTab(event, 2)} onClick={() => setTab('suggestions')}><ShieldCheck size={12}/>Sugestões{suggestions.length > 0 && <span className="tab-count">{suggestions.length}</span>}</button><button id="agent-tab-artifacts" role="tab" aria-controls="agent-panel-artifacts" aria-selected={tab === 'artifacts'} tabIndex={tab === 'artifacts' ? 0 : -1} className={tab === 'artifacts' ? 'active' : ''} onKeyDown={(event) => moveTab(event, 3)} onClick={() => setTab('artifacts')}><PackageOpen size={12}/>Artefatos{artifacts.length > 0 && <span className="tab-count">{artifacts.length}</span>}</button></div>
     <div className="inspector-scroll">
       {tab === 'activity' && <div id="agent-panel-activity" aria-labelledby="agent-tab-activity" className="tab-panel activity-panel" role="tabpanel">
@@ -91,7 +118,7 @@ export function AgentPanel({ open: isOpen, compact, triggerRef, gitInfo, artifac
       {tab === 'suggestions' && <div id="agent-panel-suggestions" aria-labelledby="agent-tab-suggestions" role="tabpanel"><SuggestionsPanel suggestions={suggestions} hasMore={suggestionsHaveMore} loadingMore={loadingCollection === 'suggestions'} onLoadMore={onLoadMoreSuggestions} onStatus={onSuggestionStatus} onApply={onSuggestionApply} onOpenFile={onPreview} onNotify={onNotify}/></div>}
       {tab === 'artifacts' && <div id="agent-panel-artifacts" aria-labelledby="agent-tab-artifacts" role="tabpanel"><ArtifactsPanel artifacts={artifacts} hasMore={artifactsHaveMore} loadingMore={loadingCollection === 'artifacts'} onLoadMore={onLoadMoreArtifacts} onOpen={onArtifact} onDelete={onDeleteArtifact}/></div>}
     </div>
-  </aside>
+  </aside>{documentDraft && <DocumentUpdateDialog preview={documentDraft} busy={applyingDocument} onClose={() => setDocumentDraft(null)} onApply={(strategy) => void applyDocument(strategy)}/>}</>
 }
 
 function ApprovalCard({ approval, onDecide }: { approval: Approval; onDecide(key: string, accepted: boolean): void }) {
