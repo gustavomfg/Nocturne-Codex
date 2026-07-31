@@ -37,6 +37,7 @@ import { buildBrainMemoryContext } from '../memory/BrainMemoryContext'
 import { CodexAccountService } from '../codex/CodexAccountService'
 import { BuildRollbackService } from '../ai/BuildRollbackService'
 import { DocumentUpdateService } from '../documents/DocumentUpdateService'
+import type { AwarenessSnapshot } from '../../shared/awareness'
 
 const execFileAsync = promisify(execFile)
 
@@ -175,9 +176,6 @@ export function registerIpc(
     }
 
     const history = database.listRecentMessages(conversationId, AI_TASK_LIMITS.messages)
-    database.addMessage(conversationId, 'user', prompt, { attachments })
-    if (conversation.title === 'Nova conversa') database.renameFromPrompt(conversationId, prompt)
-
     const workspaceMemory = await loadWorkspaceMemoryForAi(database, conversation.workspace)
     const brainMemory = buildBrainMemoryContext(
       database,
@@ -214,6 +212,28 @@ export function registerIpc(
         potentiallyOutdated: true,
       })
     }
+    const awareness: AwarenessSnapshot = {
+      mode,
+      createdAt: new Date().toISOString(),
+      selections: [
+        ...(workspaceMemory.content ? [{
+          id: 'workspace-memory',
+          title: 'Memória do workspace',
+          source: 'workspace-memory' as const,
+          sourceType: 'workspace' as const,
+          sourceId: null,
+          kind: 'workspace-context' as const,
+          scope: 'workspace' as const,
+          relevance: 100,
+          reason: 'Contexto explícito mantido pelo usuário para todas as execuções deste workspace.',
+          updatedAt: workspaceMemory.updatedAt || null,
+          contentPreview: workspaceMemory.content.slice(0, 500),
+        }] : []),
+        ...brainMemory.selections,
+      ],
+    }
+    database.addMessage(conversationId, 'user', prompt, { attachments, awareness })
+    if (conversation.title === 'Nova conversa') database.renameFromPrompt(conversationId, prompt)
 
     const attachmentMessages = await buildAttachmentMessages(attachments, conversation.workspace)
     const messages = [

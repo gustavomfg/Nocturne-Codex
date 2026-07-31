@@ -218,7 +218,7 @@ Implemented:
 - Review Mode
 - Workspace Memory
 - Second Brain
-- Awareness Foundation
+- Awareness explicável por execução
 - Secure Provider System
 - Credential Vault
 - Typed IPC

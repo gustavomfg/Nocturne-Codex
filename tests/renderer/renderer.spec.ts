@@ -587,6 +587,39 @@ test.describe('renderer do produto', () => {
     await expect(page.getByRole('button', { name: 'Reverter alterações' })).toHaveCount(0)
   })
 
+  test('explica o contexto selecionado em cada execução', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await ready(page)
+    await page.evaluate(() => {
+      const now = '2026-07-30T20:00:00.000Z'
+      const awareness = {
+        mode: 'review',
+        createdAt: now,
+        selections: [{
+          id: 'memory-1', title: 'SQLite como fonte de verdade', source: 'brain-memory', sourceType: 'manual', sourceId: null,
+          kind: 'decision', scope: 'workspace', relevance: 87,
+          reason: '3 termos relacionados ao pedido; confiança 95%; escopo do workspace; atualização recente.',
+          updatedAt: now, contentPreview: 'SQLite permanece como fonte de verdade local.',
+        }],
+      }
+      window.nocturne.conversations.messagePage = async () => ({ items: [
+        { id: 'user-awareness', conversationId: 'conversation-1', role: 'user', content: 'Revise a persistência SQLite', metadata: JSON.stringify({ awareness }), createdAt: now },
+        { id: 'assistant-awareness', conversationId: 'conversation-1', role: 'assistant', content: 'Revisão concluída.', metadata: null, createdAt: now },
+      ], hasMore: false })
+    })
+    await page.locator('.conversation-open').click()
+    const activity = page.locator('#agent-panel-activity')
+    await activity.getByText('Contexto usado nesta execução').click()
+    await expect(activity.getByText('87% relevante')).toBeVisible()
+    await expect(activity.getByText(/confiança 95%/)).toBeVisible()
+    await expect(activity.getByText(/memória criada pelo usuário/)).toBeVisible()
+    await activity.getByText('Trecho utilizado').click()
+    await expect(activity.getByText('SQLite permanece como fonte de verdade local.')).toBeVisible()
+    await activity.getByText('Contexto usado nesta execução').click()
+    await page.getByText('Contexto usado · 1').click()
+    await expect(page.getByText('SQLite como fonte de verdade · 87%')).toBeVisible()
+  })
+
   test('compara e aprova uma atualização incremental no Docs Mode', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await ready(page)

@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent, type RefObject } from 'react'
+import { useEffect, useMemo, useState, type KeyboardEvent, type RefObject } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { Activity as ActivityIcon, Check, Command, ExternalLink, Eye, FileCode2, FileDown, FolderOpen, GitBranch, ListChecks, LoaderCircle, PackageOpen, RotateCcw, ShieldCheck, Sparkles, Trash2, X } from 'lucide-react'
 import type { Activity, Approval, Artifact, BuildRollbackStatus, DocumentUpdatePreview, GitInfo, PlanStep, Suggestion, SuggestionStatus } from '../../types'
@@ -8,6 +8,7 @@ import { SuggestionsPanel } from '../suggestions/SuggestionsPanel'
 import { GitPanel } from '../git/GitPanel'
 import { useOffCanvasPanel } from '../../shared/useOffCanvasPanel'
 import { DocumentUpdateDialog } from './DocumentUpdateDialog'
+import { parseAwarenessSnapshot } from '../../../shared/awareness'
 
 interface AgentPanelProps {
   open: boolean; compact: boolean; triggerRef: RefObject<HTMLElement | null>; gitInfo: GitInfo | null;
@@ -18,11 +19,13 @@ interface AgentPanelProps {
 const tabs = ['activity', 'plan', 'suggestions', 'artifacts'] as const
 
 export function AgentPanel({ open: isOpen, compact, triggerRef, gitInfo, artifactsHaveMore, suggestionsHaveMore, loadingCollection, onClose, onDecide, onError, onNotify, onGitRefresh, onArtifactsRefresh, onLoadMoreArtifacts, onLoadMoreSuggestions, onPreview, onArtifact, onDeleteArtifact, onSuggestionStatus, onSuggestionApply, onPlanChange, onPlanExecute }: AgentPanelProps) {
-  const { activities, approvals, diff, files, artifacts, suggestions, plan, planExplanation, activeId, documentContent } = useAppStore(useShallow((state) => ({
+  const { activities, approvals, diff, files, artifacts, suggestions, plan, planExplanation, activeId, documentContent, awarenessMetadata } = useAppStore(useShallow((state) => ({
     activities: state.activities, approvals: state.approvals, diff: state.diff, files: state.files, artifacts: state.artifacts, suggestions: state.suggestions,
     plan: state.plan, planExplanation: state.planExplanation, activeId: state.activeId,
     documentContent: [...state.messages].reverse().find((message) => message.role === 'assistant')?.content || '',
+    awarenessMetadata: [...state.messages].reverse().find((message) => message.role === 'user')?.metadata ?? null,
   })))
+  const awareness = useMemo(() => parseAwarenessSnapshot(awarenessMetadata), [awarenessMetadata])
   const [tab, setTab] = useState<'activity' | 'plan' | 'suggestions' | 'artifacts'>('activity')
   const [exporting, setExporting] = useState<string | null>(null)
   const [rollback, setRollback] = useState<BuildRollbackStatus | null>(null)
@@ -106,6 +109,7 @@ export function AgentPanel({ open: isOpen, compact, triggerRef, gitInfo, artifac
       {tab === 'activity' && <div id="agent-panel-activity" aria-labelledby="agent-tab-activity" className="tab-panel activity-panel" role="tabpanel">
         {(pendingApprovals.length > 0 || currentActivity) && <div className="activity-priority">{currentActivity && <div className={`current-operation ${currentActivity.status}`} role="status" aria-live="polite"><span>{currentActivity.status === 'running' ? <LoaderCircle size={15}/> : currentActivity.status === 'failed' ? <X size={15}/> : <Check size={15}/>}</span><div><small>Estado atual</small><strong>{currentActivity.label}</strong></div></div>}{pendingApprovals.length > 0 && <section aria-labelledby="pending-approvals-title"><h3 id="pending-approvals-title">Decisões pendentes <span>{pendingApprovals.length}</span></h3>{pendingApprovals.map((approval) => <ApprovalCard key={approval.key} approval={approval} onDecide={onDecide}/>)}</section>}</div>}
         <ActivityTimeline activities={activities}/>
+        {awareness && <details className="activity-section awareness-section"><summary><Sparkles size={14}/>Contexto usado nesta execução <span>{awareness.selections.length}</span></summary><div className="awareness-panel">{awareness.selections.length ? awareness.selections.map((selection) => <article key={`${selection.source}-${selection.id}`}><header><strong>{selection.title}</strong><span>{selection.relevance}% relevante</span></header><p>{selection.reason}</p><small>Origem: {awarenessSourceLabel(selection.sourceType)} · Escopo: {selection.scope === 'conversation' ? 'conversa' : 'workspace'}{selection.updatedAt ? ` · Atualizada em ${new Date(selection.updatedAt).toLocaleString('pt-BR')}` : ''}</small><details><summary>Trecho utilizado</summary><pre>{selection.contentPreview}</pre></details></article>) : <p>Nenhuma memória atingiu o limiar de relevância para este pedido.</p>}</div></details>}
         {rollback?.createdAt && <details className="activity-section"><summary><RotateCcw size={14}/>Rollback do último Build</summary><div className="document-panel"><p>{rollback.available ? `${rollback.files.length} arquivo(s) podem voltar ao estado anterior à execução.` : rollback.reason}</p><button disabled={!rollback.available || rollingBack} onClick={() => void rollbackBuild()}>{rollingBack ? 'Revertendo…' : 'Reverter alterações'}</button></div></details>}
         {!!files.length && <details className="activity-section" open><summary><FileCode2 size={14}/>Arquivos alterados <span>{files.length}</span></summary><div className="files-panel">{files.slice(-300).map((file) => <div className="changed-file" key={file.path}><span className={`file-kind ${file.kind}`}>{file.kind[0].toUpperCase()}</span><button aria-label={`Visualizar ${file.path}`} onClick={() => onPreview(file.path)}>{file.path.split(/[/\\]/).pop()}</button><button aria-label={`Visualizar ${file.path}`} title="Visualizar" onClick={() => onPreview(file.path)}><Eye size={12}/></button><button aria-label={`Abrir ${file.path} no editor`} title="Abrir no editor" onClick={() => void open(file.path, 'editor')}><ExternalLink size={12}/></button><button aria-label={`Mostrar ${file.path} na pasta`} title="Mostrar na pasta" onClick={() => void open(file.path, 'folder')}><FolderOpen size={12}/></button></div>)}</div></details>}
         {diff && <DiffSection diff={diff}/>}
@@ -148,4 +152,8 @@ function DiffSection({ diff }: { diff: string }) {
 function ArtifactsPanel({ artifacts, hasMore, loadingMore, onLoadMore, onOpen, onDelete }: { artifacts: Artifact[]; hasMore: boolean; loadingMore: boolean; onLoadMore(): void; onOpen(artifact: Artifact): void; onDelete(id: string): void }) {
   if (!artifacts.length) return <div className="inspector-empty"><div><PackageOpen size={22}/></div><p>Nenhum artefato ainda.</p><small>Respostas, diffs e arquivos produzidos pelo agente serão preservados aqui.</small></div>
   return <div className="artifact-list">{artifacts.map((artifact) => <div className="artifact-card" key={artifact.id}><button className="artifact-main" onClick={() => onOpen(artifact)}><span className={`artifact-icon ${artifact.type}`}>{artifact.type === 'file' ? <FileCode2 size={15}/> : artifact.type === 'diff' ? <GitBranch size={15}/> : <FileDown size={15}/>}</span><span><strong>{artifact.title}</strong><small>{artifact.type} · {relativeTime(artifact.updatedAt)}</small></span><Eye size={13}/></button><button className="artifact-delete" aria-label={`Remover artefato ${artifact.title}`} title="Remover do painel" onClick={() => onDelete(artifact.id)}><Trash2 size={12}/></button></div>)}{hasMore && <button className="collection-load-more" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? 'Carregando…' : 'Carregar artefatos anteriores'}</button>}</div>
+}
+
+function awarenessSourceLabel(source: string) {
+  return ({ workspace: 'contexto editado do workspace', manual: 'memória criada pelo usuário', message: 'mensagem', agent: 'proposta do agente' } as Record<string, string>)[source] ?? source
 }
