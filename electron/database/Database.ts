@@ -343,31 +343,36 @@ export class LocalDatabase {
   recordApproval(key: string, accepted: boolean, command?: string, risk?: string) { this.db.prepare('INSERT INTO approval_audit(id,approval_key,decision,command,risk,created_at) VALUES(?,?,?,?,?,?)').run(randomUUID(), key, accepted ? 'accepted' : 'declined', command?.slice(0, 4_000) ?? null, risk ?? null, new Date().toISOString()) }
 
   listSuggestions(conversationId: string): Suggestion[] {
-    const rows = this.db.prepare(`${suggestionSelect} WHERE conversation_id=? AND status IN ('pending','accepted') ORDER BY updated_at DESC`).all(conversationId) as EncodedSuggestion[]
-    return decodeSuggestions(rows)
+    const rows = this.db.prepare(`${suggestionSelect} WHERE conversation_id=? AND status IN ('new','in-analysis','accepted','deferred') ORDER BY updated_at DESC`).all(conversationId) as EncodedSuggestion[]
+    return this.decodeSuggestions(rows)
   }
 
   listSuggestionPage(conversationId: string, offset = 0, limit = 50) {
-    const rows = this.db.prepare(`${suggestionSelect} WHERE conversation_id=? AND status IN ('pending','accepted') ORDER BY updated_at DESC LIMIT ? OFFSET ?`).all(conversationId, limit + 1, offset) as EncodedSuggestion[]
-    return { items: decodeSuggestions(rows.slice(0, limit)), hasMore: rows.length > limit }
+    const rows = this.db.prepare(`${suggestionSelect} WHERE conversation_id=? AND status IN ('new','in-analysis','accepted','deferred') ORDER BY updated_at DESC LIMIT ? OFFSET ?`).all(conversationId, limit + 1, offset) as EncodedSuggestion[]
+    return { items: this.decodeSuggestions(rows.slice(0, limit)), hasMore: rows.length > limit }
   }
 
   getSuggestion(id: string, conversationId?: string): Suggestion | null {
     const row = this.db.prepare(`${suggestionSelect} WHERE id=?${conversationId ? ' AND conversation_id=?' : ''}`).get(...(conversationId ? [id, conversationId] : [id])) as EncodedSuggestion | undefined
-    return row ? decodeSuggestions([row])[0] : null
+    return row ? this.decodeSuggestions([row])[0] : null
   }
 
   addSuggestion(conversationId: string, workspaceId: string, value: SuggestionInput): Suggestion {
     const now = new Date().toISOString()
+    const decisionId = randomUUID()
     const row: Suggestion = {
       id: randomUUID(), workspaceId, conversationId, ...value,
       evidence: value.evidence ?? [],
       confidence: value.confidence ?? 60,
       source: value.source ?? 'Análise do agente',
       responsible: value.responsible ?? 'Agente de revisão',
-      status: 'pending', createdAt: now, updatedAt: now,
+      status: 'new', createdAt: now, updatedAt: now,
+      history: [{ id: decisionId, status: 'new', result: null, createdAt: now }],
     }
-    this.db.prepare(`INSERT INTO suggestions(id,workspace_id,conversation_id,title,description,reasoning,category,severity,affected_files,proposed_changes,expected_benefits,complexity,risk,evidence,confidence,source,responsible,status,created_at,updated_at) VALUES(@id,@workspaceId,@conversationId,@title,@description,@reasoning,@category,@severity,@affectedFiles,@proposedChanges,@expectedBenefits,@complexity,@risk,@evidence,@confidence,@source,@responsible,@status,@createdAt,@updatedAt)`).run({ ...row, affectedFiles: JSON.stringify(row.affectedFiles), expectedBenefits: JSON.stringify(row.expectedBenefits), evidence: JSON.stringify(row.evidence) })
+    this.db.transaction(() => {
+      this.db.prepare(`INSERT INTO suggestions(id,workspace_id,conversation_id,title,description,reasoning,category,severity,affected_files,proposed_changes,expected_benefits,complexity,risk,evidence,confidence,source,responsible,status,created_at,updated_at) VALUES(@id,@workspaceId,@conversationId,@title,@description,@reasoning,@category,@severity,@affectedFiles,@proposedChanges,@expectedBenefits,@complexity,@risk,@evidence,@confidence,@source,@responsible,@status,@createdAt,@updatedAt)`).run({ ...row, affectedFiles: JSON.stringify(row.affectedFiles), expectedBenefits: JSON.stringify(row.expectedBenefits), evidence: JSON.stringify(row.evidence) })
+      this.db.prepare('INSERT INTO suggestion_decisions(id,suggestion_id,status,result,created_at) VALUES(?,?,?,?,?)').run(decisionId, row.id, 'new', null, now)
+    })()
     return row
   }
 
@@ -378,9 +383,9 @@ export class LocalDatabase {
       for (const suggestion of history) {
         const identity = suggestionIdentity(suggestion)
         const existing = byIdentity.get(identity)
-        const suggestionIsActive = suggestion.status === 'pending' || suggestion.status === 'accepted'
-        const existingIsActive = existing?.status === 'pending' || existing?.status === 'accepted'
-        if (!existing || (!existingIsActive && suggestionIsActive) || (existing.status === 'pending' && suggestion.status === 'accepted')) byIdentity.set(identity, suggestion)
+        const suggestionIsActive = isActiveSuggestionStatus(suggestion.status)
+        const existingIsActive = existing ? isActiveSuggestionStatus(existing.status) : false
+        if (!existing || (!existingIsActive && suggestionIsActive) || (existing.status === 'new' && suggestion.status === 'accepted')) byIdentity.set(identity, suggestion)
       }
       return values.map((value) => {
         const identity = suggestionIdentity(value)
@@ -390,12 +395,12 @@ export class LocalDatabase {
           byIdentity.set(identity, created)
           return created
         }
-        if (existing.status !== 'pending') return existing
+        if (!['new', 'in-analysis', 'deferred'].includes(existing.status)) return existing
         const updatedAt = new Date().toISOString()
         this.db.prepare(`UPDATE suggestions SET title=@title,description=@description,reasoning=@reasoning,category=@category,severity=@severity,
           affected_files=@affectedFiles,proposed_changes=@proposedChanges,expected_benefits=@expectedBenefits,complexity=@complexity,risk=@risk,
           evidence=@evidence,confidence=@confidence,source=@source,responsible=@responsible,updated_at=@updatedAt
-          WHERE id=@id AND conversation_id=@conversationId AND status='pending'`).run({
+          WHERE id=@id AND conversation_id=@conversationId AND status IN ('new','in-analysis','deferred')`).run({
           ...value, id: existing.id, conversationId, affectedFiles: JSON.stringify(value.affectedFiles),
           expectedBenefits: JSON.stringify(value.expectedBenefits), evidence: JSON.stringify(value.evidence ?? []),
           confidence: value.confidence ?? 60, source: value.source ?? 'Análise do agente',
@@ -410,21 +415,61 @@ export class LocalDatabase {
 
   private listSuggestionHistory(conversationId: string): Suggestion[] {
     const rows = this.db.prepare(`${suggestionSelect} WHERE conversation_id=? ORDER BY updated_at DESC`).all(conversationId) as EncodedSuggestion[]
-    return decodeSuggestions(rows)
+    return this.decodeSuggestions(rows)
   }
 
   setSuggestionStatus(id: string, status: SuggestionStatus, result?: string): Suggestion {
-    const updatedAt = new Date().toISOString()
-    const current = this.db.prepare('SELECT status FROM suggestions WHERE id=?').get(id) as { status: SuggestionStatus } | undefined
-    if (!current) throw new Error('Sugestão não encontrada.')
-    const allowed: Record<SuggestionStatus, SuggestionStatus[]> = { pending: ['accepted', 'rejected'], accepted: ['applied', 'rejected'], rejected: [], applied: [] }
-    if (current.status === status) return this.getSuggestion(id) as Suggestion
-    if (current.status !== status && !allowed[current.status].includes(status)) throw new Error(`Transição de sugestão inválida: ${current.status} → ${status}.`)
-    const changed = this.db.prepare('UPDATE suggestions SET status=?,result=?,updated_at=? WHERE id=?').run(status, result?.slice(0, 20_000) ?? null, updatedAt, id)
-    if (!changed.changes) throw new Error('Sugestão não encontrada.')
-    this.db.prepare('INSERT INTO suggestion_decisions(id,suggestion_id,status,result,created_at) VALUES(?,?,?,?,?)').run(randomUUID(), id, status, result?.slice(0, 20_000) ?? null, updatedAt)
-    const row = this.db.prepare('SELECT conversation_id conversationId FROM suggestions WHERE id=?').get(id) as { conversationId: string }
-    return this.getSuggestion(id, row.conversationId) as Suggestion
+    return this.db.transaction(() => {
+      const updatedAt = new Date().toISOString()
+      const current = this.db.prepare('SELECT status FROM suggestions WHERE id=?').get(id) as { status: SuggestionStatus } | undefined
+      if (!current) throw new Error('Sugestão não encontrada.')
+      const allowed: Record<SuggestionStatus, SuggestionStatus[]> = {
+        new: ['in-analysis', 'accepted', 'rejected', 'deferred', 'invalid'],
+        'in-analysis': ['accepted', 'rejected', 'resolved', 'deferred', 'invalid'],
+        accepted: ['resolved', 'rejected', 'deferred', 'invalid'],
+        deferred: ['in-analysis', 'accepted', 'rejected', 'resolved', 'invalid'],
+        rejected: [],
+        resolved: [],
+        invalid: [],
+      }
+      if (current.status === status) return this.getSuggestion(id) as Suggestion
+      if (!allowed[current.status].includes(status)) throw new Error(`Transição de sugestão inválida: ${current.status} → ${status}.`)
+      const normalizedResult = result?.slice(0, 20_000) ?? null
+      const changed = this.db.prepare('UPDATE suggestions SET status=?,result=?,updated_at=? WHERE id=?').run(status, normalizedResult, updatedAt, id)
+      if (!changed.changes) throw new Error('Sugestão não encontrada.')
+      this.db.prepare('INSERT INTO suggestion_decisions(id,suggestion_id,status,result,created_at) VALUES(?,?,?,?,?)').run(randomUUID(), id, status, normalizedResult, updatedAt)
+      const row = this.db.prepare('SELECT conversation_id conversationId FROM suggestions WHERE id=?').get(id) as { conversationId: string }
+      return this.getSuggestion(id, row.conversationId) as Suggestion
+    })()
+  }
+
+  private decodeSuggestions(rows: EncodedSuggestion[]): Suggestion[] {
+    if (!rows.length) return []
+    const identifiers = rows.map((row) => row.id)
+    const placeholders = identifiers.map(() => '?').join(',')
+    const decisions = this.db.prepare(`SELECT id,suggestion_id suggestionId,status,result,created_at createdAt
+      FROM suggestion_decisions WHERE suggestion_id IN (${placeholders}) ORDER BY created_at,rowid`).all(...identifiers) as Array<{
+        id: string
+        suggestionId: string
+        status: SuggestionStatus
+        result: string | null
+        createdAt: string
+      }>
+    const history = new Map<string, Suggestion['history']>()
+    for (const decision of decisions) {
+      const entries = history.get(decision.suggestionId) ?? []
+      entries.push({ id: decision.id, status: decision.status, result: decision.result, createdAt: decision.createdAt })
+      history.set(decision.suggestionId, entries)
+    }
+    return decodeSuggestions(rows).map((suggestion) => ({
+      ...suggestion,
+      history: history.get(suggestion.id) ?? [{
+        id: `legacy-${suggestion.id}`,
+        status: 'new',
+        result: null,
+        createdAt: suggestion.createdAt,
+      }],
+    }))
   }
 
   exportData() {
@@ -591,7 +636,7 @@ function restrictFileIfPresent(filePath: string) {
   }
 }
 
-type EncodedSuggestion = Omit<Suggestion, 'affectedFiles' | 'expectedBenefits' | 'evidence'> & {
+type EncodedSuggestion = Omit<Suggestion, 'affectedFiles' | 'expectedBenefits' | 'evidence' | 'history'> & {
   affectedFiles: string
   expectedBenefits: string
   evidence: string
@@ -605,7 +650,12 @@ function decodeSuggestions(rows: EncodedSuggestion[]) {
     affectedFiles: JSON.parse(row.affectedFiles) as string[],
     expectedBenefits: JSON.parse(row.expectedBenefits) as string[],
     evidence: JSON.parse(row.evidence) as Suggestion['evidence'],
+    history: [],
   }))
+}
+
+function isActiveSuggestionStatus(status: SuggestionStatus) {
+  return status === 'new' || status === 'in-analysis' || status === 'accepted' || status === 'deferred'
 }
 
 const brainMemoryColumns = (prefix = '') => `${prefix}id,${prefix}workspace_id workspaceId,${prefix}conversation_id conversationId,${prefix}kind,${prefix}scope,${prefix}status,${prefix}content,${prefix}confidence,${prefix}source_type sourceType,${prefix}source_id sourceId,${prefix}created_at createdAt,${prefix}updated_at updatedAt,${prefix}last_confirmed_at lastConfirmedAt,${prefix}last_used_at lastUsedAt,${prefix}use_count useCount`

@@ -3,7 +3,7 @@ import { brainMemoryKinds, brainMemoryScopes, isSafeBrainMemoryContent, type Bra
 
 export const suggestionCategories = ['architecture', 'security', 'performance', 'bug', 'cleanup', 'testing', 'documentation', 'dependency', 'accessibility'] as const
 export const suggestionSeverities = ['info', 'low', 'medium', 'high', 'critical'] as const
-export const suggestionStatuses = ['pending', 'accepted', 'rejected', 'applied'] as const
+export const suggestionStatuses = ['new', 'in-analysis', 'accepted', 'rejected', 'resolved', 'deferred', 'invalid'] as const
 export const agentModes = ['build', 'review', 'docs'] as const
 export type SuggestionCategory = typeof suggestionCategories[number]
 export type SuggestionSeverity = typeof suggestionSeverities[number]
@@ -14,14 +14,20 @@ export interface SuggestionEvidence {
   detail: string
   location?: string
 }
+export interface SuggestionHistoryEntry {
+  id: string
+  status: SuggestionStatus
+  result: string | null
+  createdAt: string
+}
 
 export interface Suggestion {
   id: string; workspaceId: string; conversationId: string; title: string; description: string; reasoning: string
   category: SuggestionCategory; severity: SuggestionSeverity; affectedFiles: string[]; proposedChanges: string; expectedBenefits: string[]; complexity: 'low' | 'medium' | 'high'; risk: 'low' | 'medium' | 'high'
   evidence: SuggestionEvidence[]; confidence: number; source: string; responsible: string
-  createdAt: string; updatedAt: string; status: SuggestionStatus
+  createdAt: string; updatedAt: string; status: SuggestionStatus; history: SuggestionHistoryEntry[]
 }
-export type SuggestionInput = Omit<Suggestion, 'id' | 'workspaceId' | 'conversationId' | 'createdAt' | 'updatedAt' | 'status' | 'evidence' | 'confidence' | 'source' | 'responsible'> & {
+export type SuggestionInput = Omit<Suggestion, 'id' | 'workspaceId' | 'conversationId' | 'createdAt' | 'updatedAt' | 'status' | 'history' | 'evidence' | 'confidence' | 'source' | 'responsible'> & {
   evidence?: SuggestionEvidence[]
   confidence?: number
   source?: string

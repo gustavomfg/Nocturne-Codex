@@ -55,7 +55,7 @@ export function useTurnLifecycle({ flushStream, activeTurnRef, refreshGit }: { f
     }
     if (context.suggestionId) {
       const changedInApprovedScope = hasAppliedSuggestionChanges(context.suggestionFiles, useAppStore.getState().files.map((file) => file.path))
-      if (!error && !cancelled && changedInApprovedScope) await window.nocturne.suggestions.status(context.conversationId, context.suggestionId, 'applied', 'Turno concluído com alterações observadas no escopo aprovado; consulte a resposta do agente para os resultados de validação.')
+      if (!error && !cancelled && changedInApprovedScope) await window.nocturne.suggestions.status(context.conversationId, context.suggestionId, 'resolved', 'Turno concluído com alterações observadas no escopo aprovado; consulte a resposta do agente para os resultados de validação.')
       if (useAppStore.getState().activeId === context.conversationId) store.setSuggestions((await window.nocturne.suggestions.page(context.conversationId)).items)
     }
       refreshGit(context.conversationId)

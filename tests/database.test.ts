@@ -42,7 +42,7 @@ describe('persistência SQLite', () => {
     expect(fs.statSync(databasePath).mode & 0o777).toBe(0o600)
   })
   it('mantém migrações incrementais, ordenadas e sem lacunas', () => {
-    expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
+    expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14])
     expect(migrations[migrations.length - 1]?.version).toBe(DATABASE_SCHEMA_VERSION)
   })
   it('persiste conversa, mensagens, memória e artefatos', () => {
@@ -337,7 +337,7 @@ describe('persistência SQLite', () => {
     const db = new LocalDatabase(directory)
     db.close()
     const migrated = new Sqlite(file, { readonly: true })
-    expect(migrated.pragma('user_version', { simple: true })).toBe(13)
+    expect(migrated.pragma('user_version', { simple: true })).toBe(14)
     const tables = migrated.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>
     expect(tables.map((item) => item.name)).toContain('suggestions')
     expect(tables.map((item) => item.name)).toContain('workspace_memory')
@@ -381,7 +381,7 @@ describe('persistência SQLite', () => {
     expect(fs.statSync(path.join(directory, migrationBackups[0])).mode & 0o777).toBe(0o600)
     migrated.close()
     const verified = new Sqlite(file, { readonly: true })
-    expect(verified.pragma('user_version', { simple: true })).toBe(13)
+    expect(verified.pragma('user_version', { simple: true })).toBe(14)
     verified.close()
   })
   it('mantém somente os três backups pré-migração mais recentes', () => {
@@ -429,7 +429,7 @@ describe('persistência SQLite', () => {
     expect(migrated.providerConfigurations.list()).toEqual([])
     migrated.close()
     const verified = new Sqlite(file, { readonly: true })
-    expect(verified.pragma('user_version', { simple: true })).toBe(13)
+    expect(verified.pragma('user_version', { simple: true })).toBe(14)
     verified.close()
   })
   it('migra o schema 9 preservando dados e criando catálogo e bindings', () => {
@@ -446,18 +446,52 @@ describe('persistência SQLite', () => {
     expect(migrationBackups).toHaveLength(1)
     migrated.close()
     const verified = new Sqlite(file, { readonly: true })
-    expect(verified.pragma('user_version', { simple: true })).toBe(13)
+    expect(verified.pragma('user_version', { simple: true })).toBe(14)
     verified.close()
+  })
+  it('migra estados legados de sugestões sem reabrir itens resolvidos', () => {
+    const db = create()
+    const conversation = db.createConversation('/tmp/from-13')
+    const now = new Date().toISOString()
+    db.close()
+    const directory = directories[directories.length - 1]
+    const file = path.join(directory, 'nocturne.db')
+    const previous = new Sqlite(file)
+    previous.prepare(`INSERT INTO suggestions(
+      id,workspace_id,conversation_id,title,description,reasoning,category,severity,affected_files,
+      proposed_changes,expected_benefits,complexity,risk,evidence,confidence,source,responsible,status,
+      created_at,updated_at
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      '00000000-0000-4000-8000-000000000013', conversation.workspace, conversation.id,
+      'Estado legado', 'Descrição', 'Justificativa', 'bug', 'medium', '[]', 'Corrigir', '[]',
+      'low', 'low', '[]', 80, 'Migração', 'Teste', 'applied', now, now,
+    )
+    previous.prepare('INSERT INTO suggestion_decisions(id,suggestion_id,status,result,created_at) VALUES(?,?,?,?,?)').run(
+      '00000000-0000-4000-8000-000000000014',
+      '00000000-0000-4000-8000-000000000013',
+      'applied',
+      'Concluída',
+      now,
+    )
+    previous.pragma('user_version = 13')
+    previous.close()
+    const migrated = new LocalDatabase(directory)
+    expect(migrated.getSuggestion('00000000-0000-4000-8000-000000000013', conversation.id)).toMatchObject({
+      status: 'resolved',
+      history: [expect.objectContaining({ status: 'resolved' })],
+    })
+    expect(migrated.listSuggestions(conversation.id)).toEqual([])
+    migrated.close()
   })
   it('recusa schema futuro antes de executar manutenção ou migrações', () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-test-')); directories.push(directory)
     const file = path.join(directory, 'nocturne.db')
     const future = new Sqlite(file)
-    future.pragma('user_version = 14')
+    future.pragma('user_version = 15')
     future.close()
-    expect(() => new LocalDatabase(directory)).toThrow(/schema 14.*suporta até o schema 13/)
+    expect(() => new LocalDatabase(directory)).toThrow(/schema 15.*suporta até o schema 14/)
     const preserved = new Sqlite(file, { readonly: true })
-    expect(preserved.pragma('user_version', { simple: true })).toBe(14)
+    expect(preserved.pragma('user_version', { simple: true })).toBe(15)
     preserved.close()
   })
   it('reverte integralmente uma restauração inválida', () => {

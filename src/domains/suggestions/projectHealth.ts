@@ -3,7 +3,7 @@ import type { Suggestion } from '../../types'
 const severityWeight: Record<string, number> = { info: 0, low: 0.5, medium: 1, high: 2, critical: 3 }
 
 export function projectHealth(suggestions: Suggestion[]) {
-  const pending = suggestions.filter((item) => item.status === 'pending' || item.status === 'accepted')
+  const pending = suggestions.filter((item) => ['new', 'in-analysis', 'accepted', 'deferred'].includes(item.status))
   const metric = (categories: string[]) => {
     const relevant = pending.filter((item) => categories.includes(item.category))
     return {

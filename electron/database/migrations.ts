@@ -128,6 +128,14 @@ export const migrations: Migration[] = [
     if (!hasColumn(db, 'suggestions', 'source')) db.exec("ALTER TABLE suggestions ADD COLUMN source TEXT NOT NULL DEFAULT 'Análise do agente'")
     if (!hasColumn(db, 'suggestions', 'responsible')) db.exec("ALTER TABLE suggestions ADD COLUMN responsible TEXT NOT NULL DEFAULT 'Agente de revisão'")
   } },
+  { version: 14, up: (db) => {
+    db.exec(`
+      UPDATE suggestions SET status='new' WHERE status='pending';
+      UPDATE suggestions SET status='resolved' WHERE status='applied';
+      UPDATE suggestion_decisions SET status='new' WHERE status='pending';
+      UPDATE suggestion_decisions SET status='resolved' WHERE status='applied';
+    `)
+  } },
 ]
 
 export function migrateDatabase(db: Database.Database, currentVersion: number, availableMigrations: Migration[] = migrations) {

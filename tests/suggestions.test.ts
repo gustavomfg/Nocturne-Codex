@@ -32,19 +32,25 @@ describe('sugestões', () => {
   it('persiste, recarrega e registra mudanças válidas de status', () => {
     const directory = tempDirectory(); let db = new LocalDatabase(directory); const conversation = db.createConversation('/tmp/project')
     const suggestion = db.addSuggestion(conversation.id, conversation.workspace, input)
-    expect(suggestion.status).toBe('pending')
+    expect(suggestion.status).toBe('new')
+    expect(suggestion.history).toHaveLength(1)
     expect(db.setSuggestionStatus(suggestion.id, 'accepted').status).toBe('accepted')
-    expect(db.setSuggestionStatus(suggestion.id, 'applied', 'typecheck ok').status).toBe('applied')
+    expect(db.setSuggestionStatus(suggestion.id, 'resolved', 'typecheck ok').status).toBe('resolved')
     db.close(); db = new LocalDatabase(directory)
     expect(db.getSuggestion(suggestion.id, conversation.id)).toMatchObject({
       id: suggestion.id,
-      status: 'applied',
+      status: 'resolved',
       affectedFiles: input.affectedFiles,
       evidence: input.evidence,
       confidence: 90,
       source: 'Review Mode',
       responsible: 'Agente de revisão',
     })
+    expect(db.getSuggestion(suggestion.id, conversation.id)?.history.map((entry) => entry.status)).toEqual([
+      'new',
+      'accepted',
+      'resolved',
+    ])
     expect(db.listSuggestions(conversation.id)).toEqual([])
     db.close()
   })
@@ -54,7 +60,27 @@ describe('sugestões', () => {
     expect(db.setSuggestionStatus(suggestion.id, 'rejected').status).toBe('rejected')
     expect(db.setSuggestionStatus(suggestion.id, 'rejected').status).toBe('rejected')
     expect(() => db.setSuggestionStatus(suggestion.id, 'accepted')).toThrow(/Transição.*inválida/)
-    expect((db.exportData().suggestionDecisions as unknown[])).toHaveLength(1)
+    expect((db.exportData().suggestionDecisions as unknown[])).toHaveLength(2)
+    db.close()
+  })
+
+  it('suporta análise, adiamento e invalidação com histórico ordenado', () => {
+    const db = new LocalDatabase(tempDirectory())
+    const conversation = db.createConversation('/tmp/project')
+    const suggestion = db.addSuggestion(conversation.id, conversation.workspace, input)
+    db.setSuggestionStatus(suggestion.id, 'in-analysis')
+    db.setSuggestionStatus(suggestion.id, 'deferred', 'Aguardar decisão arquitetural.')
+    db.setSuggestionStatus(suggestion.id, 'in-analysis')
+    const invalid = db.setSuggestionStatus(suggestion.id, 'invalid', 'A evidência não se reproduz.')
+    expect(invalid.history.map((entry) => entry.status)).toEqual([
+      'new',
+      'in-analysis',
+      'deferred',
+      'in-analysis',
+      'invalid',
+    ])
+    expect(db.listSuggestions(conversation.id)).toEqual([])
+    expect(() => db.setSuggestionStatus(suggestion.id, 'accepted')).toThrow(/Transição.*inválida/)
     db.close()
   })
 
@@ -63,15 +89,15 @@ describe('sugestões', () => {
     const pending = db.addSuggestion(conversation.id, conversation.workspace, input)
     const repeated = db.reconcileSuggestions(conversation.id, conversation.workspace, [{ ...input, description: 'Descrição atualizada pela análise mais recente.', severity: 'critical' }])
     expect(repeated).toHaveLength(1)
-    expect(repeated[0]).toMatchObject({ id: pending.id, status: 'pending', description: 'Descrição atualizada pela análise mais recente.', severity: 'critical' })
+    expect(repeated[0]).toMatchObject({ id: pending.id, status: 'new', description: 'Descrição atualizada pela análise mais recente.', severity: 'critical' })
     const accepted = db.setSuggestionStatus(pending.id, 'accepted')
     const acceptedRepeat = db.reconcileSuggestions(conversation.id, conversation.workspace, [{ ...input, description: 'Não deve alterar o escopo já aprovado.' }])
     expect(acceptedRepeat[0]).toMatchObject({ id: accepted.id, status: 'accepted', description: 'Descrição atualizada pela análise mais recente.' })
-    db.setSuggestionStatus(pending.id, 'applied')
+    db.setSuggestionStatus(pending.id, 'resolved')
     expect(db.listSuggestions(conversation.id)).toEqual([])
     expect(db.listSuggestionPage(conversation.id)).toEqual({ items: [], hasMore: false })
     const completedRepeat = db.reconcileSuggestions(conversation.id, conversation.workspace, [{ ...input, description: 'A IA repetiu a sugestão já concluída.' }])
-    expect(completedRepeat[0]).toMatchObject({ id: pending.id, status: 'applied' })
+    expect(completedRepeat[0]).toMatchObject({ id: pending.id, status: 'resolved' })
     expect(db.listSuggestions(conversation.id)).toEqual([])
     db.close()
   })
@@ -96,11 +122,11 @@ describe('sugestões', () => {
   })
 
   it('recalcula todas as dimensões quando sugestões deixam de estar abertas', () => {
-    const base: Omit<Suggestion, 'id' | 'category' | 'severity'> = { workspaceId: '/workspace', conversationId: 'conversation-1', title: 'Melhoria', description: 'Problema confirmado.', reasoning: 'Evidência.', evidence: [], confidence: 80, source: 'Teste', responsible: 'Vitest', affectedFiles: ['src/App.tsx'], proposedChanges: '+ melhoria', expectedBenefits: ['Mais qualidade'], complexity: 'low', risk: 'low', status: 'pending', createdAt: '2026-07-19T10:00:00.000Z', updatedAt: '2026-07-19T10:00:00.000Z' }
+    const base: Omit<Suggestion, 'id' | 'category' | 'severity'> = { workspaceId: '/workspace', conversationId: 'conversation-1', title: 'Melhoria', description: 'Problema confirmado.', reasoning: 'Evidência.', evidence: [], confidence: 80, source: 'Teste', responsible: 'Vitest', affectedFiles: ['src/App.tsx'], proposedChanges: '+ melhoria', expectedBenefits: ['Mais qualidade'], complexity: 'low', risk: 'low', status: 'new', history: [], createdAt: '2026-07-19T10:00:00.000Z', updatedAt: '2026-07-19T10:00:00.000Z' }
     const suggestions: Suggestion[] = [
       ['architecture', 'medium'], ['security', 'high'], ['testing', 'medium'], ['performance', 'critical'], ['cleanup', 'medium'], ['documentation', 'high'],
     ].map(([category, severity], index) => ({ ...base, id: `suggestion-${index}`, category: category as Suggestion['category'], severity: severity as Suggestion['severity'] }))
     expect(Object.fromEntries(Object.entries(projectHealth(suggestions)).map(([label, metric]) => [label, metric.score]))).toEqual({ Arquitetura: 9, Segurança: 8, Testes: 9, Performance: 7, Manutenção: 9, Documentação: 8 })
-    expect(Object.values(projectHealth(suggestions.map((suggestion) => ({ ...suggestion, status: 'applied' })))).every((metric) => metric.score === 10)).toBe(true)
+    expect(Object.values(projectHealth(suggestions.map((suggestion) => ({ ...suggestion, status: 'resolved' })))).every((metric) => metric.score === 10)).toBe(true)
   })
 })
