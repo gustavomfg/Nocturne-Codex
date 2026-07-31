@@ -552,7 +552,7 @@ test.describe('renderer do produto', () => {
     const brain = page.getByRole('dialog', { name: 'Segundo Cérebro' })
     await expect(brain.getByText('Validar restaurações antes de substituir dados locais.')).toBeVisible()
     await expect(brain.locator('.brain-card').getByText('Candidata', { exact: true })).toBeVisible()
-    await expect(brain.getByRole('button', { name: 'Aprovar' })).toBeVisible()
+    await expect(brain.getByRole('button', { name: 'Aprovar', exact: true })).toBeVisible()
   })
 
   test('mantém o Segundo Cérebro alinhado em desktop e mobile', async ({ page }) => {
@@ -626,9 +626,21 @@ test.describe('renderer do produto', () => {
         available = false
         return { restored: ['src/App.tsx'] }
       }
+      const bridge = (window as unknown as { __nocturneTest: { emitEvent(payload: unknown): void } }).__nocturneTest
+      bridge.emitEvent({
+        method: 'item/completed',
+        params: {
+          item: {
+            id: 'rollback-file',
+            type: 'fileChange',
+            status: 'completed',
+            changes: [{ path: 'src/App.tsx', kind: 'modified', status: 'completed' }],
+          },
+        },
+      })
     })
-    await page.locator('.conversation-open').click()
     await page.getByRole('tab', { name: 'Atividade' }).click()
+    await expect(page.getByText('Rollback do último Build')).toBeVisible()
     await page.getByText('Rollback do último Build').click()
     await page.getByRole('button', { name: 'Reverter alterações' }).click()
     await expect(page.locator('.product-toast')).toContainText('1 arquivo(s) restaurado(s).')
@@ -792,6 +804,22 @@ test('diferencia o estado vazio sem dados locais', async ({ page }) => {
   await ready(page)
   await expect(page.getByText('Nenhuma conversa ainda')).toBeVisible()
   await expect(page.getByText('O que vamos construir?')).toBeVisible()
+})
+
+test('conclui a jornada de primeiro uso e persiste a decisão', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-07-13T20:05:00.000Z'))
+  await installNocturneMock(page, { firstRun: true })
+  await page.setViewportSize({ width: 1180, height: 850 })
+  await ready(page)
+  const onboarding = page.getByRole('dialog', { name: 'Prontidão do Nocturne' })
+  await expect(onboarding.getByText('Ambiente pronto para trabalhar')).toBeVisible()
+  await onboarding.getByRole('button', { name: 'Continuar' }).click()
+  await onboarding.getByRole('button', { name: 'Continuar' }).click()
+  await onboarding.getByRole('button', { name: 'Continuar' }).click()
+  await onboarding.getByRole('button', { name: 'Concluir configuração' }).click()
+  await expect(onboarding).toBeHidden()
+  await expect(page.locator('.product-toast')).toContainText('Nocturne pronto para trabalhar.')
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('nocturne.onboarding.completed'))).toBe('true')
 })
 
 test('oferece login por conta e chave de API como caminhos separados', async ({ page }) => {

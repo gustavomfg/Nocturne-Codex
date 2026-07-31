@@ -1,8 +1,9 @@
 import type { Page } from '@playwright/test'
 
-export async function installNocturneMock(page: Page, options: { empty?: boolean; unauthorized?: boolean; moved?: boolean; signedOut?: boolean; messageCount?: number } = {}) {
-  await page.addInitScript(({ empty, unauthorized, moved, signedOut, messageCount }) => {
-    localStorage.setItem('nocturne.onboarding.completed', 'true')
+export async function installNocturneMock(page: Page, options: { empty?: boolean; unauthorized?: boolean; moved?: boolean; signedOut?: boolean; messageCount?: number; firstRun?: boolean } = {}) {
+  await page.addInitScript(({ empty, unauthorized, moved, signedOut, messageCount, firstRun }) => {
+    if (firstRun) localStorage.removeItem('nocturne.onboarding.completed')
+    else localStorage.setItem('nocturne.onboarding.completed', 'true')
     const now = '2026-07-13T20:00:00.000Z'
     const workspace = '/workspace/sample-project'
     const conversation = { id: 'conversation-1', title: 'Lapidação da experiência', workspace, createdAt: now, updatedAt: now }
@@ -218,5 +219,5 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       calls: () => ({ selectedExpected, memoryReads }),
       performanceReports: () => structuredClone(rendererPerformanceReports),
     } })
-  }, { empty: Boolean(options.empty), unauthorized: Boolean(options.unauthorized), moved: Boolean(options.moved), signedOut: Boolean(options.signedOut), messageCount: options.messageCount ?? 0 })
+  }, { empty: Boolean(options.empty), unauthorized: Boolean(options.unauthorized), moved: Boolean(options.moved), signedOut: Boolean(options.signedOut), messageCount: options.messageCount ?? 0, firstRun: Boolean(options.firstRun) })
 }

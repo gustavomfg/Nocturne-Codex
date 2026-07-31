@@ -275,6 +275,7 @@ Build Mode and Docs Mode currently require Codex CLI.
 - [Updates](docs/updates.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Security](docs/security.md) and [privacy](docs/privacy.md)
+- [1.0 release readiness](docs/release-readiness-1.0.md)
 - [Development environment](docs/development.md)
 
 Nocturne Studio remains at `0.9.0-beta`. The 1.0 documents describe release
