@@ -42,7 +42,12 @@ class FakeCodexProcess extends EventEmitter implements CodexProcessAdapter {
     )
   }
 
-  respond(method: string, result: unknown = {}) {
+  respond(method: string, result: unknown = method === 'initialize' ? {
+    userAgent: 'codex-cli/0.146.0',
+    codexHome: '/tmp/codex',
+    platformFamily: 'unix',
+    platformOs: 'linux',
+  } : {}) {
     const request = this.request(method)
     if (!request) throw new Error(`Request ausente: ${method}`)
     this.emit('message', { id: request.id, result })
@@ -74,6 +79,13 @@ async function createThread(client: CodexClient, process: FakeCodexProcess) {
 }
 
 describe('CodexClient', () => {
+  it('valida o handshake do protocolo antes de declarar o App Server compatível', async () => {
+    const { client } = await readyClient()
+    await expect(client.checkProtocol()).resolves.toEqual({
+      compatible: true,
+      serverVersion: 'codex-cli/0.146.0',
+    })
+  })
   it('lista e valida os modelos disponíveis para a conta', async () => {
     const { client, process } = await readyClient()
     const listed = client.listModels()

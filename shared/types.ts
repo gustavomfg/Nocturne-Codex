@@ -21,4 +21,24 @@ export interface GitChangedFile { path: string; status: string; originalPath?: s
 export interface GitInfo { branch: string; status: string; diff: string; diffTruncated?: boolean; filesTruncated?: boolean; files: GitChangedFile[] }
 export interface AppSettings { model: string; sandbox: 'read-only' | 'workspace-write'; approvalPolicy: 'untrusted' | 'on-request'; diagnosticMode?: boolean; theme?: 'dark'; pandocVersion?: string }
 export interface AgentEvent { method: string; params: Record<string, unknown> }
-export interface CodexAccountStatus { installed: boolean; authenticated: boolean; compatible: boolean; version?: string; authenticationMethod?: 'chatgpt' | 'api-key' | 'unknown' }
+export type CodexAccountState =
+  | 'ready'
+  | 'not-installed'
+  | 'not-authenticated'
+  | 'incompatible'
+  | 'internal-error'
+export interface CodexAccountStatus {
+  state: CodexAccountState
+  installed: boolean
+  authenticated: boolean
+  compatible: boolean
+  version?: string
+  minimumVersion: string
+  recommendedVersion: string
+  minimumSatisfied: boolean
+  recommended: boolean
+  protocolCompatible?: boolean
+  serverVersion?: string
+  authenticationMethod?: 'chatgpt' | 'api-key' | 'unknown'
+  error?: string
+}

@@ -10,10 +10,15 @@ describe('CodexAccountService', () => {
       stderr: '',
     }))
     await expect(chatGpt.status()).resolves.toEqual({
+      state: 'ready',
       installed: true,
       authenticated: true,
       compatible: true,
       version: '0.145.0',
+      minimumVersion: '0.145.0',
+      recommendedVersion: '0.146.0',
+      minimumSatisfied: true,
+      recommended: false,
       authenticationMethod: 'chatgpt',
     })
 
@@ -56,6 +61,11 @@ describe('CodexAccountService', () => {
       stderr: '',
     }))
     await expect(service.login()).rejects.toThrow(/não foi homologada/)
+    await expect(service.status()).resolves.toMatchObject({
+      state: 'incompatible',
+      minimumSatisfied: true,
+      recommended: false,
+    })
   })
 
   it('aceita a versão 0.146.0 após validação explícita do contrato', async () => {
@@ -70,7 +80,29 @@ describe('CodexAccountService', () => {
       authenticated: true,
       compatible: true,
       version: '0.146.0',
+      recommended: true,
       authenticationMethod: 'chatgpt',
+    })
+  })
+
+  it('distingue versão abaixo do mínimo e falha interna da ausência do executável', async () => {
+    const outdated = new CodexAccountService(async (args) => ({
+      stdout: args[0] === '--version' ? 'codex-cli 0.144.0' : '',
+      stderr: '',
+    }))
+    await expect(outdated.status()).resolves.toMatchObject({
+      state: 'incompatible',
+      installed: true,
+      minimumSatisfied: false,
+    })
+
+    const internalError = new CodexAccountService(async () => {
+      throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
+    })
+    await expect(internalError.status()).resolves.toMatchObject({
+      state: 'internal-error',
+      installed: false,
+      error: expect.stringContaining('verificar'),
     })
   })
 })

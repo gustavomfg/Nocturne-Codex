@@ -25,29 +25,43 @@ export class CodexAccountService {
       versionOutput = (await this.run(['--version'], 5_000)).stdout
     } catch (error) {
       if (isMissingExecutable(error)) {
-        return { installed: false, authenticated: false, compatible: false }
+        return baseStatus('not-installed')
       }
-      throw new Error('Não foi possível verificar a instalação do Codex CLI.')
+      return {
+        ...baseStatus('internal-error'),
+        error: 'Não foi possível verificar a instalação do Codex CLI.',
+      }
     }
 
     const version = versionOutput.match(/\d+\.\d+\.\d+/)?.[0]
     const compatible = Boolean(version && compatibility.verified.includes(version))
+    const minimumSatisfied = Boolean(version && compareSemver(version, compatibility.minimum) >= 0)
+    const recommended = version === compatibility.recommended
     try {
       const output = await this.run(['login', 'status'], 10_000)
       const authenticationMethod = parseAuthenticationMethod(`${output.stdout}\n${output.stderr}`)
       return {
+        ...baseStatus(authenticationMethod ? 'ready' : 'not-authenticated'),
         installed: true,
         authenticated: authenticationMethod !== undefined,
         compatible,
         version,
+        minimumSatisfied,
+        recommended,
         authenticationMethod,
+        state: compatible
+          ? (authenticationMethod ? 'ready' : 'not-authenticated')
+          : 'incompatible',
       }
     } catch {
       return {
+        ...baseStatus(compatible ? 'not-authenticated' : 'incompatible'),
         installed: true,
         authenticated: false,
         compatible,
         version,
+        minimumSatisfied,
+        recommended,
       }
     }
   }
@@ -99,4 +113,27 @@ function isMissingExecutable(error: unknown) {
   return error instanceof Error
     && 'code' in error
     && (error as NodeJS.ErrnoException).code === 'ENOENT'
+}
+
+function baseStatus(state: CodexAccountStatus['state']): CodexAccountStatus {
+  return {
+    state,
+    installed: false,
+    authenticated: false,
+    compatible: false,
+    minimumVersion: compatibility.minimum,
+    recommendedVersion: compatibility.recommended,
+    minimumSatisfied: false,
+    recommended: false,
+  }
+}
+
+function compareSemver(left: string, right: string) {
+  const leftParts = left.split('.').map(Number)
+  const rightParts = right.split('.').map(Number)
+  for (let index = 0; index < 3; index += 1) {
+    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0)
+    if (difference !== 0) return difference
+  }
+  return 0
 }

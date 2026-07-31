@@ -90,6 +90,10 @@ export class AiExecutionCoordinator {
     return this.codex.listModels()
   }
 
+  checkCodexProtocol() {
+    return this.codex.checkProtocol()
+  }
+
   async startProvider(
     conversationId: string,
     taskInput: NormalizedTaskInput,

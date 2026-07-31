@@ -280,6 +280,8 @@ export function AIConnectionPage({
         <p className="ai-list-sub">Use sua conta ChatGPT pelo Codex CLI, uma chave de API ou um modelo local.</p>
       </div>
 
+      {codexAccount && codexAccount.state !== 'ready' && <CodexStatusSummary value={codexAccount}/>}
+
       {(codexAccount?.authenticated || services.length > 0) && <div className="ai-list-connections">
         {codexAccount?.authenticated && <div className="ai-list-row">
           <div className="ai-list-row-info">
@@ -369,7 +371,13 @@ export function AIConnectionPage({
         <p className="ai-local-note">Instale uma versão homologada do Codex CLI ({verifiedCodexVersions}) para usar uma conta ChatGPT.</p>
       )}
       {selectedPreset.authType === 'account' && codexAccount?.installed && !codexAccount.compatible && (
-        <p className="ai-local-note">Codex CLI {codexAccount.version || 'desconhecido'} não homologado. Use {verifiedCodexVersions}.</p>
+        <p className="ai-local-note">
+          Codex CLI {codexAccount.version || 'desconhecido'} não homologado.
+          {codexAccount.minimumSatisfied ? ` Use a versão recomendada ${codexAccount.recommendedVersion}.` : ` A versão mínima é ${codexAccount.minimumVersion}.`}
+        </p>
+      )}
+      {selectedPreset.authType === 'account' && codexAccount?.state === 'internal-error' && (
+        <p className="ai-local-note" role="alert">{codexAccount.error}</p>
       )}
 
       {selectedPreset.authType === 'api-key' && <>
@@ -506,6 +514,24 @@ export function AIConnectionPage({
         </div>
       </div>
     </div>}
+  </div>
+}
+
+function CodexStatusSummary({ value }: { value: CodexAccountStatus }) {
+  const message = {
+    'not-installed': `Codex CLI não instalado. Instale ${value.recommendedVersion}.`,
+    'not-authenticated': 'Codex CLI disponível, mas nenhuma conta ChatGPT está autenticada.',
+    incompatible: value.minimumSatisfied
+      ? `Codex CLI ${value.version ?? 'desconhecido'} não homologado. Recomendado: ${value.recommendedVersion}.`
+      : `Codex CLI desatualizado. Versão mínima: ${value.minimumVersion}.`,
+    'internal-error': value.error ?? 'O Codex CLI encontrou um erro interno.',
+    ready: '',
+  }[value.state]
+  return <div
+    className={`provider-feedback ${value.state === 'not-authenticated' ? '' : 'error'}`}
+    role={value.state === 'internal-error' ? 'alert' : 'status'}
+  >
+    {message}
   </div>
 }
 

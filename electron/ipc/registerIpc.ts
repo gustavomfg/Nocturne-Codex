@@ -67,8 +67,26 @@ export function registerIpc(
     approvalDetails,
     (snapshot) => persistCompletedTurn(database, snapshot),
   )
-  ipcMain.handle('codex:accountStatus', () => codexAccount.status())
-  ipcMain.handle('codex:login', () => codexAccount.login())
+  const codexStatus = async () => {
+    const account = await codexAccount.status()
+    if (!account.installed || !account.compatible) return account
+    try {
+      const protocol = await aiExecutions.checkCodexProtocol()
+      return { ...account, protocolCompatible: true, serverVersion: protocol.serverVersion }
+    } catch (error) {
+      return {
+        ...account,
+        state: 'internal-error' as const,
+        protocolCompatible: false,
+        error: `O Codex CLI foi encontrado, mas o App Server não respondeu com um protocolo compatível: ${error instanceof Error ? error.message : String(error)}`,
+      }
+    }
+  }
+  ipcMain.handle('codex:accountStatus', () => codexStatus())
+  ipcMain.handle('codex:login', async () => {
+    await codexAccount.login()
+    return codexStatus()
+  })
   ipcMain.handle('codex:logout', () => codexAccount.logout())
   ipcMain.handle('codex:models', async () => {
     const account = await codexAccount.status()

@@ -10,6 +10,7 @@ import {
   type CodexModel,
 } from '../../shared/codexModels'
 import productIdentity from '../../shared/product-identity.json'
+import { z } from 'zod'
 
 const APPROVAL_METHODS = new Set([
   'item/commandExecution/requestApproval',
@@ -49,6 +50,7 @@ export class CodexClient extends EventEmitter {
     }),
   )
   status: CodexStatus = 'disconnected'
+  private serverVersion: string | undefined
 
   constructor(process: CodexProcessAdapter = new CodexProcess()) {
     super()
@@ -144,6 +146,14 @@ export class CodexClient extends EventEmitter {
         isDefault: model.isDefault === true,
       })
     })
+  }
+
+  async checkProtocol() {
+    await this.start()
+    if (!this.serverVersion) {
+      throw new Error('O App Server não informou uma versão identificável.')
+    }
+    return { compatible: true as const, serverVersion: this.serverVersion }
   }
 
   async sendTurn(
@@ -244,7 +254,7 @@ export class CodexClient extends EventEmitter {
   private async initialize() {
     this.setStatus('starting')
     this.process.start(this.executable)
-    await this.call('initialize', {
+    const initialized = initializeResponseSchema.parse(await this.call('initialize', {
       clientInfo: {
         name: productIdentity.codexClientName,
         title: productIdentity.displayName,
@@ -254,7 +264,8 @@ export class CodexClient extends EventEmitter {
         experimentalApi: true,
         requestAttestation: false,
       },
-    })
+    }))
+    this.serverVersion = initialized.userAgent
     this.notify('initialized')
     this.setStatus('ready')
   }
@@ -345,6 +356,13 @@ export class CodexClient extends EventEmitter {
     this.pending.clear()
   }
 }
+
+const initializeResponseSchema = z.object({
+  userAgent: z.string().min(1).max(500),
+  codexHome: z.string().min(1),
+  platformFamily: z.string().min(1).max(100),
+  platformOs: z.string().min(1).max(100),
+})
 
 function toSandboxPolicy(mode: string | undefined, workspace: string) {
   return mode === 'read-only'
