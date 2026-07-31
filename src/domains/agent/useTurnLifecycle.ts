@@ -5,7 +5,7 @@ import { useShallow } from 'zustand/react/shallow'
 
 export interface ActiveTurnContext { conversationId: string; mode: AgentMode; suggestionId: string | null; suggestionFiles: string[] }
 
-export function useTurnLifecycle({ flushStream, activeTurnRef, refreshGit }: { flushStream(): void; activeTurnRef: MutableRefObject<ActiveTurnContext | null>; refreshGit(conversationId: string): void }) {
+export function useTurnLifecycle({ flushStream, activeTurnRef, refreshGit }: { flushStream(): void; activeTurnRef: MutableRefObject<ActiveTurnContext | null>; refreshGit(conversationId: string): Promise<void> }) {
   const processingTurnsRef = useRef(new Set<string>())
   const persistedTurnsRef = useRef(new Set<string>())
   const store = useAppStore(useShallow((state) => ({
@@ -59,7 +59,7 @@ export function useTurnLifecycle({ flushStream, activeTurnRef, refreshGit }: { f
       if (!error && !cancelled && changedInApprovedScope) await window.nocturne.suggestions.status(context.conversationId, context.suggestionId, 'resolved', 'Turno concluído com alterações observadas no escopo aprovado; consulte a resposta do agente para os resultados de validação.')
       if (useAppStore.getState().activeId === context.conversationId) store.setSuggestions((await window.nocturne.suggestions.page(context.conversationId)).items)
     }
-      refreshGit(context.conversationId)
+      await refreshGit(context.conversationId)
       persistedTurnsRef.current.add(completionKey)
       if (persistedTurnsRef.current.size > 100) persistedTurnsRef.current.delete(persistedTurnsRef.current.values().next().value as string)
       if (activeTurnRef.current === context) activeTurnRef.current = null
