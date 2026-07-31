@@ -11,7 +11,7 @@ import { Logger } from '../logging/Logger'
 import { resolveInsideWorkspace } from '../security/ExecutionPolicy'
 import { sanitizeSuggestionTitle } from '../../shared/suggestions'
 import { appendSuggestionDecision } from '../persistence/SuggestionDecisionLog'
-import { approvalSchema, aiCancelSchema, aiSendSchema, applyMarkdownSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, prepareMarkdownSchema, saveAssistantSchema } from '../../shared/ipc/schemas'
+import { approvalSchema, aiCancelSchema, aiSendSchema, applyMarkdownSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, prepareMarkdownSchema, rendererStatsSchema, saveAssistantSchema } from '../../shared/ipc/schemas'
 import { registerDataIpc } from './registerDataIpc'
 import { registerGitIpc } from './registerGitIpc'
 import { registerWorkspaceIpc } from './registerWorkspaceIpc'
@@ -39,6 +39,7 @@ import { BuildRollbackService } from '../ai/BuildRollbackService'
 import { DocumentUpdateService } from '../documents/DocumentUpdateService'
 import type { AwarenessSnapshot } from '../../shared/awareness'
 import packageMetadata from '../../package.json'
+import { RENDERER_PERFORMANCE_BUDGETS } from '../../shared/constants'
 
 const execFileAsync = promisify(execFile)
 
@@ -178,8 +179,15 @@ export function registerIpc(
     logger.error('app', `Renderer ${data.type}`, { fingerprint })
   })
   ipcMain.handle('diagnostics:rendererStats', (_event, value: unknown) => {
-    const data = z.object({ responseSize: z.number().int().nonnegative().max(10_000_000), activities: z.number().int().nonnegative().max(100_000), messages: z.number().int().nonnegative().max(100_000) }).parse(value)
-    logger.info('app', 'Estado do renderer durante execução', data)
+    const data = rendererStatsSchema.parse(value)
+    logger.info('app', 'Métricas internas do renderer', {
+      ...data,
+      budgetExceeded: {
+        startup: data.startupMs > RENDERER_PERFORMANCE_BUDGETS.startupMs,
+        conversationLoad: data.conversationLoadMs > RENDERER_PERFORMANCE_BUDGETS.conversationLoadMs,
+        longTask: data.longestLongTaskMs > RENDERER_PERFORMANCE_BUDGETS.longTaskMs,
+      },
+    })
   })
 
   ipcMain.handle('ai:send', async (_event, value: unknown) => {

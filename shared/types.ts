@@ -22,6 +22,16 @@ export interface GitInfo { branch: string; status: string; diff: string; diffTru
 export interface AppSettings { model: string; sandbox: 'read-only' | 'workspace-write'; approvalPolicy: 'untrusted' | 'on-request'; diagnosticMode?: boolean; theme?: 'dark'; pandocVersion?: string }
 export interface BuildRollbackStatus { available: boolean; files: string[]; createdAt?: string; reason?: string }
 export interface DocumentUpdatePreview { target: string; name: string; existing: string; generated: string; expectedHash: string | null }
+export interface RendererPerformanceStats {
+  responseSize: number
+  activities: number
+  messages: number
+  startupMs: number
+  conversationLoadMs: number
+  longTasks: number
+  longTaskDurationMs: number
+  longestLongTaskMs: number
+}
 export interface AgentEvent { method: string; params: Record<string, unknown> }
 export type CodexAccountState =
   | 'ready'

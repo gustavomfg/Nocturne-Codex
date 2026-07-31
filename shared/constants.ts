@@ -19,4 +19,10 @@ export const UI_TIMING = {
   diagnosticsIntervalMs: 10_000,
 } as const
 
+export const RENDERER_PERFORMANCE_BUDGETS = {
+  startupMs: 5_000,
+  conversationLoadMs: 2_000,
+  longTaskMs: 50,
+} as const
+
 export const COLLECTION_PAGE_LIMITS = { conversations: 100, artifacts: 50, suggestions: 50, brainMemories: 50 } as const

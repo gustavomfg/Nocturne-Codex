@@ -1,4 +1,4 @@
-import type { AgentMode, Artifact, Attachment, AgentEvent, AppSettings, BuildRollbackStatus, CodexAccountStatus, CollectionPage, Conversation, DocumentUpdatePreview, FilePreview, GitInfo, Message, MessagePage, Suggestion, SuggestionStatus, Workspace, WorkspaceChangeEvent, WorkspaceMemory } from '../types'
+import type { AgentMode, Artifact, Attachment, AgentEvent, AppSettings, BuildRollbackStatus, CodexAccountStatus, CollectionPage, Conversation, DocumentUpdatePreview, FilePreview, GitInfo, Message, MessagePage, RendererPerformanceStats, Suggestion, SuggestionStatus, Workspace, WorkspaceChangeEvent, WorkspaceMemory } from '../types'
 import type { ReviewComparison } from '../suggestions'
 import type { BrainMemory, BrainMemoryHistoryEntry, BrainMemoryKind, BrainMemoryScope, BrainMemoryStatus, UpdateBrainMemoryInput } from '../brainMemory'
 import type { ProviderAvailability, ProviderDiagnostic } from '../ai/provider'
@@ -49,7 +49,7 @@ export interface NocturneApi {
   artifacts: { list(conversationId: string): Promise<Artifact[]>; page(conversationId: string, offset?: number, limit?: number): Promise<CollectionPage<Artifact>>; delete(conversationId: string, artifactId: string): Promise<{ deleted: true }> }
   suggestions: { list(conversationId: string): Promise<Suggestion[]>; page(conversationId: string, offset?: number, limit?: number): Promise<CollectionPage<Suggestion>>; create(conversationId: string, content: string): Promise<{ suggestions: Suggestion[]; content: string; comparison?: ReviewComparison; warning?: string }>; status(conversationId: string, suggestionId: string, status: SuggestionStatus, result?: string): Promise<Suggestion> }
   data: { export(): Promise<string | null>; import(): Promise<boolean> }
-  diagnostics: { openLogs(): Promise<string>; copy(): Promise<string>; export(): Promise<string | null>; rendererError(value: { type: 'error' | 'unhandledRejection'; message: string; stack?: string }): Promise<void>; rendererStats(value: { responseSize: number; activities: number; messages: number }): Promise<void> }
+  diagnostics: { openLogs(): Promise<string>; copy(): Promise<string>; export(): Promise<string | null>; rendererError(value: { type: 'error' | 'unhandledRejection'; message: string; stack?: string }): Promise<void>; rendererStats(value: RendererPerformanceStats): Promise<void> }
   settings: { get(): Promise<AppSettings>; set(settings: Partial<AppSettings>): Promise<AppSettings> }
   providers: {
     list(): Promise<ProviderConfigurationSummary[]>

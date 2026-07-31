@@ -14,6 +14,7 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
     let selectedWorkspace = workspace
     let selectedExpected: string | undefined
     let memoryReads = 0
+    const rendererPerformanceReports: unknown[] = []
     type MockBrainMemory = { id: string; workspaceId: string; conversationId: string | null; kind: 'fact' | 'decision' | 'preference' | 'constraint' | 'learning'; scope: 'workspace' | 'conversation'; status: 'candidate' | 'active' | 'outdated' | 'archived'; content: string; confidence: number; sourceType: 'manual' | 'agent'; sourceId: string | null; createdAt: string; updatedAt: string; lastConfirmedAt: string | null; lastUsedAt: string | null; useCount: number }
     type MockProviderConfiguration = { id: string; providerType: 'openai-compatible'; displayName: string; source: 'local' | 'remote'; baseUrl: string; enabled: boolean; requiresAuthentication: boolean; credentialConfigured: boolean; timeoutMs: number; createdAt: string; updatedAt: string }
     type MockModelReference = { providerId: string; modelId: string }
@@ -132,7 +133,13 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       artifacts: { list: async () => [], page: async () => ({ items: [], hasMore: false }), delete: noop },
       suggestions: { list: async () => [], page: async () => ({ items: [], hasMore: false }), create: async (_id: string, content: string) => ({ suggestions: [], content }), status: noop },
       data: { export: async () => '/tmp/backup.json', import: async () => true },
-      diagnostics: { openLogs: noop, copy: async () => 'diagnóstico', export: async () => '/tmp/nocturne-diagnostic.json', rendererError: noop, rendererStats: noop },
+      diagnostics: {
+        openLogs: noop,
+        copy: async () => 'diagnóstico',
+        export: async () => '/tmp/nocturne-diagnostic.json',
+        rendererError: noop,
+        rendererStats: async (value: unknown) => { rendererPerformanceReports.push(structuredClone(value)) },
+      },
       settings: {
         get: async () => ({ ...appSettings }),
         check: async () => ({ ...appSettings }),
@@ -209,6 +216,7 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
       emitStatus: (payload: unknown) => statusListeners.forEach((listener) => listener(payload)),
       emitWorkspaceChange: (payload: unknown) => workspaceChangeListeners.forEach((listener) => listener(payload)),
       calls: () => ({ selectedExpected, memoryReads }),
+      performanceReports: () => structuredClone(rendererPerformanceReports),
     } })
   }, { empty: Boolean(options.empty), unauthorized: Boolean(options.unauthorized), moved: Boolean(options.moved), signedOut: Boolean(options.signedOut), messageCount: options.messageCount ?? 0 })
 }

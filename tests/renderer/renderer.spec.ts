@@ -21,6 +21,27 @@ test.describe('renderer do produto', () => {
     await expect(page.getByRole('button', { name: 'Abrir no WebStorm' })).toBeVisible()
   })
 
+  test('publica somente métricas agregadas de desempenho', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await ready(page)
+    const reports = await page.evaluate(() => (
+      window as unknown as {
+        __nocturneTest: { performanceReports(): Array<Record<string, unknown>> }
+      }
+    ).__nocturneTest.performanceReports())
+    expect(reports.length).toBeGreaterThan(0)
+    expect(reports[reports.length - 1]).toEqual({
+      responseSize: expect.any(Number),
+      activities: expect.any(Number),
+      messages: expect.any(Number),
+      startupMs: expect.any(Number),
+      conversationLoadMs: expect.any(Number),
+      longTasks: expect.any(Number),
+      longTaskDurationMs: expect.any(Number),
+      longestLongTaskMs: expect.any(Number),
+    })
+  })
+
   test('mantém somente um painel modal e restaura o foco', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await ready(page)

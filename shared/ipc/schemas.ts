@@ -16,6 +16,16 @@ export const workspaceFavoriteSchema = z.object({ workspace: z.string().min(1), 
 export const workspaceToolSchema = z.object({ workspace: z.string().min(1), tool: z.enum(['editor', 'terminal']) })
 export const fileActionSchema = z.object({ conversationId: idSchema, filePath: z.string().min(1), action: z.enum(['file', 'folder', 'editor']) })
 export const filePreviewSchema = z.object({ conversationId: idSchema, filePath: z.string().min(1) })
+export const rendererStatsSchema = z.object({
+  responseSize: z.number().int().nonnegative().max(10_000_000),
+  activities: z.number().int().nonnegative().max(100_000),
+  messages: z.number().int().nonnegative().max(100_000),
+  startupMs: z.number().nonnegative().max(600_000),
+  conversationLoadMs: z.number().nonnegative().max(600_000),
+  longTasks: z.number().int().nonnegative().max(100_000),
+  longTaskDurationMs: z.number().nonnegative().max(10_000_000),
+  longestLongTaskMs: z.number().nonnegative().max(600_000),
+}).strict()
 export const suggestionStatusSchema = z.object({ conversationId: idSchema, suggestionId: idSchema, status: z.enum(suggestionStatuses), result: z.string().max(20_000).optional() })
 export const suggestionExtractSchema = z.object({ conversationId: idSchema, content: z.string().max(PERSISTENCE_LIMITS.assistantCharacters) }).strict()
 export const gitCommitSchema = z.object({ conversationId: idSchema, message: z.string().trim().min(1).max(200), files: z.array(z.string().min(1).max(4_000)).min(1).max(1_000) })

@@ -1,4 +1,4 @@
-import { FormEvent, lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { FormEvent, lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { X } from 'lucide-react'
 import { useAppStore } from './store'
@@ -80,12 +80,22 @@ function App() {
   const lastAttemptRef = useRef<{ conversationId: string; content: string; mode: AgentMode; attachments: Attachment[] } | null>(null)
   const conversationRequestRef = useRef(0)
   const historyOffsetRef = useRef(0)
+  const performanceRef = useRef({ startupMs: 0, conversationLoadMs: 0, longTasks: 0, longTaskDurationMs: 0, longestLongTaskMs: 0 })
   const active = store.conversations.find((item) => item.id === store.activeId)
   const filtered = store.conversations.filter((item) => item.title.toLowerCase().includes(search.toLowerCase()) && (!workspace || item.workspace === workspace))
   const workspaceAuthorized = Boolean(workspaces.find((item) => item.path === workspace)?.authorized)
   const finishTurn = useTurnLifecycle({ flushStream, activeTurnRef, refreshGit })
   const collections = usePagedCollections(store.setError)
   const interactionLocked = () => { const state = useAppStore.getState(); return isBusy(state.status) || state.finalizing }
+  const reportRendererPerformance = useCallback(() => {
+    const state = useAppStore.getState()
+    void window.nocturne.diagnostics.rendererStats({
+      responseSize: state.streaming.length,
+      activities: state.activities.length,
+      messages: state.messages.length,
+      ...performanceRef.current,
+    }).catch(() => undefined)
+  }, [])
 
   const refresh = collections.refreshConversations
 
@@ -95,6 +105,8 @@ function App() {
       const normalized = { model: savedSettings.model || '', sandbox: savedSettings.sandbox || 'workspace-write', approvalPolicy: savedSettings.approvalPolicy === 'untrusted' ? 'untrusted' : 'on-request', diagnosticMode: savedSettings.diagnosticMode === true, theme: 'dark' } as AppSettings
       store.setConversations(conversations); void collections.initializeConversationHasMore(conversationPage.hasMore); setWorkspaces(savedWorkspaces); setSettings(normalized)
       if (conversations[0]) await openConversation(conversations[0].id, conversations, savedWorkspaces)
+      performanceRef.current.startupMs = performance.now()
+      reportRendererPerformance()
     }).catch((error) => store.setError(error.message))
     const offStatus = window.nocturne.ai.onStatus(({ status, conversationId, error }) => {
       if (conversationId && conversationId !== activeTurnRef.current?.conversationId) return
@@ -107,6 +119,21 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    if (typeof PerformanceObserver === 'undefined' || !PerformanceObserver.supportedEntryTypes.includes('longtask')) return
+    const observer = new PerformanceObserver((list) => {
+      const entries = list.getEntries()
+      performanceRef.current.longTasks += entries.length
+      performanceRef.current.longTaskDurationMs += entries.reduce((total, entry) => total + entry.duration, 0)
+      performanceRef.current.longestLongTaskMs = Math.max(
+        performanceRef.current.longestLongTaskMs,
+        ...entries.map((entry) => entry.duration),
+      )
+      reportRendererPerformance()
+    })
+    observer.observe({ entryTypes: ['longtask'] })
+    return () => observer.disconnect()
+  }, [reportRendererPerformance])
   useEffect(() => {
     const scroller = chatScrollRef.current
     if (!scroller) return
@@ -138,9 +165,9 @@ function App() {
   })
   useEffect(() => {
     if (!isBusy(store.status)) return
-    const timer = setInterval(() => { const state = useAppStore.getState(); void window.nocturne.diagnostics.rendererStats({ responseSize: state.streaming.length, activities: state.activities.length, messages: state.messages.length }) }, UI_TIMING.diagnosticsIntervalMs)
+    const timer = setInterval(reportRendererPerformance, UI_TIMING.diagnosticsIntervalMs)
     return () => clearInterval(timer)
-  }, [store.status])
+  }, [reportRendererPerformance, store.status])
   useEffect(() => {
     if (!workspace || !workspaceAuthorized) return
     let refreshTimer: number | null = null
@@ -204,6 +231,7 @@ function App() {
   }
 
   async function openConversation(id: string, conversations = store.conversations, availableWorkspaces = workspaces) {
+    const loadStartedAt = performance.now()
     if (interactionLocked() && id !== useAppStore.getState().activeId) { store.setError('Cancele ou aguarde a execução atual antes de trocar de conversa.'); return }
     const requestId = ++conversationRequestRef.current
     stickToBottomRef.current = true; setNewContent(false)
@@ -241,6 +269,8 @@ function App() {
     const savedMemory = await window.nocturne.memory.get(id)
     if (requestId !== conversationRequestRef.current || useAppStore.getState().activeId !== id) return
     setMemory(savedMemory)
+    performanceRef.current.conversationLoadMs = performance.now() - loadStartedAt
+    reportRendererPerformance()
     void refreshGit(id)
   }
 

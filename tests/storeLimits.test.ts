@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '../src/store'
-import { PERSISTENCE_LIMITS } from '../shared/constants'
-import { exportDocumentSchema, prepareMarkdownSchema, saveAssistantSchema, suggestionExtractSchema } from '../shared/ipc/schemas'
+import { PERSISTENCE_LIMITS, RENDERER_PERFORMANCE_BUDGETS } from '../shared/constants'
+import { exportDocumentSchema, prepareMarkdownSchema, rendererStatsSchema, saveAssistantSchema, suggestionExtractSchema } from '../shared/ipc/schemas'
 
 beforeEach(() => useAppStore.setState({ streaming: '', activities: [], files: [] }))
 
@@ -37,5 +37,28 @@ describe('limites de persistência IPC', () => {
     expect(suggestionExtractSchema.safeParse({ conversationId, content: 'x'.repeat(PERSISTENCE_LIMITS.assistantCharacters + 1) }).success).toBe(false)
     expect(exportDocumentSchema.safeParse({ conversationId, content: 'x'.repeat(PERSISTENCE_LIMITS.documentCharacters + 1), format: 'pdf' }).success).toBe(false)
     expect(prepareMarkdownSchema.safeParse({ conversationId, content: '', name: 'a'.repeat(PERSISTENCE_LIMITS.documentNameCharacters + 1) }).success).toBe(false)
+  })
+})
+
+describe('métricas internas de desempenho', () => {
+  const metrics = {
+    responseSize: 2_000,
+    activities: 12,
+    messages: 80,
+    startupMs: RENDERER_PERFORMANCE_BUDGETS.startupMs,
+    conversationLoadMs: RENDERER_PERFORMANCE_BUDGETS.conversationLoadMs,
+    longTasks: 1,
+    longTaskDurationMs: RENDERER_PERFORMANCE_BUDGETS.longTaskMs,
+    longestLongTaskMs: RENDERER_PERFORMANCE_BUDGETS.longTaskMs,
+  }
+
+  it('aceita apenas agregados numéricos limitados', () => {
+    expect(rendererStatsSchema.parse(metrics)).toEqual(metrics)
+    expect(rendererStatsSchema.safeParse({ ...metrics, prompt: 'conteúdo privado' }).success).toBe(false)
+  })
+
+  it('rejeita métricas negativas ou fora dos limites', () => {
+    expect(rendererStatsSchema.safeParse({ ...metrics, startupMs: -1 }).success).toBe(false)
+    expect(rendererStatsSchema.safeParse({ ...metrics, responseSize: 10_000_001 }).success).toBe(false)
   })
 })
