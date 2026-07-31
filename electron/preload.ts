@@ -71,6 +71,8 @@ export const nocturneApi: NocturneApi = {
     cancel: (conversationId: string) => ipcRenderer.invoke(channels.ai.cancel, { conversationId }),
     saveAssistant: (conversationId: string, content: string, metadata?: unknown) => ipcRenderer.invoke(channels.ai.saveAssistant, { conversationId, content, metadata }),
     approve: (key: string, accepted: boolean, forSession = false) => ipcRenderer.invoke(channels.ai.approve, { key, accepted, forSession }),
+    rollbackStatus: (conversationId: string) => ipcRenderer.invoke(channels.ai.rollbackStatus, conversationId),
+    rollback: (conversationId: string) => ipcRenderer.invoke(channels.ai.rollback, conversationId),
     onEvent: (listener: (payload: AgentEvent) => void) => on(channels.ai.event, listener),
     onStatus: (listener: (payload: { status: string; conversationId?: string; error?: string }) => void) => on(channels.ai.status, listener),
   },

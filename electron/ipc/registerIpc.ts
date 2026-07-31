@@ -35,6 +35,7 @@ import type { NormalizedTaskInput } from '../../shared/ai/task'
 import { AI_TASK_LIMITS } from '../../shared/ai/task'
 import { buildBrainMemoryContext } from '../memory/BrainMemoryContext'
 import { CodexAccountService } from '../codex/CodexAccountService'
+import { BuildRollbackService } from '../ai/BuildRollbackService'
 
 const execFileAsync = promisify(execFile)
 
@@ -58,6 +59,7 @@ export function registerIpc(
   ipcMain.handle('clipboard:writeText', (_event, value: unknown) => { clipboard.writeText(z.string().max(100_000).parse(value)) })
 
   const approvalDetails = new Map<string, { command?: string; risk?: string }>()
+  const buildRollback = new BuildRollbackService()
   const codexAccount = new CodexAccountService()
   const aiExecutions = new AiExecutionCoordinator(
     win,
@@ -65,7 +67,11 @@ export function registerIpc(
     providerRegistry,
     logger,
     approvalDetails,
-    (snapshot) => persistCompletedTurn(database, snapshot),
+    (snapshot) => {
+      const persisted = persistCompletedTurn(database, snapshot)
+      if (snapshot.mode === 'build') buildRollback.complete(snapshot.conversationId, snapshot.files)
+      return persisted
+    },
     (conversationId, threadId) => database.setConversationCodexThread(conversationId, threadId),
   )
   const codexStatus = async () => {
@@ -229,7 +235,9 @@ export function registerIpc(
 
     if (useCodex) {
       const settings = database.getSettings()
-      await aiExecutions.startCodex({
+      if (mode === 'build') await buildRollback.begin(conversationId, conversation.workspace)
+      try {
+        await aiExecutions.startCodex({
         conversationId,
         workspace: conversation.workspace,
         prompt,
@@ -245,7 +253,11 @@ export function registerIpc(
           diagnosticMode: settings.diagnosticMode === 'true',
           theme: 'dark',
         },
-      })
+        })
+      } catch (error) {
+        if (mode === 'build') buildRollback.abort(conversationId)
+        throw error
+      }
       database.markBrainMemoriesUsed(brainMemory.memoryIds)
       return
     }
@@ -258,6 +270,29 @@ export function registerIpc(
     const { conversationId } = aiCancelSchema.parse(value)
     getAuthorizedConversation(database, conversationId)
     await aiExecutions.cancel(conversationId)
+  })
+
+  ipcMain.handle('ai:rollbackStatus', (_event, value: unknown) => {
+    const conversation = getAuthorizedConversation(database, idSchema.parse(value))
+    return buildRollback.status(conversation.id)
+  })
+  ipcMain.handle('ai:rollback', async (_event, value: unknown) => {
+    const conversation = getAuthorizedConversation(database, idSchema.parse(value))
+    const status = buildRollback.status(conversation.id)
+    if (!status.available) throw new Error(status.reason ?? 'Este Build não pode ser revertido.')
+    const confirmation = await dialog.showMessageBox(win, {
+      type: 'warning',
+      buttons: ['Cancelar', 'Reverter Build'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Reverter alterações do Build',
+      message: `Restaurar ${status.files.length} arquivo(s) para o estado anterior ao Build?`,
+      detail: 'A reversão é limitada aos caminhos reportados pelo agente e exige que o workspace estivesse limpo antes da execução. Revise o diff atual antes de continuar.',
+    })
+    if (confirmation.response !== 1) return null
+    const result = await buildRollback.rollback(conversation.id, conversation.workspace)
+    logger.info('ai', 'Rollback de Build concluído', { conversationId: conversation.id, files: result.restored })
+    return result
   })
 
   ipcMain.handle('ai:save-assistant', (_event, value: unknown) => {

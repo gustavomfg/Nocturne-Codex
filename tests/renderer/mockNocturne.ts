@@ -79,6 +79,8 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
         cancel: noop,
         saveAssistant: async (conversationId: string, content: string) => ({ id: 'saved-message', conversationId, role: 'assistant', content, metadata: null, createdAt: now }),
         approve: noop,
+        rollbackStatus: async () => ({ available: false, files: [], reason: 'Nenhum Build reversível foi registrado nesta conversa.' }),
+        rollback: async () => null,
         onEvent: (listener: (payload: unknown) => void) => { eventListeners.push(listener); return () => { const index = eventListeners.indexOf(listener); if (index >= 0) eventListeners.splice(index, 1) } },
         onStatus: (listener: (payload: unknown) => void) => { statusListeners.push(listener); return () => { const index = statusListeners.indexOf(listener); if (index >= 0) statusListeners.splice(index, 1) } },
       },

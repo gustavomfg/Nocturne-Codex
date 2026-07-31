@@ -563,6 +563,27 @@ test.describe('renderer do produto', () => {
     await expect(page.locator('.product-toast')).toContainText('Commit criado com sucesso.')
   })
 
+  test('oferece rollback somente para um Build reversível', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await ready(page)
+    await page.evaluate(() => {
+      let available = true
+      window.nocturne.ai.rollbackStatus = async () => available
+        ? { available: true, files: ['src/App.tsx'], createdAt: '2026-07-30T20:00:00.000Z' }
+        : { available: false, files: [], reason: 'Rollback concluído.' }
+      window.nocturne.ai.rollback = async () => {
+        available = false
+        return { restored: ['src/App.tsx'] }
+      }
+    })
+    await page.locator('.conversation-open').click()
+    await page.getByRole('tab', { name: 'Atividade' }).click()
+    await page.getByText('Rollback do último Build').click()
+    await page.getByRole('button', { name: 'Reverter alterações' }).click()
+    await expect(page.locator('.product-toast')).toContainText('1 arquivo(s) restaurado(s).')
+    await expect(page.getByRole('button', { name: 'Reverter alterações' })).toHaveCount(0)
+  })
+
   test('mantém falhas de clipboard dentro da solução aberta', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await ready(page)

@@ -1,7 +1,7 @@
 import { useEffect, useState, type KeyboardEvent, type RefObject } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { Activity as ActivityIcon, Check, Command, ExternalLink, Eye, FileCode2, FileDown, FolderOpen, GitBranch, ListChecks, LoaderCircle, PackageOpen, ShieldCheck, Sparkles, Trash2, X } from 'lucide-react'
-import type { Activity, Approval, Artifact, GitInfo, PlanStep, Suggestion, SuggestionStatus } from '../../types'
+import { Activity as ActivityIcon, Check, Command, ExternalLink, Eye, FileCode2, FileDown, FolderOpen, GitBranch, ListChecks, LoaderCircle, PackageOpen, RotateCcw, ShieldCheck, Sparkles, Trash2, X } from 'lucide-react'
+import type { Activity, Approval, Artifact, BuildRollbackStatus, GitInfo, PlanStep, Suggestion, SuggestionStatus } from '../../types'
 import { useAppStore } from '../../store'
 import { errorMessage, relativeTime } from '../../shared/format'
 import { SuggestionsPanel } from '../suggestions/SuggestionsPanel'
@@ -24,6 +24,8 @@ export function AgentPanel({ open: isOpen, compact, triggerRef, gitInfo, artifac
   })))
   const [tab, setTab] = useState<'activity' | 'plan' | 'suggestions' | 'artifacts'>('activity')
   const [exporting, setExporting] = useState<string | null>(null)
+  const [rollback, setRollback] = useState<BuildRollbackStatus | null>(null)
+  const [rollingBack, setRollingBack] = useState(false)
   const inspectorRef = useOffCanvasPanel<HTMLElement>({ open: isOpen, modal: compact, onClose, triggerRef })
   useEffect(() => { if (inspectorRef.current) inspectorRef.current.inert = !isOpen }, [inspectorRef, isOpen])
   const open = async (filePath: string, action: 'file' | 'folder' | 'editor') => { if (!activeId) return; try { await window.nocturne.files.open(activeId, filePath, action); onNotify(action === 'folder' ? 'Pasta do arquivo aberta.' : 'Arquivo aberto com sucesso.') } catch (error) { onError(errorMessage(error)) } }
@@ -44,12 +46,40 @@ export function AgentPanel({ open: isOpen, compact, triggerRef, gitInfo, artifac
   const pendingApprovals = approvals.filter((approval) => approval.status === 'pending')
   const resolvedApprovals = approvals.filter((approval) => approval.status !== 'pending')
   const currentActivity = [...activities].reverse().find((activity) => activity.status === 'running') ?? activities[activities.length - 1]
+  useEffect(() => {
+    let active = true
+    if (!activeId) {
+      setRollback(null)
+      return () => { active = false }
+    }
+    void window.nocturne.ai.rollbackStatus(activeId)
+      .then((status) => { if (active) setRollback(status) })
+      .catch(() => { if (active) setRollback(null) })
+    return () => { active = false }
+  }, [activeId, currentActivity?.status, files.length])
+  const rollbackBuild = async () => {
+    if (!activeId || rollingBack) return
+    setRollingBack(true)
+    try {
+      const result = await window.nocturne.ai.rollback(activeId)
+      if (result) {
+        setRollback(await window.nocturne.ai.rollbackStatus(activeId))
+        onGitRefresh()
+        onNotify(`${result.restored.length} arquivo(s) restaurado(s).`)
+      }
+    } catch (error) {
+      onError(errorMessage(error))
+    } finally {
+      setRollingBack(false)
+    }
+  }
   return <aside id="agent-inspector" ref={inspectorRef} className={`inspector ${isOpen ? 'open' : 'closed'}`} aria-hidden={!isOpen} role={compact && isOpen ? 'dialog' : undefined} aria-modal={compact && isOpen ? true : undefined} aria-label={compact && isOpen ? 'Painel do agente' : undefined} tabIndex={-1}><div className="inspector-header"><div><ActivityIcon size={16}/><strong>Agente</strong></div><span>{activities.some((activity) => activity.status === 'running') ? 'Em execução' : 'Em espera'}</span>{compact && <button className="inspector-close" aria-label="Fechar painel do agente" title="Fechar painel" onClick={onClose}><X size={16}/></button>}</div>
     <div className="inspector-tabs" role="tablist" aria-label="Painel do agente"><button id="agent-tab-activity" role="tab" aria-controls="agent-panel-activity" aria-selected={tab === 'activity'} tabIndex={tab === 'activity' ? 0 : -1} className={tab === 'activity' ? 'active' : ''} onKeyDown={(event) => moveTab(event, 0)} onClick={() => setTab('activity')}><ActivityIcon size={12}/>Atividade</button><button id="agent-tab-plan" role="tab" aria-controls="agent-panel-plan" aria-selected={tab === 'plan'} tabIndex={tab === 'plan' ? 0 : -1} className={tab === 'plan' ? 'active' : ''} onKeyDown={(event) => moveTab(event, 1)} onClick={() => setTab('plan')}><ListChecks size={12}/>Plano{plan.length > 0 && <span className="tab-count">{plan.length}</span>}</button><button id="agent-tab-suggestions" role="tab" aria-controls="agent-panel-suggestions" aria-selected={tab === 'suggestions'} tabIndex={tab === 'suggestions' ? 0 : -1} className={tab === 'suggestions' ? 'active' : ''} onKeyDown={(event) => moveTab(event, 2)} onClick={() => setTab('suggestions')}><ShieldCheck size={12}/>Sugestões{suggestions.length > 0 && <span className="tab-count">{suggestions.length}</span>}</button><button id="agent-tab-artifacts" role="tab" aria-controls="agent-panel-artifacts" aria-selected={tab === 'artifacts'} tabIndex={tab === 'artifacts' ? 0 : -1} className={tab === 'artifacts' ? 'active' : ''} onKeyDown={(event) => moveTab(event, 3)} onClick={() => setTab('artifacts')}><PackageOpen size={12}/>Artefatos{artifacts.length > 0 && <span className="tab-count">{artifacts.length}</span>}</button></div>
     <div className="inspector-scroll">
       {tab === 'activity' && <div id="agent-panel-activity" aria-labelledby="agent-tab-activity" className="tab-panel activity-panel" role="tabpanel">
         {(pendingApprovals.length > 0 || currentActivity) && <div className="activity-priority">{currentActivity && <div className={`current-operation ${currentActivity.status}`} role="status" aria-live="polite"><span>{currentActivity.status === 'running' ? <LoaderCircle size={15}/> : currentActivity.status === 'failed' ? <X size={15}/> : <Check size={15}/>}</span><div><small>Estado atual</small><strong>{currentActivity.label}</strong></div></div>}{pendingApprovals.length > 0 && <section aria-labelledby="pending-approvals-title"><h3 id="pending-approvals-title">Decisões pendentes <span>{pendingApprovals.length}</span></h3>{pendingApprovals.map((approval) => <ApprovalCard key={approval.key} approval={approval} onDecide={onDecide}/>)}</section>}</div>}
         <ActivityTimeline activities={activities}/>
+        {rollback?.createdAt && <details className="activity-section"><summary><RotateCcw size={14}/>Rollback do último Build</summary><div className="document-panel"><p>{rollback.available ? `${rollback.files.length} arquivo(s) podem voltar ao estado anterior à execução.` : rollback.reason}</p><button disabled={!rollback.available || rollingBack} onClick={() => void rollbackBuild()}>{rollingBack ? 'Revertendo…' : 'Reverter alterações'}</button></div></details>}
         {!!files.length && <details className="activity-section" open><summary><FileCode2 size={14}/>Arquivos alterados <span>{files.length}</span></summary><div className="files-panel">{files.slice(-300).map((file) => <div className="changed-file" key={file.path}><span className={`file-kind ${file.kind}`}>{file.kind[0].toUpperCase()}</span><button aria-label={`Visualizar ${file.path}`} onClick={() => onPreview(file.path)}>{file.path.split(/[/\\]/).pop()}</button><button aria-label={`Visualizar ${file.path}`} title="Visualizar" onClick={() => onPreview(file.path)}><Eye size={12}/></button><button aria-label={`Abrir ${file.path} no editor`} title="Abrir no editor" onClick={() => void open(file.path, 'editor')}><ExternalLink size={12}/></button><button aria-label={`Mostrar ${file.path} na pasta`} title="Mostrar na pasta" onClick={() => void open(file.path, 'folder')}><FolderOpen size={12}/></button></div>)}</div></details>}
         {diff && <DiffSection diff={diff}/>}
         {gitInfo && <details className="activity-section"><summary><GitBranch size={14}/>Git e commit</summary><GitPanel activeId={activeId} gitInfo={gitInfo} onRefresh={onGitRefresh} onError={onError} onNotify={onNotify}/></details>}
