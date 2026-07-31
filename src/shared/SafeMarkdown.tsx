@@ -7,6 +7,10 @@ function SafeLink({ href, children }: ComponentProps<'a'>) {
   return external ? <a href={external} target="_blank" rel="noreferrer noopener">{children}</a> : <span className="blocked-markdown-link" title="Link não permitido">{children}</span>
 }
 
+function BlockedImage({ alt }: ComponentProps<'img'>) {
+  return <span className="blocked-markdown-link" title="Imagem Markdown bloqueada">{alt || 'Imagem bloqueada'}</span>
+}
+
 export function SafeMarkdown({ children }: { children: ReactNode }) {
-  return <ReactMarkdown components={{ a: SafeLink }}>{String(children ?? '')}</ReactMarkdown>
+  return <ReactMarkdown components={{ a: SafeLink, img: BlockedImage }}>{String(children ?? '')}</ReactMarkdown>
 }
