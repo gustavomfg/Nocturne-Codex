@@ -35,6 +35,10 @@ export function registerKnowledgeIpc(win: BrowserWindow, database: LocalDatabase
     const data = brainMemoryPageSchema.parse(value); const workspace = dependencies.authorizedWorkspace(data.conversationId)
     return database.listBrainMemoryPage(workspace, data.offset, data.limit, data.query, data.status)
   })
+  ipcMain.handle('brain:history', (_event, value: unknown) => {
+    const data = brainMemoryDeleteSchema.parse(value); const workspace = dependencies.authorizedWorkspace(data.conversationId)
+    return database.listBrainMemoryHistory(data.memoryId, workspace)
+  })
   ipcMain.handle('brain:create', (_event, value: unknown) => {
     const data = brainMemoryCreateSchema.parse(value); const workspace = dependencies.authorizedWorkspace(data.conversationId)
     const memory = database.createBrainMemory(workspace, { kind: data.kind, scope: data.scope, content: data.content, conversationId: data.scope === 'conversation' ? data.conversationId : undefined, sourceType: 'manual', status: 'candidate' })

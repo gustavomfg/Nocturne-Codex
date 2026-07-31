@@ -37,6 +37,7 @@ a restauração falhar, eles voltam aos caminhos originais.
 | 12 | Associação persistente e limitada entre conversa e thread retomável do Codex |
 | 13 | Evidências, confiança, origem e responsável das sugestões de Review |
 | 14 | Ciclo de vida completo e histórico consultável das sugestões |
+| 15 | Histórico auditável do ciclo de vida das memórias do Segundo Cérebro |
 
 As migrações são progressivas. Reversão para uma versão antiga do aplicativo
 deve usar um backup criado por essa versão; não se remove schema novo

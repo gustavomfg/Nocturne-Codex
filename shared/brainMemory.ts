@@ -7,6 +7,18 @@ export type BrainMemoryKind = typeof brainMemoryKinds[number]
 export type BrainMemoryScope = typeof brainMemoryScopes[number]
 export type BrainMemoryStatus = typeof brainMemoryStatuses[number]
 export type BrainMemorySource = typeof brainMemorySources[number]
+export const brainMemoryHistoryActions = ['created', 'edited', 'approved', 'disapproved', 'marked-outdated', 'archived', 'restored'] as const
+export type BrainMemoryHistoryAction = typeof brainMemoryHistoryActions[number]
+
+export interface BrainMemoryHistoryEntry {
+  id: string
+  memoryId: string
+  action: BrainMemoryHistoryAction
+  fromStatus: BrainMemoryStatus | null
+  toStatus: BrainMemoryStatus
+  summary: string
+  createdAt: string
+}
 
 export interface BrainMemory {
   id: string

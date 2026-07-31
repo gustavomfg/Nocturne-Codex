@@ -1,11 +1,12 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
-import { Archive, Brain, Check, Pencil, Plus, RotateCcw, Search, ShieldCheck, Sparkles, Trash2, X } from 'lucide-react'
-import type { BrainMemory, BrainMemoryKind, BrainMemoryScope, BrainMemoryStatus } from '../../../shared/brainMemory'
+import { Archive, Brain, Check, History, Pencil, Plus, RotateCcw, Search, ShieldCheck, Sparkles, Trash2, X } from 'lucide-react'
+import type { BrainMemory, BrainMemoryHistoryEntry, BrainMemoryKind, BrainMemoryScope, BrainMemoryStatus } from '../../../shared/brainMemory'
 import { errorMessage, relativeTime } from '../../shared/format'
 import { useDialogA11y } from '../../shared/useDialogA11y'
 
 const kindLabels: Record<BrainMemoryKind, string> = { fact: 'Fato', decision: 'Decisão', preference: 'Preferência', constraint: 'Restrição', learning: 'Aprendizado' }
 const statusLabels: Record<BrainMemoryStatus, string> = { candidate: 'Candidata', active: 'Ativa', outdated: 'Desatualizada', archived: 'Arquivada' }
+const historyLabels: Record<BrainMemoryHistoryEntry['action'], string> = { created: 'Criada', edited: 'Editada', approved: 'Aprovada', disapproved: 'Desaprovada', 'marked-outdated': 'Desatualizada', archived: 'Arquivada', restored: 'Restaurada' }
 
 export function BrainMemoryDialog({ conversationId, onClose, onNotify }: { conversationId: string; onClose(): void; onNotify(message: string): void }) {
   const [items, setItems] = useState<BrainMemory[]>([])
@@ -23,6 +24,9 @@ export function BrainMemoryDialog({ conversationId, onClose, onNotify }: { conve
   const [editContent, setEditContent] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [mobileView, setMobileView] = useState<'library' | 'create'>('library')
+  const [history, setHistory] = useState<Record<string, BrainMemoryHistoryEntry[]>>({})
+  const [historyOpen, setHistoryOpen] = useState<string | null>(null)
+  const [historyLoading, setHistoryLoading] = useState<string | null>(null)
   const dialogRef = useDialogA11y<HTMLDivElement>(onClose)
 
   const load = useCallback(async (offset = 0, append = false) => {
@@ -55,6 +59,16 @@ export function BrainMemoryDialog({ conversationId, onClose, onNotify }: { conve
     try { await window.nocturne.brain.delete(conversationId, memory.id); setConfirmDelete(null); await load(); onNotify('Memória excluída definitivamente.') }
     catch (deleteError) { setError(errorMessage(deleteError)) } finally { setSaving(false) }
   }
+  const toggleHistory = async (memory: BrainMemory) => {
+    if (historyOpen === memory.id) { setHistoryOpen(null); return }
+    setHistoryOpen(memory.id)
+    if (history[memory.id]) return
+    setHistoryLoading(memory.id); setError(null)
+    try {
+      const entries = await window.nocturne.brain.history(conversationId, memory.id)
+      setHistory((current) => ({ ...current, [memory.id]: entries }))
+    } catch (historyError) { setError(errorMessage(historyError)) } finally { setHistoryLoading(null) }
+  }
 
   const candidateCount = items.filter((memory) => memory.status === 'candidate').length
   return <div className="modal-backdrop" onMouseDown={onClose}><div ref={dialogRef} className="settings-dialog brain-dialog" role="dialog" aria-modal="true" aria-labelledby="brain-title" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
@@ -75,15 +89,19 @@ export function BrainMemoryDialog({ conversationId, onClose, onNotify }: { conve
         {loading && !items.length && <div className="brain-skeletons" role="status" aria-label="Carregando memórias"><span/><span/><span/></div>}
         {!loading && !items.length && <div className="brain-empty"><span><Brain size={25}/></span><strong>{search || filter !== 'all' ? 'Nenhuma correspondência' : 'Seu Segundo Cérebro está vazio'}</strong><small>{search || filter !== 'all' ? 'Ajuste a busca ou escolha outro estado.' : 'Crie uma candidata para começar a construir memória durável.'}</small><button onClick={() => setMobileView('create')}><Plus size={14}/>Criar primeira memória</button></div>}
         <div className={`brain-list ${loading ? 'is-refreshing' : ''}`}>{items.map((memory) => <article className={`brain-card ${memory.status}`} key={memory.id}>
-          <div className="brain-card-top"><div className="brain-card-meta"><span>{kindLabels[memory.kind]}</span><span>{memory.scope === 'workspace' ? 'Workspace' : 'Conversa'}</span><span className="brain-source">{memory.sourceType === 'agent' ? 'Proposta pelo agente' : 'Criada por você'}</span></div><span className={`brain-status ${memory.status}`}>{statusLabels[memory.status]}</span></div>
+          <div className="brain-card-top"><div className="brain-card-meta"><span>{kindLabels[memory.kind]}</span><span>{memory.scope === 'workspace' ? 'Workspace' : 'Conversa'}</span><span className="brain-source">{memory.sourceType === 'agent' ? 'Proposta pelo agente' : memory.sourceType === 'message' ? 'Extraída de mensagem' : 'Criada por você'}</span></div><span className={`brain-status ${memory.status}`}>{statusLabels[memory.status]}</span></div>
           {editing === memory.id ? <div className="brain-edit"><label><span className="sr-only">Editar memória</span><textarea value={editContent} onChange={(event) => setEditContent(event.target.value)} maxLength={8_000}/></label><div><button disabled={saving} onClick={() => setEditing(null)}>Cancelar</button><button className="primary" disabled={saving || !editContent.trim()} onClick={() => void update(memory, { content: editContent.trim() }, 'Memória atualizada.')}>Salvar edição</button></div></div> : <p className="brain-card-content">{memory.content}</p>}
           <div className="brain-confidence" aria-label={`${memory.confidence}% de confiança`}><span><i style={{ width: `${memory.confidence}%` }}/></span><small>{memory.confidence}% confiança</small></div>
-          <footer><small>Atualizada {relativeTime(memory.updatedAt)} · usada {memory.useCount} vez(es)</small><div className="brain-card-actions">
+          <div className="brain-audit-summary"><small>Criada em {new Date(memory.createdAt).toLocaleString('pt-BR')} · atualizada {relativeTime(memory.updatedAt)} · usada {memory.useCount} vez(es)</small><button aria-expanded={historyOpen === memory.id} onClick={() => void toggleHistory(memory)}><History size={13}/>{historyOpen === memory.id ? 'Ocultar histórico' : 'Ver histórico'}</button></div>
+          {historyOpen === memory.id && <div className="brain-history" aria-label="Histórico da memória">{historyLoading === memory.id ? <small>Carregando histórico…</small> : (history[memory.id] ?? []).map((entry) => <div key={entry.id}><span/><p><strong>{historyLabels[entry.action]}</strong><small>{entry.summary} · {new Date(entry.createdAt).toLocaleString('pt-BR')}</small></p></div>)}</div>}
+          <footer><div className="brain-card-actions">
             {editing !== memory.id && <button disabled={saving} aria-label="Editar memória" title="Editar" onClick={() => { setEditing(memory.id); setEditContent(memory.content) }}><Pencil size={14}/></button>}
             {memory.status === 'candidate' && <button disabled={saving} className="success" onClick={() => void update(memory, { status: 'active' }, 'Memória aprovada e ativada.')}><Check size={14}/>Aprovar</button>}
+            {memory.status === 'candidate' && <button disabled={saving} onClick={() => void update(memory, { status: 'archived' }, 'Candidata desaprovada.')}><X size={14}/>Desaprovar</button>}
             {memory.status === 'active' && <button disabled={saving} onClick={() => void update(memory, { status: 'outdated' }, 'Memória marcada como desatualizada.')}><RotateCcw size={14}/>Desatualizar</button>}
-            {(memory.status === 'outdated' || memory.status === 'archived') && <button disabled={saving} onClick={() => void update(memory, { status: 'active' }, 'Memória reativada.')}><RotateCcw size={14}/>Reativar</button>}
-            {memory.status !== 'archived' && <button disabled={saving} onClick={() => void update(memory, { status: 'archived' }, 'Memória arquivada.')}><Archive size={14}/>Arquivar</button>}
+            {memory.status === 'outdated' && <button disabled={saving} onClick={() => void update(memory, { status: 'active' }, 'Memória reativada.')}><RotateCcw size={14}/>Reativar</button>}
+            {memory.status === 'archived' && <button disabled={saving} onClick={() => void update(memory, { status: 'active' }, 'Memória restaurada.')}><RotateCcw size={14}/>Restaurar</button>}
+            {(memory.status === 'active' || memory.status === 'outdated') && <button disabled={saving} onClick={() => void update(memory, { status: 'archived' }, 'Memória arquivada.')}><Archive size={14}/>Arquivar</button>}
             {memory.status === 'archived' && <button disabled={saving} className="danger" onClick={() => void remove(memory)}><Trash2 size={14}/>{confirmDelete === memory.id ? 'Confirmar exclusão' : 'Excluir'}</button>}
           </div></footer>
         </article>)}</div>

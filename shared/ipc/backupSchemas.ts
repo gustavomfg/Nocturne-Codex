@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { suggestionStatuses } from '../suggestions'
 import { BACKUP_LIMITS } from './backupLimits'
 import { DATABASE_SCHEMA_VERSION } from '../constants'
-import { isSafeBrainMemoryContent } from '../brainMemory'
+import { brainMemoryHistoryActions, isSafeBrainMemoryContent } from '../brainMemory'
 import { modelDescriptorSchema } from '../ai/modelSchemas'
 import { workspaceModelBindingsSchema } from '../ai/bindingSchemas'
 
@@ -17,6 +17,7 @@ const message = z.object({ id: uuid, conversation_id: uuid, role: z.enum(['user'
 const artifact = z.object({ id: uuid, conversation_id: uuid, workspace: pathValue, type: z.string().min(1).max(50), title: z.string().min(1).max(500), file_path: pathValue.nullable().default(null), content: z.string().max(2_000_000).nullable().default(null), metadata: jsonText(500_000).nullable().default(null), created_at: timestamp, updated_at: timestamp }).strict()
 const memory = z.object({ workspace: pathValue, content: z.string().max(50_000), updated_at: timestamp }).strict()
 const brainMemory = z.object({ id: uuid, workspace_id: pathValue, conversation_id: uuid.nullable().default(null), kind: z.enum(['fact', 'decision', 'preference', 'constraint', 'learning']), scope: z.enum(['workspace', 'conversation']), status: z.enum(['candidate', 'active', 'outdated', 'archived']), content: z.string().trim().min(1).max(8_000).refine(isSafeBrainMemoryContent, 'A memória parece conter uma credencial.'), confidence: z.number().int().min(0).max(100), source_type: z.enum(['manual', 'message', 'agent']), source_id: z.string().max(500).nullable().default(null), created_at: timestamp, updated_at: timestamp, last_confirmed_at: timestamp.nullable().default(null), last_used_at: timestamp.nullable().default(null), use_count: z.number().int().min(0).default(0) }).strict()
+const brainMemoryHistoryEntry = z.object({ id: z.string().min(1).max(500), memory_id: uuid, action: z.enum(brainMemoryHistoryActions), from_status: z.enum(['candidate', 'active', 'outdated', 'archived']).nullable(), to_status: z.enum(['candidate', 'active', 'outdated', 'archived']), summary: z.string().min(1).max(500), created_at: timestamp }).strict()
 const persistedSuggestionStatus = z.enum([...suggestionStatuses, 'pending', 'applied']).transform((status) =>
   status === 'pending' ? 'new' as const : status === 'applied' ? 'resolved' as const : status,
 )
@@ -41,8 +42,8 @@ const workspaceModelBinding = z.object({ workspace_id: pathValue, bindings: json
 })
 const settings = z.object({ model: z.string().max(100).optional(), sandbox: z.enum(['read-only', 'workspace-write']).optional(), approvalPolicy: z.enum(['untrusted', 'on-request']).optional(), diagnosticMode: z.enum(['true', 'false']).optional(), theme: z.literal('dark').optional() }).strict()
 
-export const backupSchema = z.object({ schemaVersion: z.number().int().min(1).max(DATABASE_SCHEMA_VERSION), exportedAt: timestamp.optional(), conversations: z.array(conversation).max(25_000), workspaces: z.array(workspace).max(5_000), messages: z.array(message).max(100_000), artifacts: z.array(artifact).max(50_000), memories: z.array(memory).max(5_000), brainMemories: z.array(brainMemory).max(50_000).default([]), suggestions: z.array(suggestion).max(25_000).default([]), suggestionDecisions: z.array(decision).max(50_000).default([]), providerConfigs: z.array(providerConfig).max(1_000).default([]), modelCatalog: z.array(modelCatalogItem).max(25_000).default([]), workspaceModelBindings: z.array(workspaceModelBinding).max(5_000).default([]), settings: settings.optional() }).strict().superRefine((data, context) => {
-  const totalRecords = data.conversations.length + data.workspaces.length + data.messages.length + data.artifacts.length + data.memories.length + data.brainMemories.length + data.suggestions.length + data.suggestionDecisions.length + data.providerConfigs.length + data.modelCatalog.length + data.workspaceModelBindings.length
+export const backupSchema = z.object({ schemaVersion: z.number().int().min(1).max(DATABASE_SCHEMA_VERSION), exportedAt: timestamp.optional(), conversations: z.array(conversation).max(25_000), workspaces: z.array(workspace).max(5_000), messages: z.array(message).max(100_000), artifacts: z.array(artifact).max(50_000), memories: z.array(memory).max(5_000), brainMemories: z.array(brainMemory).max(50_000).default([]), brainMemoryHistory: z.array(brainMemoryHistoryEntry).max(100_000).default([]), suggestions: z.array(suggestion).max(25_000).default([]), suggestionDecisions: z.array(decision).max(50_000).default([]), providerConfigs: z.array(providerConfig).max(1_000).default([]), modelCatalog: z.array(modelCatalogItem).max(25_000).default([]), workspaceModelBindings: z.array(workspaceModelBinding).max(5_000).default([]), settings: settings.optional() }).strict().superRefine((data, context) => {
+  const totalRecords = data.conversations.length + data.workspaces.length + data.messages.length + data.artifacts.length + data.memories.length + data.brainMemories.length + data.brainMemoryHistory.length + data.suggestions.length + data.suggestionDecisions.length + data.providerConfigs.length + data.modelCatalog.length + data.workspaceModelBindings.length
   if (totalRecords > BACKUP_LIMITS.maxRecords) context.addIssue({ code: 'custom', message: `O backup excede o limite agregado de ${new Intl.NumberFormat('pt-BR').format(BACKUP_LIMITS.maxRecords)} registros.` })
   const conversations = new Set(data.conversations.map((item) => item.id))
   const workspaces = new Set(data.workspaces.map((item) => item.path))
@@ -54,6 +55,7 @@ export const backupSchema = z.object({ schemaVersion: z.number().int().min(1).ma
     ['artifacts', data.artifacts.map((item) => item.id)],
     ['memories', data.memories.map((item) => item.workspace)],
     ['brainMemories', data.brainMemories.map((item) => item.id)],
+    ['brainMemoryHistory', data.brainMemoryHistory.map((item) => item.id)],
     ['suggestions', data.suggestions.map((item) => item.id)],
     ['suggestionDecisions', data.suggestionDecisions.map((item) => item.id)],
     ['providerConfigs', data.providerConfigs.map((item) => item.id)],
@@ -71,6 +73,8 @@ export const backupSchema = z.object({ schemaVersion: z.number().int().min(1).ma
     if (item.scope === 'conversation' && (!item.conversation_id || !conversations.has(item.conversation_id))) context.addIssue({ code: 'custom', path: ['brainMemories', index, 'conversation_id'], message: 'Memória da conversa referencia uma conversa inexistente.' })
     if (item.scope === 'workspace' && item.conversation_id) context.addIssue({ code: 'custom', path: ['brainMemories', index, 'conversation_id'], message: 'Memória do workspace não pode referenciar uma conversa.' })
   }
+  const brainMemories = new Set(data.brainMemories.map((item) => item.id))
+  for (const [index, item] of data.brainMemoryHistory.entries()) if (!brainMemories.has(item.memory_id)) context.addIssue({ code: 'custom', path: ['brainMemoryHistory', index, 'memory_id'], message: 'Histórico referencia uma memória inexistente.' })
   for (const [index, item] of data.suggestions.entries()) { if (!conversations.has(item.conversation_id)) context.addIssue({ code: 'custom', path: ['suggestions', index, 'conversation_id'], message: 'Conversa referenciada não existe no backup.' }); if (!workspaces.has(item.workspace_id)) context.addIssue({ code: 'custom', path: ['suggestions', index, 'workspace_id'], message: 'Workspace referenciado não existe no backup.' }) }
   for (const [index, item] of data.suggestionDecisions.entries()) if (!suggestions.has(item.suggestion_id)) context.addIssue({ code: 'custom', path: ['suggestionDecisions', index, 'suggestion_id'], message: 'Sugestão referenciada não existe no backup.' })
 })

@@ -101,6 +101,10 @@ export async function installNocturneMock(page: Page, options: { empty?: boolean
           const filtered = brainMemories.filter((item) => (!status || item.status === status) && (!normalized || item.content.toLocaleLowerCase().includes(normalized)))
           return { items: filtered.slice(offset, offset + limit), hasMore: filtered.length > offset + limit }
         },
+        history: async (_id: string, memoryId: string) => {
+          const memory = brainMemories.find((item) => item.id === memoryId)
+          return memory ? [{ id: `history-${memory.id}`, memoryId: memory.id, action: 'created' as const, fromStatus: null, toStatus: memory.status, summary: 'Memória criada manualmente.', createdAt: memory.createdAt }] : []
+        },
         create: async (_id: string, value: Pick<MockBrainMemory, 'kind' | 'scope' | 'content'>) => {
           const memory: MockBrainMemory = { id: `brain-${brainMemories.length + 1}`, workspaceId: workspace, conversationId: value.scope === 'conversation' ? conversation.id : null, ...value, status: 'candidate', confidence: 70, sourceType: 'manual', sourceId: null, createdAt: now, updatedAt: now, lastConfirmedAt: null, lastUsedAt: null, useCount: 0 }
           brainMemories = [memory, ...brainMemories]; return memory

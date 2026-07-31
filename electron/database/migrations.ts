@@ -136,6 +136,23 @@ export const migrations: Migration[] = [
       UPDATE suggestion_decisions SET status='resolved' WHERE status='applied';
     `)
   } },
+  { version: 15, up: (db) => db.exec(`
+    CREATE TABLE IF NOT EXISTS brain_memory_history (
+      id TEXT PRIMARY KEY,
+      memory_id TEXT NOT NULL,
+      action TEXT NOT NULL CHECK(action IN ('created','edited','approved','disapproved','marked-outdated','archived','restored')),
+      from_status TEXT CHECK(from_status IS NULL OR from_status IN ('candidate','active','outdated','archived')),
+      to_status TEXT NOT NULL CHECK(to_status IN ('candidate','active','outdated','archived')),
+      summary TEXT NOT NULL CHECK(length(summary) BETWEEN 1 AND 500),
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (memory_id) REFERENCES brain_memories(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_brain_memory_history_memory
+      ON brain_memory_history(memory_id, created_at DESC);
+    INSERT OR IGNORE INTO brain_memory_history(id,memory_id,action,from_status,to_status,summary,created_at)
+      SELECT 'created-' || id,id,'created',NULL,status,'Memória existente incorporada ao histórico.',created_at
+      FROM brain_memories;
+  `) },
 ]
 
 export function migrateDatabase(db: Database.Database, currentVersion: number, availableMigrations: Migration[] = migrations) {
