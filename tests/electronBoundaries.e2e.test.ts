@@ -18,6 +18,7 @@ const electron = vi.hoisted(() => {
   const dialogs = {
     open: [] as Array<{ canceled: boolean; filePaths: string[] }>,
     save: [] as Array<{ canceled: boolean; filePath?: string }>,
+    message: [] as Array<{ response: number }>,
   }
   let exposed: NocturneApi | null = null
   let clipboardText = ''
@@ -47,7 +48,7 @@ vi.mock('electron', () => ({
   dialog: {
     showOpenDialog: vi.fn(async () => electron.dialogs.open.shift() ?? { canceled: true, filePaths: [] }),
     showSaveDialog: vi.fn(async () => electron.dialogs.save.shift() ?? { canceled: true }),
-    showMessageBox: vi.fn(async () => ({ response: 1 })),
+    showMessageBox: vi.fn(async () => electron.dialogs.message.shift() ?? { response: 1 }),
   },
   ipcMain: {
     handle: (channel: string, handler: IpcHandler) => {
@@ -333,6 +334,27 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     const current = await api.settings.get()
     expect(current.model).toBe('gpt-5')
     expect(current.diagnosticMode).toBe(true)
+  })
+
+  it('exporta backup atômico com formato e checksum verificáveis', async () => {
+    const destination = path.join(root, 'verified-backup.json')
+    electron.dialogs.message.push({ response: 0 })
+    electron.dialogs.save.push({ canceled: false, filePath: destination })
+
+    await expect(api.data.export()).resolves.toBe(destination)
+
+    const exported = JSON.parse(fs.readFileSync(destination, 'utf8')) as {
+      format: string
+      formatVersion: number
+      integrity: { algorithm: string; checksum: string }
+    }
+    expect(exported).toMatchObject({
+      format: 'nocturne-studio-backup',
+      formatVersion: 1,
+      integrity: { algorithm: 'sha256', checksum: expect.stringMatching(/^[a-f0-9]{64}$/) },
+    })
+    expect(fs.statSync(destination).mode & 0o777).toBe(0o600)
+    expect(fs.readdirSync(root).some((name) => name.startsWith('verified-backup.json.tmp-'))).toBe(false)
   })
 
   it('rejeita credenciais em backup e remove codexPath das settings importadas', async () => {

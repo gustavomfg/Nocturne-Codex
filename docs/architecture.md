@@ -46,6 +46,10 @@ também é mantido em `.nocturne/` com escrita atômica. O processo principal
 mantém no máximo um observador nativo para o workspace ativo. Mudanças são
 agrupadas, limitadas e enviadas por um canal nomeado do preload; a interface
 atualiza o estado Git e recarrega memória/regras quando esses arquivos mudam.
+Backups exportados usam um envelope versionado com SHA-256 sobre os dados e são
+gravados por arquivo temporário seguido de substituição atômica. A importação
+continua aceitando o JSON legado, mas exige checksum válido no formato novo
+antes da validação relacional e de qualquer alteração no banco.
 
 O Segundo Cérebro injeta somente memórias aprovadas e relevantes, sempre
 marcadas como potencialmente desatualizadas e serializadas como dados não

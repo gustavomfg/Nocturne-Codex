@@ -1,5 +1,6 @@
 import { dialog, type BrowserWindow } from 'electron'
 import fs from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import type { LocalDatabase } from '../database/Database'
 import type { Logger } from '../logging/Logger'
@@ -19,11 +20,11 @@ export function registerDataIpc(win: BrowserWindow, database: LocalDatabase, log
     const startedAt = performance.now()
     const metrics = database.getExportMetrics()
     assertBackupMetrics(metrics.records, metrics.estimatedBytes)
-    const exported = database.exportData()
+    const exported = backupSchema.parse(database.exportData())
     assertBackupRecordLimit(exported)
     const serialized = await serializeBackupInWorker(exported)
     assertBackupByteLimit(Buffer.byteLength(serialized, 'utf8'))
-    await fs.promises.writeFile(result.filePath, serialized, { encoding: 'utf8', mode: 0o600 })
+    await atomicWriteBackup(result.filePath, serialized)
     logger.info('persistence', 'Dados exportados', { bytes: Buffer.byteLength(serialized), durationMs: Math.round(performance.now() - startedAt) })
     return result.filePath
   })
@@ -45,4 +46,21 @@ export function registerDataIpc(win: BrowserWindow, database: LocalDatabase, log
     return true
   })
   return () => ipcMain.dispose()
+}
+
+async function atomicWriteBackup(destination: string, content: string) {
+  const temporary = `${destination}.tmp-${process.pid}-${randomUUID()}`
+  let handle: fs.promises.FileHandle | null = null
+  try {
+    handle = await fs.promises.open(temporary, 'wx', 0o600)
+    await handle.writeFile(content, 'utf8')
+    await handle.sync()
+    await handle.close()
+    handle = null
+    await fs.promises.rename(temporary, destination)
+  } catch (error) {
+    await handle?.close().catch(() => undefined)
+    await fs.promises.unlink(temporary).catch(() => undefined)
+    throw error
+  }
 }

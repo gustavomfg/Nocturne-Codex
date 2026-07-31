@@ -6,7 +6,7 @@ import { performance } from 'node:perf_hooks'
 import { afterEach, describe, expect, it } from 'vitest'
 import { backupSchema } from '../shared/ipc/backupSchemas'
 import { assertBackupByteLimit, assertBackupRecordLimit, BACKUP_LIMITS, countBackupRecords, PERSISTENCE_PERFORMANCE_BUDGETS } from '../shared/ipc/backupLimits'
-import { parseBackupInWorker, serializeBackupInWorker } from '../electron/ipc/backupWorkers'
+import { BACKUP_FILE_FORMAT, parseBackupInWorker, serializeBackupInWorker } from '../electron/ipc/backupWorkers'
 
 const now = new Date().toISOString()
 const workspace = { path: '/tmp/project', name: 'project', favorite: 0 as const, created_at: now, last_opened_at: now }
@@ -111,9 +111,31 @@ describe('schema de backup', () => {
     temporaryFiles.push(file)
     const startedAt = performance.now()
     const serialized = await serializeBackupInWorker({ messages: new Array(PERSISTENCE_PERFORMANCE_BUDGETS.workerRoundTripRecords).fill(null) })
+    expect(JSON.parse(serialized)).toMatchObject({
+      format: BACKUP_FILE_FORMAT,
+      formatVersion: 1,
+      integrity: { algorithm: 'sha256', checksum: expect.stringMatching(/^[a-f0-9]{64}$/) },
+    })
     fs.writeFileSync(file, serialized)
     const parsed = await parseBackupInWorker(file) as { messages: unknown[] }
     expect(parsed.messages).toHaveLength(PERSISTENCE_PERFORMANCE_BUDGETS.workerRoundTripRecords)
     expect(performance.now() - startedAt).toBeLessThan(PERSISTENCE_PERFORMANCE_BUDGETS.workerRoundTripMs)
   }, 10_000)
+
+  it('rejeita backup verificável alterado e mantém compatibilidade com o formato legado', async () => {
+    const verifiedFile = path.join(os.tmpdir(), `nocturne-backup-verified-${randomUUID()}.json`)
+    const legacyFile = path.join(os.tmpdir(), `nocturne-backup-legacy-${randomUUID()}.json`)
+    temporaryFiles.push(verifiedFile, legacyFile)
+    const serialized = await serializeBackupInWorker(valid())
+    const tampered = JSON.parse(serialized) as { data: { conversations: Array<{ title: string }> } }
+    tampered.data.conversations[0].title = 'Conteúdo alterado'
+    fs.writeFileSync(verifiedFile, JSON.stringify(tampered))
+    fs.writeFileSync(legacyFile, JSON.stringify(valid()))
+
+    await expect(parseBackupInWorker(verifiedFile)).rejects.toThrow(/checksum/)
+    await expect(parseBackupInWorker(legacyFile)).resolves.toMatchObject({
+      schemaVersion: 5,
+      conversations: [{ id: conversation.id }],
+    })
+  })
 })
