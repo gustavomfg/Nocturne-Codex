@@ -162,6 +162,7 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
   let api: NocturneApi
   let database: Awaited<ReturnType<typeof createDatabase>> | null = null
   let disposeIpc: (() => void) | null = null
+  let reinstallIpc: (() => () => void) | null = null
   let root: string
   const electronMock = electron
 
@@ -188,15 +189,16 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     const testProviderRegistry = new ProviderRegistry()
 
     const mockBrowserWindow = { webContents: electronMock.mainWebContents }
-    disposeIpc = registerIpc(
+    reinstallIpc = () => registerIpc(
       mockBrowserWindow as never,
-      database,
+      database!,
       logger,
       providers as never,
       simulatedModelCatalog as never,
       testModelRegistry,
       testProviderRegistry,
     )
+    disposeIpc = reinstallIpc()
     await import('../electron/preload')
     if (!electron.exposed) throw new Error('O preload não expôs window.nocturne.')
     api = electron.exposed
@@ -437,6 +439,19 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     expect((await api.settings.get()).model).toBe('gpt-5')
     expect((await api.workspace.list())[0]).toMatchObject({ path: root, authorized: false })
     expect(fs.readdirSync(path.join(root, 'backups')).some((name) => name.startsWith('nocturne-before-restore-'))).toBe(true)
+  })
+
+  it('descarta e registra novamente todos os handlers ao recriar a janela', async () => {
+    const registeredHandlers = electronMock.handlers.size
+    expect(registeredHandlers).toBeGreaterThan(0)
+
+    disposeIpc?.()
+    disposeIpc = null
+    expect(electronMock.handlers.size).toBe(0)
+
+    disposeIpc = reinstallIpc?.() ?? null
+    expect(electronMock.handlers.size).toBe(registeredHandlers)
+    await expect(api.clipboard.writeText('handler reaberto')).resolves.toBeUndefined()
   })
 })
 

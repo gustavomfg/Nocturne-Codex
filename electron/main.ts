@@ -47,11 +47,20 @@ let providerRegistry: ProviderRegistry | null = null
 let modelRegistry: ModelRegistry | null = null
 let modelCatalog: ModelCatalogService | null = null
 
+function disposeWindowIpc() {
+  disposeIpc?.()
+  disposeIpc = null
+}
+
 process.on('uncaughtException', (error) => { logger?.error('app', 'uncaughtException no processo principal', error); console.error(error) })
 process.on('unhandledRejection', (reason) => { logger?.error('app', 'unhandledRejection no processo principal', reason); console.error(reason) })
 
 function createWindow() {
   if (!database || !logger || !providerConfigurations || !modelRegistry || !providerRegistry || !modelCatalog) throw new Error('Serviços do Nocturne não foram inicializados.')
+  if (win?.isDestroyed()) {
+    disposeWindowIpc()
+    win = null
+  }
   const rendererUrl = VITE_DEV_SERVER_URL || new URL(`file://${path.join(RENDERER_DIST, 'index.html')}`).toString()
   const currentWindow = new BrowserWindow({
     width: 1440, height: 920, minWidth: 720, minHeight: 600,
@@ -118,8 +127,7 @@ function createWindow() {
   currentWindow.webContents.on('responsive', () => logger?.info('app', 'Renderer voltou a responder'))
   currentWindow.on('closed', () => {
     if (win !== currentWindow) return
-    disposeIpc?.()
-    disposeIpc = null
+    disposeWindowIpc()
     win = null
   })
   if (VITE_DEV_SERVER_URL) void currentWindow.loadURL(rendererUrl)
@@ -252,7 +260,7 @@ app.on('second-instance', () => {
 app.on('before-quit', () => {
   logger?.info('app', 'Encerrando aplicação')
   disposeUpdates?.(); disposeUpdates = null
-  disposeIpc?.(); disposeIpc = null
+  disposeWindowIpc()
   void providerRegistry?.dispose()
   providerRegistry = null
   providerConfigurations = null

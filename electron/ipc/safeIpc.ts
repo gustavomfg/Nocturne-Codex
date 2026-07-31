@@ -28,8 +28,10 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
 export function safeIpcMain(win: BrowserWindow) {
   const channels = new Set<string>()
   const callLog = new Map<string, number[]>()
+  let disposed = false
   return {
     handle(channel: string, handler: Handler) {
+      if (disposed) throw new Error('O registro de handlers IPC já foi descartado.')
       if (channels.has(channel)) throw new Error(`Handler IPC duplicado: ${channel}.`)
       ipcMain.handle(channel, (event, ...args) => {
         const trustedContents = win.webContents
@@ -55,6 +57,8 @@ export function safeIpcMain(win: BrowserWindow) {
       channels.add(channel)
     },
     dispose() {
+      if (disposed) return
+      disposed = true
       for (const channel of channels) ipcMain.removeHandler(channel)
       channels.clear()
       callLog.clear()
