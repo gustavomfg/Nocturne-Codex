@@ -54,6 +54,8 @@ A restauração sempre cria primeiro um snapshot local. O modo completo substitu
 todo o estado exportável; o modo parcial substitui somente projetos, conversas,
 artefatos, sugestões e memórias, preservando Providers, catálogo de modelos e
 preferências desta instalação.
+O histórico e a política operacional das migrações estão em
+[`database-migrations.md`](database-migrations.md).
 
 O Segundo Cérebro injeta somente memórias aprovadas e relevantes, sempre
 marcadas como potencialmente desatualizadas e serializadas como dados não

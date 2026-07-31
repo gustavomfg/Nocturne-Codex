@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 
-interface Migration { version: number; up(db: Database.Database): void }
+export interface Migration { version: number; up(db: Database.Database): void }
 
 const hasColumn = (db: Database.Database, table: string, column: string) =>
   (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).some((item) => item.name === column)
@@ -119,12 +119,15 @@ export const migrations: Migration[] = [
   } },
 ]
 
-export function migrateDatabase(db: Database.Database, currentVersion: number) {
-  // Builds antigos podiam marcar v1 após criar apenas conversations. A etapa
-  // inicial é idempotente e também repara esse snapshot legado incompleto.
-  if (currentVersion > 0) db.transaction(() => migrations[0].up(db))()
-  for (const migration of migrations) {
-    if (migration.version <= currentVersion) continue
-    db.transaction(() => { migration.up(db); db.pragma(`user_version = ${migration.version}`) })()
-  }
+export function migrateDatabase(db: Database.Database, currentVersion: number, availableMigrations: Migration[] = migrations) {
+  db.transaction(() => {
+    // Builds antigos podiam marcar v1 após criar apenas conversations. A etapa
+    // inicial é idempotente e também repara esse snapshot legado incompleto.
+    if (currentVersion > 0) migrations[0].up(db)
+    for (const migration of availableMigrations) {
+      if (migration.version <= currentVersion) continue
+      migration.up(db)
+      db.pragma(`user_version = ${migration.version}`)
+    }
+  })()
 }

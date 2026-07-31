@@ -44,6 +44,8 @@ const importColumns: Record<string, ReadonlySet<string>> = {
   workspace_model_bindings: new Set(['workspace_id', 'bindings', 'updated_at']),
 }
 const exportTables = ['conversations', 'workspaces', 'messages', 'artifacts', 'workspace_memory', 'brain_memories', 'suggestions', 'suggestion_decisions', 'provider_configs', 'model_catalog', 'workspace_model_bindings', 'settings'] as const
+const MIGRATION_BACKUP_PREFIX = 'nocturne.db.backup-'
+const MIGRATION_BACKUP_RETENTION = 3
 
 export class LocalDatabase {
   private db: Database.Database
@@ -69,12 +71,19 @@ export class LocalDatabase {
     this.db.pragma('temp_store = MEMORY')
     this.restrictDatabaseFiles()
     if (schemaVersion > 0 && schemaVersion < DATABASE_SCHEMA_VERSION && fs.existsSync(this.databasePath)) {
-      this.db.pragma('wal_checkpoint(FULL)')
-      const backupPath = `${this.databasePath}.backup-${Date.now()}`
-      fs.copyFileSync(this.databasePath, backupPath)
-      fs.chmodSync(backupPath, 0o600)
+      try {
+        this.createMigrationBackup()
+      } catch (error) {
+        this.db.close()
+        throw error
+      }
     }
-    migrateDatabase(this.db, schemaVersion)
+    try {
+      migrateDatabase(this.db, schemaVersion)
+    } catch (error) {
+      this.db.close()
+      throw new Error(`A migração do banco falhou e foi revertida integralmente: ${error instanceof Error ? error.message : String(error)}`)
+    }
     this.restrictDatabaseFiles()
     this.providerConfigurations = new ProviderConfigurationRepository(this.db)
     this.modelCatalog = new ModelCatalogRepository(this.db)
@@ -478,6 +487,33 @@ export class LocalDatabase {
     const integrity = this.db.pragma('quick_check', { simple: true }) as string
     if (integrity !== 'ok') throw new Error(`Banco de dados corrompido (${integrity}). Preserve o arquivo e restaure um backup.`)
     this.db.prepare(`INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(key, new Date().toISOString())
+  }
+
+  private createMigrationBackup() {
+    const integrity = this.db.pragma('quick_check', { simple: true }) as string
+    if (integrity !== 'ok') throw new Error(`O banco atual falhou na verificação de integridade (${integrity}); a migração não foi iniciada.`)
+    this.db.pragma('wal_checkpoint(FULL)')
+    const directory = path.dirname(this.databasePath)
+    const backupPath = path.join(directory, `${MIGRATION_BACKUP_PREFIX}${Date.now()}.db`)
+    fs.copyFileSync(this.databasePath, backupPath)
+    fs.chmodSync(backupPath, 0o600)
+    let backup: Database.Database | null = null
+    try {
+      backup = new Database(backupPath, { readonly: true, fileMustExist: true })
+      const backupIntegrity = backup.pragma('quick_check', { simple: true }) as string
+      if (backupIntegrity !== 'ok') throw new Error(backupIntegrity)
+    } catch (error) {
+      backup?.close()
+      backup = null
+      fs.rmSync(backupPath, { force: true })
+      throw new Error(`Não foi possível verificar o backup pré-migração: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      backup?.close()
+      fs.rmSync(`${backupPath}-wal`, { force: true })
+      fs.rmSync(`${backupPath}-shm`, { force: true })
+    }
+    const backups = fs.readdirSync(directory).filter((name) => name.startsWith(MIGRATION_BACKUP_PREFIX) && name.endsWith('.db')).sort().reverse()
+    for (const name of backups.slice(MIGRATION_BACKUP_RETENTION)) fs.rmSync(path.join(directory, name), { force: true })
   }
 
   renameFromPrompt(id: string, prompt: string) {

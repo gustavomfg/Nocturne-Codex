@@ -5,7 +5,7 @@ import { performance } from 'node:perf_hooks'
 import { afterEach, describe, expect, it } from 'vitest'
 import { LocalDatabase } from '../electron/database/Database'
 import Sqlite from 'better-sqlite3'
-import { migrations } from '../electron/database/migrations'
+import { migrateDatabase, migrations } from '../electron/database/migrations'
 import { DATABASE_SCHEMA_VERSION } from '../shared/constants'
 import { PERSISTENCE_PERFORMANCE_BUDGETS } from '../shared/ipc/backupLimits'
 import type { ModelDescriptor } from '../shared/ai/model'
@@ -332,6 +332,22 @@ describe('persistência SQLite', () => {
     expect(tables.map((item) => item.name)).toContain('workspace_memory')
     migrated.close()
   })
+  it('reverte todas as etapas quando uma migração posterior falha', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-migration-rollback-'))
+    directories.push(directory)
+    const file = path.join(directory, 'rollback.db')
+    const sqlite = new Sqlite(file)
+    sqlite.exec('CREATE TABLE conversations (id TEXT PRIMARY KEY, title TEXT NOT NULL, workspace TEXT NOT NULL, codex_thread_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL); PRAGMA user_version = 1;')
+
+    expect(() => migrateDatabase(sqlite, 1, [
+      { version: 2, up: (db) => db.exec('CREATE TABLE migration_probe (id TEXT PRIMARY KEY);') },
+      { version: 3, up: () => { throw new Error('falha simulada') } },
+    ])).toThrow(/falha simulada/)
+
+    expect(sqlite.pragma('user_version', { simple: true })).toBe(1)
+    expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='migration_probe'").get()).toBeUndefined()
+    sqlite.close()
+  })
   it('mantém índices de navegação e relacionamentos após a migração', () => {
     const db = create(); db.close()
     const directory = directories[directories.length - 1]
@@ -356,6 +372,28 @@ describe('persistência SQLite', () => {
     const verified = new Sqlite(file, { readonly: true })
     expect(verified.pragma('user_version', { simple: true })).toBe(11)
     verified.close()
+  })
+  it('mantém somente os três backups pré-migração mais recentes', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-migration-retention-'))
+    directories.push(directory)
+    for (let index = 0; index < 4; index += 1) {
+      const file = path.join(directory, 'nocturne.db')
+      const legacy = new Sqlite(file)
+      legacy.exec('CREATE TABLE IF NOT EXISTS conversations (id TEXT PRIMARY KEY, title TEXT NOT NULL, workspace TEXT NOT NULL, codex_thread_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL); DROP TABLE IF EXISTS workspaces; PRAGMA user_version = 1;')
+      legacy.close()
+      const migrated = new LocalDatabase(directory)
+      migrated.close()
+      if (index < 3) {
+        const current = new Sqlite(file)
+        current.exec('DROP TABLE IF EXISTS workspaces; PRAGMA user_version = 1;')
+        current.close()
+      }
+      const waitUntil = Date.now() + 2
+      while (Date.now() < waitUntil) { /* timestamps distintos */ }
+    }
+    const backups = fs.readdirSync(directory).filter((name) => name.startsWith('nocturne.db.backup-'))
+    expect(backups).toHaveLength(3)
+    for (const name of backups) expect(fs.statSync(path.join(directory, name)).mode & 0o777).toBe(0o600)
   })
   it('migra o schema 7 preservando dados e criando o índice do Segundo Cérebro', () => {
     const db = create(); const conversation = db.createConversation('/tmp/from-7'); db.addMessage(conversation.id, 'user', 'Preservar'); db.close()
