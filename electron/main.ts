@@ -236,12 +236,13 @@ async function runPackageSmoke(output: string) {
     const conversation = database?.createConversation(smokeWorkspace)
     if (conversation) database?.addMessage(conversation.id, 'user', 'package-smoke')
     const sqlite = Boolean(conversation && database?.listMessages(conversation.id)[0]?.content === 'package-smoke')
+    const lifecycle = await recreateWindowForPackageSmoke()
     const preferences = (win?.webContents as Electron.WebContents & { getLastWebPreferences(): Electron.WebPreferences } | undefined)?.getLastWebPreferences()
     const security = { contextIsolation: preferences?.contextIsolation === true, nodeIntegration: preferences?.nodeIntegration === false, sandbox: preferences?.sandbox === true }
     const finalUrl = win?.webContents.getURL()
     const navigation = { externalWindowsDenied: preload?.externalWindowsDenied === true, unexpectedNavigationBlocked: Boolean(originalUrl && finalUrl === originalUrl), originalUrl, finalUrl }
-    const ok = Boolean(preload?.available && preload.settings && preload.geolocation === 'denied' && sqlite && Object.values(security).every(Boolean) && navigation && Object.values(navigation).every(Boolean))
-    fs.writeFileSync(output, `${JSON.stringify({ ok, packaged: app.isPackaged, preload, sqlite, security, navigation })}\n`, { encoding: 'utf8', mode: 0o600 })
+    const ok = Boolean(preload?.available && preload.settings && preload.geolocation === 'denied' && sqlite && lifecycle.recreated && lifecycle.api && lifecycle.settings && Object.values(security).every(Boolean) && navigation && Object.values(navigation).every(Boolean))
+    fs.writeFileSync(output, `${JSON.stringify({ ok, packaged: app.isPackaged, preload, sqlite, lifecycle, security, navigation })}\n`, { encoding: 'utf8', mode: 0o600 })
     app.quit()
   } catch (error) {
     fs.writeFileSync(output, `${JSON.stringify({ ok: false, packaged: app.isPackaged, error: error instanceof Error ? error.message : String(error) })}\n`, { encoding: 'utf8', mode: 0o600 })
@@ -249,7 +250,46 @@ async function runPackageSmoke(output: string) {
   }
 }
 
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
+async function recreateWindowForPackageSmoke() {
+  const previousWindow = win
+  if (!previousWindow) throw new Error('A janela do smoke não foi criada.')
+  const closed = new Promise<void>((resolve) => previousWindow.once('closed', resolve))
+  previousWindow.close()
+  await closed
+  createWindow()
+  const recreatedWindow = win
+  if (!recreatedWindow) throw new Error('A janela do smoke não pôde ser recriada.')
+  await waitForWindowLoad(recreatedWindow)
+  const result = await recreatedWindow.webContents.executeJavaScript(`(async () => {
+    const api = window.nocturne
+    let settings = false
+    try { await api?.settings?.get(); settings = true } catch { /* handler ausente */ }
+    return { recreated: true, api: Boolean(api), settings }
+  })()` ) as { recreated: boolean; api: boolean; settings: boolean }
+  return result
+}
+
+async function waitForWindowLoad(window: BrowserWindow) {
+  if (!window.webContents.isLoading()) return
+  await new Promise<void>((resolve, reject) => {
+    const onLoad = () => { cleanup(); resolve() }
+    const onFail = (_event: Electron.Event, code: number, description: string) => {
+      cleanup()
+      reject(new Error(`A janela recriada falhou ao carregar (${code}): ${description}`))
+    }
+    const cleanup = () => {
+      window.webContents.removeListener('did-finish-load', onLoad)
+      window.webContents.removeListener('did-fail-load', onFail)
+    }
+    window.webContents.once('did-finish-load', onLoad)
+    window.webContents.once('did-fail-load', onFail)
+  })
+}
+
+app.on('window-all-closed', () => {
+  if (process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT) return
+  if (process.platform !== 'darwin') app.quit()
+})
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 app.on('second-instance', () => {
   if (!win || win.isDestroyed()) { createWindow(); return }
