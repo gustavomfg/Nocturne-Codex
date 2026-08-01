@@ -8,7 +8,7 @@ import { z } from 'zod'
 import { diagnosticFingerprint, redactLogText } from '../logging/Logger'
 import { LocalDatabase } from '../database/Database'
 import { Logger } from '../logging/Logger'
-import { readWorkspaceFile, resolveInsideWorkspace, statWorkspaceFile } from '../security/ExecutionPolicy'
+import { readWorkspaceFile, resolveExistingWorkspacePath, resolveInsideWorkspace, statWorkspaceFile } from '../security/ExecutionPolicy'
 import { sanitizeSuggestionTitle } from '../../shared/suggestions'
 import { appendSuggestionDecision } from '../persistence/SuggestionDecisionLog'
 import { approvalSchema, aiCancelSchema, aiSendSchema, applyMarkdownSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, prepareMarkdownSchema, rendererStatsSchema, saveAssistantSchema } from '../../shared/ipc/schemas'
@@ -128,13 +128,17 @@ export function registerIpc(
   ipcMain.handle('files:open', async (_event, value: unknown) => {
     const data = fileActionSchema.parse(value)
     const conversation = getAuthorizedConversation(database, data.conversationId)
-    const filePath = resolveWorkspaceFile(data.filePath, conversation.workspace)
-    if (!fs.existsSync(filePath)) throw new Error('Arquivo não encontrado.')
-    if (data.action === 'folder') { shell.showItemInFolder(filePath); return }
+    const filePath = resolveExistingWorkspacePath(data.filePath, conversation.workspace)
+    if (data.action === 'folder') {
+      const revalidatedPath = resolveExistingWorkspacePath(data.filePath, conversation.workspace)
+      shell.showItemInFolder(revalidatedPath)
+      return
+    }
     if (EXECUTABLE_EXTENSIONS.has(path.extname(filePath).toLowerCase())) {
       throw new Error('Abrir executáveis diretamente não é permitido por segurança.')
     }
-    const error = await shell.openPath(filePath)
+    const revalidatedPath = resolveExistingWorkspacePath(data.filePath, conversation.workspace)
+    const error = await shell.openPath(revalidatedPath)
     if (error) throw new Error(error)
   })
 
@@ -424,10 +428,22 @@ export function registerIpc(
     if (!pandocPath) throw new Error('Pandoc não foi encontrado no PATH.')
     const result = await dialog.showSaveDialog(win, { title: `Exportar ${data.format.toUpperCase()}`, defaultPath: path.join(conversation.workspace, `documento.${data.format}`), filters: [{ name: data.format.toUpperCase(), extensions: [data.format] }] })
     if (result.canceled || !result.filePath) return null
-    assertInsideWorkspace(result.filePath, conversation.workspace)
-    await pipeCommand(pandocPath, ['-f', 'markdown', '-t', data.format, '-o', result.filePath], data.content, conversation.workspace)
-    database.addArtifact(data.conversationId, conversation.workspace, 'document', path.basename(result.filePath), result.filePath, data.format === 'html' ? await fs.promises.readFile(result.filePath, 'utf8') : null, { format: data.format })
-    return result.filePath
+    const target = resolveWorkspaceFile(result.filePath, conversation.workspace)
+    const temporary = resolveWorkspaceFile(`${target}.tmp-${process.pid}-${randomUUID()}`, conversation.workspace)
+    try {
+      await pipeCommand(pandocPath, ['-f', 'markdown', '-t', data.format, '-o', temporary], data.content, conversation.workspace)
+      const revalidatedTarget = resolveWorkspaceFile(result.filePath, conversation.workspace)
+      if (revalidatedTarget !== target) throw new Error('O destino da exportação mudou depois da seleção.')
+      await fs.promises.rename(temporary, target)
+      await fs.promises.chmod(target, 0o600)
+      const artifactContent = data.format === 'html'
+        ? (await readWorkspaceFile(target, conversation.workspace)).content.toString('utf8')
+        : null
+      database.addArtifact(data.conversationId, conversation.workspace, 'document', path.basename(target), target, artifactContent, { format: data.format })
+      return target
+    } finally {
+      await fs.promises.unlink(temporary).catch(() => undefined)
+    }
   })
   return () => {
     aiExecutions.dispose()

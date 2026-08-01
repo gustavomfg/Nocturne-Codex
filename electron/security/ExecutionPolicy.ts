@@ -49,6 +49,13 @@ export function resolveInsideWorkspace(candidate: string, workspace: string) {
   return canonicalResolved
 }
 
+export function resolveExistingWorkspacePath(candidate: string, workspace: string) {
+  const resolved = resolveInsideWorkspace(candidate, workspace)
+  const stat = fs.statSync(resolved)
+  if (!stat.isFile() && !stat.isDirectory()) throw new Error('O caminho não é um arquivo ou diretório válido.')
+  return resolved
+}
+
 export async function statWorkspaceFile(candidate: string, workspace: string) {
   const resolved = resolveInsideWorkspace(candidate, workspace)
   const handle = await fs.promises.open(resolved, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0))

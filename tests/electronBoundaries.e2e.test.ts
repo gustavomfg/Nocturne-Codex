@@ -22,6 +22,12 @@ const electron = vi.hoisted(() => {
   }
   let exposed: NocturneApi | null = null
   let clipboardText = ''
+  let beforeShellOpenPath: (() => void) | null = null
+  const shellOpenPath = vi.fn(async (filePath: string) => {
+    void filePath
+    beforeShellOpenPath?.()
+    return ''
+  })
   const mainFrame = { routingId: 1, url: 'file:///nocturne/index.html' }
   const mainWebContents: { send(channel: string, payload: unknown): void; mainFrame: typeof mainFrame; getURL(): string } = {
     send: (channel, payload) => rendererListeners.get(channel)?.forEach((listener) => listener({}, payload)),
@@ -36,6 +42,8 @@ const electron = vi.hoisted(() => {
     setExposed(api: NocturneApi) { exposed = api },
     get clipboardText() { return clipboardText },
     set clipboardText(value: string) { clipboardText = value },
+    shellOpenPath,
+    setBeforeShellOpenPath(callback: (() => void) | null) { beforeShellOpenPath = callback },
     mainFrame,
     mainWebContents,
   }
@@ -70,7 +78,7 @@ vi.mock('electron', () => ({
     },
     removeListener: (channel: string, listener: (event: unknown, payload: unknown) => void) => electron.rendererListeners.get(channel)?.delete(listener),
   },
-  shell: { openPath: vi.fn(async () => ''), showItemInFolder: vi.fn(), openExternal: vi.fn(async () => undefined) },
+  shell: { openPath: (filePath: string) => electron.shellOpenPath(filePath), showItemInFolder: vi.fn(), openExternal: vi.fn(async () => undefined) },
 }))
 
 class SimulatedProviderConfigurations {
@@ -452,6 +460,69 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     disposeIpc = reinstallIpc?.() ?? null
     expect(electronMock.handlers.size).toBe(registeredHandlers)
     await expect(api.clipboard.writeText('handler reaberto')).resolves.toBeUndefined()
+  })
+
+  it('revalida o destino antes de abrir um caminho que trocou de symlink', async () => {
+    const project = path.join(root, 'open-race-project')
+    const safe = path.join(project, 'safe')
+    const outside = path.join(root, 'open-race-outside')
+    const link = path.join(project, 'current')
+    fs.mkdirSync(safe, { recursive: true })
+    fs.mkdirSync(outside, { recursive: true })
+    fs.writeFileSync(path.join(safe, 'notes.txt'), 'interno')
+    fs.writeFileSync(path.join(outside, 'notes.txt'), 'externo')
+    fs.symlinkSync(safe, link, 'dir')
+    electron.dialogs.open.push({ canceled: false, filePaths: [project] })
+    await api.workspace.select()
+    const conversation = await api.conversations.create(project)
+    electronMock.setBeforeShellOpenPath(() => {
+      electronMock.setBeforeShellOpenPath(null)
+      fs.unlinkSync(link)
+      fs.symlinkSync(outside, link, 'dir')
+    })
+
+    await expect(api.files.open(conversation.id, 'current/notes.txt', 'file')).rejects.toThrow(/fora do workspace/)
+    expect(electronMock.shellOpenPath).not.toHaveBeenCalled()
+  })
+
+  it('rejeita exportação quando o symlink do destino troca antes do rename', async () => {
+    if (process.platform === 'win32') return
+    const project = path.join(root, 'export-race-project')
+    const safe = path.join(project, 'safe')
+    const outside = path.join(root, 'export-race-outside')
+    const link = path.join(project, 'current')
+    const bin = path.join(root, 'export-race-bin')
+    const pandoc = path.join(bin, 'pandoc')
+    fs.mkdirSync(safe, { recursive: true })
+    fs.mkdirSync(outside, { recursive: true })
+    fs.mkdirSync(bin, { recursive: true })
+    fs.symlinkSync(safe, link, 'dir')
+    const fakePandoc = [
+      '#!/bin/sh',
+      'output=""',
+      'while [ "$#" -gt 0 ]; do',
+      '  if [ "$1" = "-o" ]; then output="$2"; shift 2; else shift; fi',
+      'done',
+      'cat > "$output"',
+      `rm -f ${JSON.stringify(link)}`,
+      `ln -s ${JSON.stringify(outside)} ${JSON.stringify(link)}`,
+      '',
+    ].join('\n')
+    fs.writeFileSync(pandoc, fakePandoc)
+    fs.chmodSync(pandoc, 0o700)
+    const previousPath = process.env.PATH
+    process.env.PATH = `${bin}${path.delimiter}${previousPath ?? ''}`
+    try {
+      electron.dialogs.open.push({ canceled: false, filePaths: [project] })
+      await api.workspace.select()
+      const conversation = await api.conversations.create(project)
+      electron.dialogs.save.push({ canceled: false, filePath: path.join(project, 'current', 'result.html') })
+
+      await expect(api.documents.export(conversation.id, '# conteúdo', 'html')).rejects.toThrow(/destino da exportação|fora do workspace/)
+      expect(fs.existsSync(path.join(outside, 'result.html'))).toBe(false)
+    } finally {
+      process.env.PATH = previousPath
+    }
   })
 })
 
