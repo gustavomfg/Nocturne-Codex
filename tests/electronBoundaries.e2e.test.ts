@@ -462,7 +462,7 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
     await expect(api.clipboard.writeText('handler reaberto')).resolves.toBeUndefined()
   })
 
-  it('revalida o destino antes de abrir um caminho que trocou de symlink', async () => {
+  it('mantém o destino canônico quando o symlink muda antes da abertura', async () => {
     const project = path.join(root, 'open-race-project')
     const safe = path.join(project, 'safe')
     const outside = path.join(root, 'open-race-outside')
@@ -481,8 +481,17 @@ describe('limites entre processos Electron (IPC, preload, SQLite)', () => {
       fs.symlinkSync(outside, link, 'dir')
     })
 
-    await expect(api.files.open(conversation.id, 'current/notes.txt', 'file')).rejects.toThrow(/fora do workspace/)
-    expect(electronMock.shellOpenPath).not.toHaveBeenCalled()
+    await expect(
+      api.files.open(conversation.id, 'current/notes.txt', 'file'),
+    ).resolves.toBeUndefined()
+
+    expect(electronMock.shellOpenPath).toHaveBeenCalledOnce()
+    expect(electronMock.shellOpenPath).toHaveBeenCalledWith(
+      path.join(safe, 'notes.txt'),
+    )
+    expect(electronMock.shellOpenPath).not.toHaveBeenCalledWith(
+      path.join(outside, 'notes.txt'),
+    )
   })
 
   it('rejeita exportação quando o symlink do destino troca antes do rename', async () => {
