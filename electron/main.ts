@@ -41,6 +41,7 @@ let win: BrowserWindow | null = null
 let database: LocalDatabase | null = null
 let logger: Logger | null = null
 let disposeIpc: (() => void) | null = null
+let packageSmokeScheduled = false
 let disposeUpdates: (() => void) | null = null
 let providerConfigurations: ProviderConfigurationService | null = null
 let providerRegistry: ProviderRegistry | null = null
@@ -108,8 +109,17 @@ function createWindow() {
     modelRegistry,
     providerRegistry,
   )
-  if (app.isPackaged && process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT) {
-    const output = path.resolve(process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT)
+  if (
+    app.isPackaged &&
+    process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT &&
+    !packageSmokeScheduled
+  ) {
+    packageSmokeScheduled = true
+
+    const output = path.resolve(
+      process.env.NOCTURNE_PACKAGE_SMOKE_OUTPUT,
+    )
+
     currentWindow.webContents.once('did-finish-load', () => {
       void runPackageSmoke(output)
     })
