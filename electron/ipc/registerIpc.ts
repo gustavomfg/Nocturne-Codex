@@ -8,7 +8,7 @@ import { z } from 'zod'
 import { diagnosticFingerprint, redactLogText } from '../logging/Logger'
 import { LocalDatabase } from '../database/Database'
 import { Logger } from '../logging/Logger'
-import { readWorkspaceFile, resolveExistingWorkspacePath, resolveInsideWorkspace, statWorkspaceFile } from '../security/ExecutionPolicy'
+import { isExternalOpenBlocked, readWorkspaceFile, resolveExistingWorkspacePath, resolveInsideWorkspace, statWorkspaceFile } from '../security/ExecutionPolicy'
 import { sanitizeSuggestionTitle } from '../../shared/suggestions'
 import { appendSuggestionDecision } from '../persistence/SuggestionDecisionLog'
 import { approvalSchema, aiCancelSchema, aiSendSchema, applyMarkdownSchema, exportDocumentSchema, fileActionSchema, filePreviewSchema, idSchema, prepareMarkdownSchema, rendererStatsSchema, saveAssistantSchema } from '../../shared/ipc/schemas'
@@ -124,7 +124,6 @@ export function registerIpc(
     })))
   })
 
-  const EXECUTABLE_EXTENSIONS = new Set(['.exe', '.bat', '.cmd', '.com', '.msi', '.sh', '.bin', '.app', '.dmg', '.deb', '.rpm', '.AppImage'])
   ipcMain.handle('files:open', async (_event, value: unknown) => {
     const data = fileActionSchema.parse(value)
     const conversation = getAuthorizedConversation(database, data.conversationId)
@@ -134,8 +133,8 @@ export function registerIpc(
       shell.showItemInFolder(revalidatedPath)
       return
     }
-    if (EXECUTABLE_EXTENSIONS.has(path.extname(filePath).toLowerCase())) {
-      throw new Error('Abrir executáveis diretamente não é permitido por segurança.')
+    if (isExternalOpenBlocked(filePath)) {
+      throw new Error('Abrir executáveis, atalhos, URLs e scripts diretamente não é permitido por segurança.')
     }
     const revalidatedPath = resolveExistingWorkspacePath(data.filePath, conversation.workspace)
     const error = await shell.openPath(revalidatedPath)

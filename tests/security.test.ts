@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { assessCommand, resolveInsideWorkspace } from '../electron/security/ExecutionPolicy'
+import { assessCommand, externalOpenRiskExtensionsByPlatform, isExternalOpenBlocked, resolveInsideWorkspace } from '../electron/security/ExecutionPolicy'
 import { redactLogText, redactLogValue } from '../electron/logging/Logger'
 
 describe('políticas de execução', () => {
@@ -76,6 +76,16 @@ describe('políticas de execução', () => {
   })
   it.each(['sudo apt update', 'git reset --hard HEAD', 'git clean -fd', 'rm -rf build', 'npm run rebuild:native', 'npm run package'])('marca comando perigoso: %s', (command) => expect(assessCommand(command)).toMatchObject({ risk: 'dangerous', requiresApproval: true, blockedAutomatic: true }))
   it('não usa substring ingênua para classificar nomes de arquivo', () => expect(assessCommand(['cat', 'sudo-notes.md']).risk).toBe('safe'))
+  it('bloqueia todos os formatos de abertura externa definidos pela plataforma', () => {
+    for (const [platform, extensions] of Object.entries(externalOpenRiskExtensionsByPlatform)) {
+      for (const extension of extensions) expect(isExternalOpenBlocked(`arquivo${extension}`, platform as NodeJS.Platform)).toBe(true)
+    }
+  })
+  it.each([
+    ['win32', '.pdf'],
+    ['darwin', '.pdf'],
+    ['linux', '.pdf'],
+  ] as const)('permite formato não executável em %s', (platform, extension) => expect(isExternalOpenBlocked(`arquivo${extension}`, platform)).toBe(false))
   it('bloqueia traversal e aceita arquivo interno', () => {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'nocturne-security-'))
     expect(() => resolveInsideWorkspace('../secret', workspace)).toThrow(/fora do workspace/)

@@ -7,6 +7,27 @@ export interface CommandAssessment { risk: CommandRisk; reasons: string[]; requi
 const dangerousPrograms = new Set(['sudo', 'doas', 'su'])
 const destructiveGit = new Set(['push', 'clean', 'reset'])
 
+const commonExternalOpenRiskExtensions = new Set([
+  '.appimage', '.bat', '.bin', '.com', '.deb', '.dmg', '.exe', '.msi', '.pkg', '.rpm',
+  '.sh', '.bash', '.zsh', '.fish', '.csh', '.ksh',
+  '.js', '.jse', '.mjs', '.vbs', '.vbe', '.wsf', '.wsh', '.hta', '.ps1', '.psm1',
+  '.inetloc', '.url', '.webloc', '.website',
+])
+
+export const externalOpenRiskExtensionsByPlatform: Record<string, ReadonlySet<string>> = {
+  win32: new Set([...commonExternalOpenRiskExtensions, '.appx', '.appxbundle', '.cmd', '.cpl', '.lnk', '.msix', '.msixbundle', '.pif', '.scr', '.scf', '.url', '.website']),
+  darwin: new Set([...commonExternalOpenRiskExtensions, '.app', '.command', '.inetloc', '.scpt', '.webloc', '.workflow']),
+  linux: new Set([...commonExternalOpenRiskExtensions, '.desktop', '.run']),
+  freebsd: new Set([...commonExternalOpenRiskExtensions, '.desktop', '.run']),
+  openbsd: new Set([...commonExternalOpenRiskExtensions, '.desktop', '.run']),
+  sunos: new Set([...commonExternalOpenRiskExtensions, '.desktop', '.run']),
+}
+
+export function isExternalOpenBlocked(filePath: string, platform: NodeJS.Platform = process.platform) {
+  const extensions = externalOpenRiskExtensionsByPlatform[platform] ?? commonExternalOpenRiskExtensions
+  return extensions.has(path.extname(filePath).toLowerCase())
+}
+
 export function assessCommand(command: string | string[]): CommandAssessment {
   const tokens = Array.isArray(command) ? command : tokenize(command)
   const normalized = tokens.map((token) => token.toLowerCase())
