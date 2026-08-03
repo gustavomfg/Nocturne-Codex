@@ -5,7 +5,7 @@
 > **An AI-powered software engineering workspace built around your project—not your prompts.**
 
 <p align="center">
-  <img src="docs/images/workspace-main.png" alt="Nocturne Studio Workspace">
+  <img src="docs/images/Captura_de_tela_20260803_145710.png" alt="Nocturne Studio — nova conversa">
 </p>
 
 Nocturne Studio is a local-first software engineering workspace that helps developers understand, review, document and evolve software projects using contextual artificial intelligence.
@@ -33,7 +33,7 @@ Knowledge, architecture, documentation, repositories and conversations remain co
 # 📸 Workspace
 
 <p align="center">
-  <img src="docs/images/workspace-main.png" alt="Workspace">
+  <img src="docs/images/Captura_de_tela_20260803_145404.png" alt="Workspace ativo">
 </p>
 
 Nocturne Studio combines conversations, repositories, project context and engineering tools into a single workspace.
@@ -45,7 +45,7 @@ Instead of switching between multiple applications, developers interact with the
 # 📊 Project Health
 
 <p align="center">
-  <img src="docs/images/suggestions.png" alt="Project Health" width="40%">
+  <img src="docs/images/Captura_de_tela_20260803_145512.png" alt="Project Health" width="40%">
 </p>
 
 Review Mode evaluates software quality across multiple engineering dimensions.
@@ -70,7 +70,7 @@ deferred decisions remain under user control.
 # 💡 AI Suggestions
 
 <p align="center">
-  <img src="docs/images/project-health.png" alt="Suggestions" width="35%">
+  <img src="docs/images/Captura_de_tela_20260803_145522.png" alt="AI Suggestions" width="35%">
 </p>
 
 Suggestions are grouped by severity and category, making technical debt easier to prioritize and review.
@@ -84,7 +84,7 @@ also **why**.
 # 🔍 Suggestion Details
 
 <p align="center">
-  <img src="docs/images/suggestions-detail.png" alt="Suggestion Detail" width="55%">
+  <img src="docs/images/Captura_de_tela_20260803_145547.png" alt="Suggestion Detail" width="55%">
 </p>
 
 Every suggestion contains detailed engineering information, including:
@@ -103,7 +103,7 @@ Developers always remain responsible for reviewing and approving changes.
 # 🌳 Git Integration
 
 <p align="center">
-  <img src="docs/images/commit-proposal.png" alt="Commit Proposal" width="45%">
+  <img src="docs/images/Captura_de_tela_20260803_145447.png" alt="Commit Proposal" width="45%">
 </p>
 
 Approved changes can be prepared for version control with integrated Git support, allowing developers to review staged files and commit messages before creating commits.
@@ -113,7 +113,7 @@ Approved changes can be prepared for version control with integrated Git support
 # 🤖 AI Providers
 
 <p align="center">
-  <img src="docs/images/providers.png" alt="Providers" width="45%">
+  <img src="docs/images/Captura_de_tela_20260803_145624.png" alt="Providers" width="45%">
 </p>
 
 Nocturne Studio separates provider integrations from the workspace itself.
