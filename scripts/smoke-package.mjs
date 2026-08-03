@@ -33,10 +33,10 @@ async function smokePackage() {
     if (!fs.existsSync(resultPath)) throw new Error(`O aplicativo não produziu o resultado do smoke test.\n${result.stderr}`)
     const report = JSON.parse(fs.readFileSync(resultPath, 'utf8'))
     const expectedChannels = ['ai', 'artifacts', 'brain', 'clipboard', 'codex', 'conversations', 'data', 'diagnostics', 'documents', 'files', 'git', 'memory', 'models', 'providers', 'settings', 'suggestions', 'workspace']
-    if (!report.ok || !report.packaged || !report.sqlite || report.preload?.geolocation !== 'denied' || !report.security?.contextIsolation || !report.security?.sandbox || report.security?.nodeIntegration !== true || !report.navigation?.externalWindowsDenied || !report.navigation?.unexpectedNavigationBlocked || JSON.stringify(report.preload?.channels) !== JSON.stringify(expectedChannels)) {
+    if (!report.ok || !report.packaged || !report.sqlite || !report.lifecycle?.closed || !report.lifecycle?.activated || !report.lifecycle?.secondInstanceReused || !report.lifecycle?.api || !report.lifecycle?.settings || report.preload?.geolocation !== 'denied' || !report.security?.contextIsolation || !report.security?.sandbox || report.security?.nodeIntegration !== true || !report.navigation?.externalWindowsDenied || !report.navigation?.unexpectedNavigationBlocked || JSON.stringify(report.preload?.channels) !== JSON.stringify(expectedChannels)) {
       throw new Error(`Smoke test inválido: ${JSON.stringify(report)}`)
     }
-    process.stdout.write(`Pacote validado: ${executable}\nSQLite, preload e isolamento do BrowserWindow responderam corretamente.\n`)
+    process.stdout.write(`Pacote validado: ${executable}\nSQLite, preload, isolamento e ciclo de vida do BrowserWindow responderam corretamente.\n`)
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true })
   }

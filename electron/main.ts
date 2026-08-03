@@ -251,7 +251,7 @@ async function runPackageSmoke(output: string) {
     const security = { contextIsolation: preferences?.contextIsolation === true, nodeIntegration: preferences?.nodeIntegration === false, sandbox: preferences?.sandbox === true }
     const finalUrl = win?.webContents.getURL()
     const navigation = { externalWindowsDenied: preload?.externalWindowsDenied === true, unexpectedNavigationBlocked: Boolean(originalUrl && finalUrl === originalUrl), originalUrl, finalUrl }
-    const ok = Boolean(preload?.available && preload.settings && preload.geolocation === 'denied' && sqlite && lifecycle.recreated && lifecycle.api && lifecycle.settings && Object.values(security).every(Boolean) && navigation && Object.values(navigation).every(Boolean))
+    const ok = Boolean(preload?.available && preload.settings && preload.geolocation === 'denied' && sqlite && lifecycle.closed && lifecycle.activated && lifecycle.secondInstanceReused && lifecycle.api && lifecycle.settings && Object.values(security).every(Boolean) && navigation && Object.values(navigation).every(Boolean))
     fs.writeFileSync(output, `${JSON.stringify({ ok, packaged: app.isPackaged, preload, sqlite, lifecycle, security, navigation })}\n`, { encoding: 'utf8', mode: 0o600 })
     app.quit()
   } catch (error) {
@@ -266,17 +266,20 @@ async function recreateWindowForPackageSmoke() {
   const closed = new Promise<void>((resolve) => previousWindow.once('closed', resolve))
   previousWindow.close()
   await closed
-  createWindow()
-  const recreatedWindow = win
-  if (!recreatedWindow) throw new Error('A janela do smoke não pôde ser recriada.')
-  await waitForWindowLoad(recreatedWindow)
-  const result = await recreatedWindow.webContents.executeJavaScript(`(async () => {
+  if (typeof app.emit !== 'function') throw new Error('O harness não oferece eventos de aplicação.')
+  app.emit('activate')
+  const activatedWindow = win
+  if (!activatedWindow) throw new Error('O evento activate não recriou a janela do smoke.')
+  await waitForWindowLoad(activatedWindow)
+  app.emit('second-instance')
+  const secondInstanceReused = win === activatedWindow && !activatedWindow.isDestroyed()
+  const result = await activatedWindow.webContents.executeJavaScript(`(async () => {
     const api = window.nocturne
     let settings = false
     try { await api?.settings?.get(); settings = true } catch { /* handler ausente */ }
     return { recreated: true, api: Boolean(api), settings }
   })()` ) as { recreated: boolean; api: boolean; settings: boolean }
-  return result
+  return { closed: true, activated: result.recreated, secondInstanceReused, api: result.api, settings: result.settings }
 }
 
 async function waitForWindowLoad(window: BrowserWindow) {
