@@ -19,6 +19,11 @@ outra arquitetura são de desenvolvimento até passarem pelo mesmo smoke.
 - Electron `43.x`;
 - SQLite via `better-sqlite3` reconstruído para o Electron adotado.
 
+Antes de iniciar a suíte, o runner verifica o ABI do Electron carregando
+`better-sqlite3` no runtime embutido. Em caso de falha, execute
+`npm run rebuild:native` e tente novamente. Para executar somente esse
+diagnóstico, use `npm run test:abi`.
+
 ## IA
 
 - Codex CLI mínimo `0.145.0`;
